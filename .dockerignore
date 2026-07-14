@@ -1,0 +1,5 @@
+games/
+__pycache__/
+**/__pycache__/
+*.pgn
+README.md
