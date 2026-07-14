@@ -8,6 +8,7 @@ import chess
 
 from .heuristics import MATE, evaluate
 from .profiles import CURRENT, EngineProfile
+from .templates import ConstructionPlan
 
 
 class ProofStatus(Enum):
@@ -256,7 +257,8 @@ def _ordered(board: chess.Board):
 def negamax(board: chess.Board, depth: int, alpha: float, beta: float,
             root_color: chess.Color, ply: int,
             model: str | None = None,
-            profile: EngineProfile = CURRENT) -> float:
+            profile: EngineProfile = CURRENT,
+            plan: ConstructionPlan | None = None) -> float:
     if board.is_checkmate():
         return MATE - ply  # the side to move is mated: it wins misère chess
     if (
@@ -268,7 +270,7 @@ def negamax(board: chess.Board, depth: int, alpha: float, beta: float,
         contempt = profile.draw_contempt
         return -contempt if board.turn == root_color else contempt
     if depth <= 0:
-        return evaluate(board, root_color, model, profile)
+        return evaluate(board, root_color, model, profile, plan)
     # NOTE: opponent nodes deliberately expand ALL legal moves (adversarial),
     # even under an opponent model. Modeling Zach's capture-aversion here once
     # taught the bot to build cages out of hanging pieces — which Zach, when
@@ -279,7 +281,7 @@ def negamax(board: chess.Board, depth: int, alpha: float, beta: float,
         board.push(m)
         v = -negamax(
             board, depth - 1, -beta, -alpha, root_color, ply + 1,
-            model, profile,
+            model, profile, plan,
         )
         board.pop()
         if v > best:

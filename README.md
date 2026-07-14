@@ -43,6 +43,10 @@ docker run --rm losebot pypy3 -m losebot endgames --profile v03 --seed 5 `
 docker run --rm losebot pypy3 -m losebot endgames --profile template `
   --case 2 --seed 5 --max-plies 40 --probe-cap 10000 `
   --probe-depth 3 --show-fen
+
+# Exercise the stateful construction planner with bounded tactical searches
+docker run --rm losebot pypy3 -m losebot endgames --profile planner `
+  --seed 5 --max-plies 40 --probe-cap 10000 --probe-depth 3
 ```
 
 ## How LoseBot works
@@ -64,8 +68,16 @@ docker run --rm losebot pypy3 -m losebot endgames --profile template `
 Named engine profiles keep experiments reproducible: `current` preserves the
 pre-profile build, `v03` reconstructs the best historic full-game weights from
 the tuning log, and experimental `template` couples both kings to one concrete
-opponent-pawn mating push. The template profile only unlocks expensive deep
-proof searches when that target is close and partially caged.
+opponent-pawn mating push. Experimental `planner` persists one such target,
+holds a defended blocker on the pawn's mating square until release, preserves
+the king cage, filters repetitions and plan regressions, and uses bounded
+short-horizon searches to herd the defending king. Deep proof searches are
+only unlocked when the selected target is close and partially caged.
+
+The modeled herding search deliberately defaults to one turn, 1,000 nodes,
+and 250 ms per invocation. Depth two currently branches too quickly to be a
+practical default; increasing it requires a more selective reply model or a
+stronger transposition strategy.
 
 ## Roadmap
 

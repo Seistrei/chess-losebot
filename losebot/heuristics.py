@@ -14,7 +14,11 @@ into their pawns and smother it with our own men.
 import chess
 
 from .profiles import CURRENT, EngineProfile
-from .templates import best_pawn_mate_template
+from .templates import (
+    ConstructionPlan,
+    best_pawn_mate_template,
+    herding_metrics,
+)
 
 PIECE_VALS = {
     chess.PAWN: 100,
@@ -30,7 +34,8 @@ MATE = 100_000
 
 def evaluate(board: chess.Board, root_color: chess.Color,
              model: str | None = None,
-             profile: EngineProfile = CURRENT) -> float:
+             profile: EngineProfile = CURRENT,
+             plan: ConstructionPlan | None = None) -> float:
     us = root_color
     them = not root_color
     stm = board.turn
@@ -115,12 +120,36 @@ def evaluate(board: chess.Board, root_color: chess.Color,
         if pawn_dist == 1:
             v += profile.herding_adjacency_bonus
 
-        target = best_pawn_mate_template(board, us)
+        target = (
+            plan.resolve(board, us)
+            if plan is not None
+            else best_pawn_mate_template(board, us)
+        )
         if target is None:
             v -= profile.no_template_penalty
         else:
             v -= profile.template_distance_penalty * target.setup_distance
             v += profile.template_cage_bonus * target.cage_occupancy
+            if target.runway_blocked:
+                v -= profile.template_runway_penalty
+            if target.ready_to_release:
+                if target.arrival_blocked:
+                    v -= profile.plan_release_block_penalty
+            elif target.holding_blocker:
+                v += profile.plan_hold_bonus
+                if not target.holding_blocker_defended:
+                    v -= profile.plan_undefended_hold_penalty
+            elif not target.arrival_blocked:
+                v -= profile.plan_unfrozen_penalty
+            herding = herding_metrics(board, us, target)
+            v -= (
+                profile.herding_open_escape_penalty
+                * herding.open_outward
+            )
+            v += (
+                profile.herding_control_bonus
+                * herding.controlled_outward
+            )
 
     # We fear the draw clock; they do not.
     v -= profile.clock_pressure * board.halfmove_clock

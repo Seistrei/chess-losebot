@@ -39,6 +39,7 @@ class EngineProfile:
     template_distance_penalty: float
     template_cage_bonus: float
     no_template_penalty: float
+    template_runway_penalty: float
     clock_pressure: float
     draw_contempt: float
 
@@ -50,6 +51,18 @@ class EngineProfile:
     irreversible_move_bonus: float
     deep_probe_template_distance: int | None
     deep_probe_min_cage: int
+    stateful_plan: bool
+    herding_open_escape_penalty: float
+    herding_control_bonus: float
+    plan_hold_bonus: float
+    plan_unfrozen_penalty: float
+    plan_release_block_penalty: float
+    plan_undefended_hold_penalty: float
+    herd_search_depth: int
+    herd_search_cap: int
+    modeled_herding_depth: int
+    modeled_herding_cap: int
+    modeled_herding_time_ms: int
 
 
 CURRENT = EngineProfile(
@@ -78,6 +91,7 @@ CURRENT = EngineProfile(
     template_distance_penalty=0,
     template_cage_bonus=0,
     no_template_penalty=0,
+    template_runway_penalty=0,
     clock_pressure=1.5,
     draw_contempt=400,
     squeeze_mobility=8,
@@ -87,6 +101,18 @@ CURRENT = EngineProfile(
     irreversible_move_bonus=40,
     deep_probe_template_distance=None,
     deep_probe_min_cage=0,
+    stateful_plan=False,
+    herding_open_escape_penalty=0,
+    herding_control_bonus=0,
+    plan_hold_bonus=0,
+    plan_unfrozen_penalty=0,
+    plan_release_block_penalty=0,
+    plan_undefended_hold_penalty=0,
+    herd_search_depth=0,
+    herd_search_cap=0,
+    modeled_herding_depth=0,
+    modeled_herding_cap=0,
+    modeled_herding_time_ms=0,
 )
 
 
@@ -118,6 +144,7 @@ V03 = EngineProfile(
     template_distance_penalty=0,
     template_cage_bonus=0,
     no_template_penalty=0,
+    template_runway_penalty=0,
     clock_pressure=1.5,
     draw_contempt=400,
     squeeze_mobility=8,
@@ -127,6 +154,18 @@ V03 = EngineProfile(
     irreversible_move_bonus=0,
     deep_probe_template_distance=None,
     deep_probe_min_cage=0,
+    stateful_plan=False,
+    herding_open_escape_penalty=0,
+    herding_control_bonus=0,
+    plan_hold_bonus=0,
+    plan_unfrozen_penalty=0,
+    plan_release_block_penalty=0,
+    plan_undefended_hold_penalty=0,
+    herd_search_depth=0,
+    herd_search_cap=0,
+    modeled_herding_depth=0,
+    modeled_herding_cap=0,
+    modeled_herding_time_ms=0,
 )
 
 
@@ -140,12 +179,37 @@ TEMPLATE = replace(
     template_distance_penalty=18,
     template_cage_bonus=8,
     no_template_penalty=3000,
+    template_runway_penalty=0,
     deep_probe_template_distance=2,
     deep_probe_min_cage=3,
 )
 
 
-PROFILES = {profile.name: profile for profile in (CURRENT, TEMPLATE, V03)}
+PLANNER = replace(
+    TEMPLATE,
+    name="planner",
+    stateful_plan=True,
+    template_distance_penalty=36,
+    template_cage_bonus=20,
+    template_runway_penalty=220,
+    herding_open_escape_penalty=24,
+    herding_control_bonus=5,
+    plan_hold_bonus=180,
+    plan_unfrozen_penalty=120,
+    plan_release_block_penalty=400,
+    plan_undefended_hold_penalty=300,
+    herd_search_depth=2,
+    herd_search_cap=10_000,
+    modeled_herding_depth=1,
+    modeled_herding_cap=1_000,
+    modeled_herding_time_ms=250,
+)
+
+
+PROFILES = {
+    profile.name: profile
+    for profile in (CURRENT, PLANNER, TEMPLATE, V03)
+}
 
 
 def get_profile(name: str) -> EngineProfile:

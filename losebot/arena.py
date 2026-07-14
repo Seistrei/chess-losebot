@@ -94,4 +94,18 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"deepest completed n={focal.deepest_probe_completed}; "
                 f"deep probes skipped {focal.deep_probe_skips} times"
             )
+        if getattr(getattr(focal, "profile", None), "stateful_plan", False):
+            print(
+                f"  construction plans: {focal.plans_created} created; "
+                f"{focal.plan_invalidations} invalidated; "
+                f"best distance {focal.best_plan_distance}; "
+                f"holding moves filtered {focal.hold_moves_filtered}; "
+                f"regressions filtered {focal.plan_regressions_filtered}; "
+                f"repetitions filtered {focal.plan_repetitions_filtered}; "
+                f"forced herds chosen {focal.forced_herding_choices}; "
+                f"herd proofs {focal.herd_search_hits}/"
+                f"{focal.herd_search_nodes} nodes; "
+                f"modeled herds {focal.modeled_herding_hits}/"
+                f"{focal.modeled_herding_replies} replies"
+            )
     return tallies

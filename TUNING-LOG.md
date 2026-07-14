@@ -96,3 +96,43 @@ A 120-ply drill-2 run later regressed to distance 7 as Zach's king wandered
 away. This is the next concrete frontier: maintain a selected construction and
 herd/box the reluctant king over a long horizon. A stateless leaf gradient can
 recognize a good template but cannot yet preserve the plan.
+
+## Stateful planner and bounded herding (2026-07-13)
+
+Added an experimental `planner` profile on top of the immutable `template`
+baseline:
+
+- a persistent construction target keyed by opponent pawn file and checked
+  side, so ordinary leaf evaluation cannot silently switch plans;
+- explicit HOLD/RELEASE state for a mobile piece occupying the future mating
+  square, including defense of that holding piece;
+- root filters that preserve our king placement, a three-piece cage reserve,
+  the pawn runway, the defended holder, and non-repeating alternatives;
+- exact bounded AND/OR search for checks that force every Zach-policy reply to
+  move the defending king closer; and
+- a bounded Zach-policy expectimax fallback for useful but non-forcing herding
+  moves.
+
+The first depth-2 expectimax experiment was stopped after roughly 90 minutes.
+That runtime was accidental: reply classification expanded before the intended
+budget could effectively bound the work. The default is now depth 1, 1,000
+nodes, and a hard 250 ms deadline per invocation. Do not restore depth 2 as a
+default without selective move generation, memoization, or both.
+
+Docker regression suite: **12/12 passing**. A five-drill bounded run (seed 5,
+40 plies, probe cap 10,000, probe depth 3) completed in **11.5 seconds**:
+
+| profile | conversions | other result | exact probe nodes |
+|---------|-------------|--------------|------------------:|
+| planner | 0/5 | 5 max-plies | about 10,000 total |
+
+This is not yet a conversion win, but it cuts the exact-probe work from the
+template baseline's 505,050 nodes to roughly 1,800-2,400 per drill while
+preserving a stable plan. Drill 2 exercised two exact herding proofs and 13
+modeled choices.
+
+A 120-ply drill-2 run completed in **4.7 seconds** with no exact-probe budget
+exhaustions. It kept a defended holder and ended at plan distance 3, with 52
+bounded modeled-herding choices. It still failed to convert before max plies,
+so the next algorithmic problem is productive long-horizon king herding rather
+than simply spending more nodes on the current branching tree.

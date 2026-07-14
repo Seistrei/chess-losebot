@@ -16,7 +16,11 @@ from .search import (
     selfmate_in,
     selfmate_status,
 )
-from .templates import best_pawn_mate_template
+from .templates import (
+    ConstructionPlan,
+    best_pawn_mate_template,
+    herding_metrics,
+)
 
 
 def make_bot(kind: str, args, color_tag: str):
@@ -117,8 +121,9 @@ def selftest() -> int:
 
     # 7. The historic configuration remains independently selectable.
     check(
-        "current and reconstructed v0.3 profiles are available",
+        "versioned engine profiles are available",
         LoseBot(profile="current").profile.name == "current"
+        and LoseBot(profile="planner").profile.name == "planner"
         and LoseBot(profile="template").profile.name == "template"
         and LoseBot(profile="v03").profile.name == "v03",
     )
@@ -142,6 +147,72 @@ def selftest() -> int:
         ),
     )
 
+    # 9. A construction plan resolves the same execution pawn/checking side
+    # instead of switching to whichever template is cheapest at each leaf.
+    plan = (
+        None
+        if target is None
+        else ConstructionPlan.from_template(target, created_ply=0)
+    )
+    resolved = None if plan is None else plan.resolve(board, chess.WHITE)
+    check(
+        "construction plan preserves its pawn and checking side",
+        resolved is not None
+        and resolved.uci == "b6b5"
+        and resolved.checked_square == chess.A4,
+        "none" if plan is None else plan.label,
+    )
+    check(
+        "complete unblocked construction is ready for release/proof",
+        target is not None and target.ready_to_release,
+    )
+
+    # 10. A mobile piece in front of the execution pawn is recognized as a
+    # temporary holding blocker, allowing the planner to freeze Zach's pawn.
+    hold_board = chess.Board(
+        "k7/p7/1p6/1B6/3Q4/2N5/PPP2PPP/R3K2R b - - 1 1"
+    )
+    held_target = (
+        None if plan is None else plan.resolve(hold_board, chess.WHITE)
+    )
+    check(
+        "construction plan recognizes a mobile pawn-holding blocker",
+        held_target is not None
+        and held_target.uci == "b6b5"
+        and held_target.holding_blocker
+        and held_target.holding_blocker_defended
+        and not held_target.ready_to_release,
+        "none" if held_target is None else (
+            f"{held_target.uci}; holding={held_target.holding_blocker}; "
+            f"defended={held_target.holding_blocker_defended}"
+        ),
+    )
+
+    # 11. The fallback search must not voluntarily abandon an incomplete hold.
+    hold_regression = chess.Board(
+        "1R6/p2k4/Q7/2p5/5B2/2N5/PPP2PPP/2K5 w - - 4 5"
+    )
+    hold_bot = LoseBot(
+        depth=1,
+        opponent_model="zach",
+        profile="planner",
+        probe_cap=0,
+        max_probe_n=1,
+    )
+    hold_bot.plan = ConstructionPlan(
+        pawn_file=chess.square_file(chess.A7),
+        checked_side=1,
+        created_ply=0,
+    )
+    held_move = hold_bot.choose_move(hold_regression)
+    check(
+        "planner does not voluntarily abandon an incomplete pawn hold",
+        held_move.from_square != chess.A6
+        and hold_bot.hold_moves_filtered > 0,
+        f"chose {hold_regression.san(held_move)}; "
+        f"filtered={hold_bot.hold_moves_filtered}",
+    )
+
     print("selftest:", "OK" if failures == 0 else f"{failures} failure(s)")
     return 1 if failures else 0
 
@@ -159,8 +230,9 @@ ENDGAME_FENS = [
 
 def endgames(args) -> int:
     import time
+    from pathlib import Path
 
-    from .arena import play_game
+    from .arena import play_game, save_pgn
 
     converted = 0
     cases = list(enumerate(ENDGAME_FENS, 1))
@@ -183,7 +255,13 @@ def endgames(args) -> int:
         dt = time.monotonic() - t0
         won = mated == chess.WHITE
         converted += won
+        if args.pgn_dir:
+            save_pgn(
+                board, bot, zach, reason, mated,
+                Path(args.pgn_dir), i,
+            )
         end_target = best_pawn_mate_template(board, chess.WHITE)
+        planned_target = bot.planned_target(board, chess.WHITE)
         template_progress = (
             "none"
             if start_target is None or end_target is None
@@ -192,6 +270,20 @@ def endgames(args) -> int:
                 f"->d{end_target.setup_distance}/c{end_target.cage_occupancy}"
             )
         )
+        if bot.plan is None:
+            plan_progress = "none"
+        elif planned_target is None:
+            plan_progress = f"{bot.plan.label}/invalid"
+        else:
+            herding = herding_metrics(board, chess.WHITE, planned_target)
+            plan_progress = (
+                f"{bot.plan.label}/d{planned_target.setup_distance}"
+                f"/c{planned_target.cage_occupancy}"
+                f"/out{herding.open_outward}"
+                f"/run{int(planned_target.runway_blocked)}"
+                f"/hold{int(planned_target.holding_blocker)}"
+                f"/def{int(planned_target.holding_blocker_defended)}"
+            )
         print(
             f"endgame {i}: {'CONVERTED (got mated)' if won else reason}"
             f" in {len(board.move_stack)} plies"
@@ -199,7 +291,17 @@ def endgames(args) -> int:
             f"nodes: {bot.probe_nodes}; "
             f"exhausted: {bot.probe_budget_exhaustions}; "
             f"deep-skips: {bot.deep_probe_skips}; "
-            f"template: {template_progress}] [{dt:.0f}s]",
+            f"template: {template_progress}; "
+            f"plan: {plan_progress}; replans: {bot.plans_created}; "
+            f"hold-filtered: {bot.hold_moves_filtered}; "
+            f"regressions-filtered: {bot.plan_regressions_filtered}; "
+            f"repetitions-filtered: {bot.plan_repetitions_filtered}; "
+            f"forced-herds: {bot.forced_herding_choices}; "
+            f"herd-proofs: {bot.herd_search_hits}; "
+            f"herd-nodes: {bot.herd_search_nodes}; "
+            f"modeled-herds: {bot.modeled_herding_hits}; "
+            f"modeled-replies: {bot.modeled_herding_replies}] "
+            f"[{dt:.0f}s]",
             flush=True,
         )
         if args.show_fen:
@@ -227,6 +329,7 @@ def main() -> int:
     eg.add_argument("--probe-cap", type=int, default=None)
     eg.add_argument("--probe-depth", type=int, default=None)
     eg.add_argument("--show-fen", action="store_true")
+    eg.add_argument("--pgn-dir", default=None)
 
     arena = sub.add_parser("arena")
     arena.add_argument("--white", required=True,
