@@ -54,3 +54,45 @@ Next steps, in rough order of expected value:
 3. Fairy-Stockfish `[misere:chess] checkmateValue = win` as a deep oracle
    (needs a ~few-MB binary download into the image).
 4. lichess-bot bridge — no misère bot exists on Lichess.
+
+## Solver foundation and template baseline (2026-07-13)
+
+Implemented without changing the `current` profile's weights:
+
+- immutable `current`, reconstructed `v03`, and experimental `template`
+  profiles, selectable from the Docker CLI;
+- tri-state exact search (`PROVEN`, `DISPROVEN`, `UNKNOWN`) so exhausting a
+  node budget is never cached as a genuine refutation;
+- exact-probe draw handling aligned with the arena's repetition and 50-move
+  rules, including draw-history state in transposition keys;
+- probe node, exhaustion, completed-depth, and deep-skip diagnostics;
+- a coupled pawn-mate template: one opponent pawn push, our king's checked
+  square, their king's pawn-defense square, and our local cage occupancy;
+- preservation penalty when king+pawns remain but no usable pawn-push template
+  survives; and
+- a template-proximity gate: n=1 is always checked, while n=2+ is attempted
+  only at template distance <=2 with at least three cage occupants.
+
+Docker regression suite: **8/8 passing**.
+
+Bounded comparison: seed 5, all five drills, 40 plies, probe cap 10,000,
+maximum probe depth 3. These are navigation/performance measurements, not
+conversion-rate estimates.
+
+| profile | conversions | other result | probe nodes | exhaustions |
+|---------|-------------|--------------|-------------|-------------|
+| current | 0/5 | 1 stalemate, 4 max-plies | 916,308 | 91 |
+| v03 | 0/5 | 5 max-plies | 1,000,000 | 100 |
+| template, before gate | 0/5 | 5 max-plies | 1,000,000 | 100 |
+| template, gated | 0/5 | 5 max-plies | **505,050** | **50** |
+
+The template profile reduced best setup distance from 5 to 2-3 in all five
+drills and built 3-4 cage occupants. In drill 2 it initially allowed the last
+usable pawn to reach a dead promotion square; the no-template penalty fixed
+that regression (final target improved from distance 5/cage 2 to distance
+2/cage 3 at ply 40).
+
+A 120-ply drill-2 run later regressed to distance 7 as Zach's king wandered
+away. This is the next concrete frontier: maintain a selected construction and
+herd/box the reluctant king over a long horizon. A stateless leaf gradient can
+recognize a good template but cannot yet preserve the plan.

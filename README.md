@@ -34,6 +34,15 @@ docker run --rm -v "D:\ChessLosebot\games:/app/games" losebot `
 
 # Endgame conversion drills (Zach pre-stripped to king+pawns)
 docker run --rm losebot pypy3 -m losebot endgames --seed 5
+
+# Reproducible profile comparison with a bounded exact probe
+docker run --rm losebot pypy3 -m losebot endgames --profile v03 --seed 5 `
+  --max-plies 40 --probe-cap 10000 --probe-depth 3
+
+# Inspect one drill and its final position
+docker run --rm losebot pypy3 -m losebot endgames --profile template `
+  --case 2 --seed 5 --max-plies 40 --probe-cap 10000 `
+  --probe-depth 3 --show-fen
 ```
 
 ## How LoseBot works
@@ -51,6 +60,12 @@ docker run --rm losebot pypy3 -m losebot endgames --seed 5
    (they are shuffle fuel), leave them king-and-pawns, walk our king in front
    of their pawns, smother it with our own men, minimize their mobility,
    and treat draws/50-move drift as failure.
+
+Named engine profiles keep experiments reproducible: `current` preserves the
+pre-profile build, `v03` reconstructs the best historic full-game weights from
+the tuning log, and experimental `template` couples both kings to one concrete
+opponent-pawn mating push. The template profile only unlocks expensive deep
+proof searches when that target is close and partially caged.
 
 ## Roadmap
 

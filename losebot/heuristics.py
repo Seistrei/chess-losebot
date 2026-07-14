@@ -13,6 +13,9 @@ into their pawns and smother it with our own men.
 
 import chess
 
+from .profiles import CURRENT, EngineProfile
+from .templates import best_pawn_mate_template
+
 PIECE_VALS = {
     chess.PAWN: 100,
     chess.KNIGHT: 320,
@@ -23,12 +26,11 @@ PIECE_VALS = {
 }
 
 MATE = 100_000
-CONTEMPT = 400        # draws are failure — steer away from them
-CLOCK_PRESSURE = 1.5  # a rising 50-move clock means we are drifting to a draw
 
 
 def evaluate(board: chess.Board, root_color: chess.Color,
-             model: str | None = None) -> float:
+             model: str | None = None,
+             profile: EngineProfile = CURRENT) -> float:
     us = root_color
     them = not root_color
     stm = board.turn
@@ -49,34 +51,38 @@ def evaluate(board: chess.Board, root_color: chess.Color,
             their_pawns += 1
         elif piece.piece_type != chess.KING:
             their_pieces += 1
-            v -= 0.90 * PIECE_VALS[piece.piece_type]
-    v += 25 * our_men
+            v -= profile.their_piece_scale * PIECE_VALS[piece.piece_type]
+    v += profile.our_man_value * our_men
 
     # They must keep something to mate us with: a bare king is a dead draw,
     # and so is a king whose only companions are pawns that can never move.
     if their_pawns == 0 and their_pieces == 0:
-        v -= 6000
+        v -= profile.bare_king_penalty
     else:
         if their_pawns:
             # Their first pawn is precious (it is the executioner we protect);
             # a couple of spares are insurance.
-            v += 55 + 25 * min(their_pawns, 3)
+            v += profile.pawn_base + profile.pawn_value * min(
+                their_pawns, profile.pawn_cap
+            )
         if their_pieces == 0:
-            v += 150  # the target state: king and pawns only
+            v += profile.king_and_pawns_bonus
             if not _any_pawn_can_move(board, them, us):
-                v -= 3000
+                v -= profile.frozen_pawns_penalty
 
     # Their menu of options. When it is small, what matters is WHICH moves
     # remain: non-mating moves must vanish, mating moves must stay available —
     # squeezing them to zero is a stalemate, not a win.
     if stm == them:
-        v += _menu_term(board, model)
+        v += _menu_term(board, model, profile)
     elif board.is_check():
         # We are being checked: progress; few escapes means nearly mated.
-        v += 40 + 6 * max(0, 8 - board.legal_moves.count())
+        v += profile.check_bonus + profile.check_escape_bonus * max(
+            0, 8 - board.legal_moves.count()
+        )
     else:
         board.push(chess.Move.null())
-        v += _menu_term(board, model)
+        v += _menu_term(board, model, profile)
         board.pop()
 
     # Kings: walk ours toward their pawns (they deliver the mate; this is
@@ -89,11 +95,13 @@ def evaluate(board: chess.Board, root_color: chess.Color,
         if not targets and their_king is not None:
             targets = [their_king]
         if targets:
-            v -= 9 * min(chess.square_distance(our_king, t) for t in targets)
+            v -= profile.king_target_distance_penalty * min(
+                chess.square_distance(our_king, t) for t in targets
+            )
         for nb in chess.SquareSet(chess.BB_KING_ATTACKS[our_king]):
             p = board.piece_at(nb)
             if p is not None and p.color == us:
-                v += 6
+                v += profile.own_king_neighbor_bonus
 
     # Endgame herding: with only king+pawns left, the mate is a pawn move
     # whose arrival square THEIR OWN KING defends (nothing else can). Drive
@@ -103,17 +111,25 @@ def evaluate(board: chess.Board, root_color: chess.Color,
             chess.square_distance(their_king, s)
             for s in board.pieces(chess.PAWN, them)
         )
-        v -= 8 * pawn_dist
+        v -= profile.herding_distance_penalty * pawn_dist
         if pawn_dist == 1:
-            v += 120
+            v += profile.herding_adjacency_bonus
+
+        target = best_pawn_mate_template(board, us)
+        if target is None:
+            v -= profile.no_template_penalty
+        else:
+            v -= profile.template_distance_penalty * target.setup_distance
+            v += profile.template_cage_bonus * target.cage_occupancy
 
     # We fear the draw clock; they do not.
-    v -= CLOCK_PRESSURE * board.halfmove_clock
+    v -= profile.clock_pressure * board.halfmove_clock
 
     return v if stm == us else -v
 
 
-def _menu_term(board: chess.Board, model: str | None = None) -> float:
+def _menu_term(board: chess.Board, model: str | None,
+               profile: EngineProfile) -> float:
     """Board has THEM to move. Score their option pool from our perspective.
 
     Counts every legal move: for the final zugzwang to be forceable, ALL
@@ -122,7 +138,7 @@ def _menu_term(board: chess.Board, model: str | None = None) -> float:
     legal = list(board.legal_moves)
     if not legal:
         return 0.0  # terminal; negamax scores it
-    if len(legal) <= 10:
+    if len(legal) <= profile.menu_limit:
         mating = 0
         nonmating = 0.0
         for r in legal:
@@ -133,12 +149,15 @@ def _menu_term(board: chess.Board, model: str | None = None) -> float:
             else:
                 # A free king is the great draw engine: boxing it is what
                 # turns their pawn moves into their entire menu.
-                nonmating += 1.6 if is_king_move else 1.0
+                nonmating += profile.king_move_weight if is_king_move else 1.0
             board.pop()
-        if nonmating == 0 and mating:
-            return 900.0  # every move they have mates us; the probe seals it
-        return -14 * nonmating + 90 * min(mating, 2)
-    return -12 * len(legal)
+        if nonmating == 0 and mating and profile.zugzwang_bonus is not None:
+            return profile.zugzwang_bonus
+        return (
+            -profile.nonmating_move_penalty * nonmating
+            + profile.mating_move_bonus * min(mating, profile.mating_move_cap)
+        )
+    return -profile.large_menu_penalty * len(legal)
 
 
 def _any_pawn_can_move(board: chess.Board, owner: chess.Color,

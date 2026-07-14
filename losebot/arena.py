@@ -87,4 +87,11 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
             f"({100.0 * wins / n_games:.0f}%); "
             f"forced selfmates found: {focal.forced_selfmates_found}"
         )
+        if getattr(focal, "probe_nodes", None) is not None:
+            print(
+                f"  exact probe: {focal.probe_nodes} nodes; "
+                f"budget exhausted {focal.probe_budget_exhaustions} times; "
+                f"deepest completed n={focal.deepest_probe_completed}; "
+                f"deep probes skipped {focal.deep_probe_skips} times"
+            )
     return tallies

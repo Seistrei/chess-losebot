@@ -2,9 +2,25 @@
 negamax with inverted terminal values (being checkmated = +MATE for the side
 that gets mated)."""
 
+from enum import Enum
+
 import chess
 
-from .heuristics import CONTEMPT, MATE, evaluate
+from .heuristics import MATE, evaluate
+from .profiles import CURRENT, EngineProfile
+
+
+class ProofStatus(Enum):
+    """Result of a bounded exact search.
+
+    UNKNOWN is materially different from DISPROVEN: it means the node budget
+    expired before the tree was resolved and therefore must never be cached as
+    a refutation.
+    """
+
+    PROVEN = "proven"
+    DISPROVEN = "disproven"
+    UNKNOWN = "unknown"
 
 
 def gives_mate(board: chess.Board, move: chess.Move) -> bool:
@@ -22,7 +38,62 @@ def gives_stalemate(board: chess.Board, move: chess.Move) -> bool:
 
 
 def _probe_draw(board: chess.Board) -> bool:
-    return board.is_insufficient_material() or board.halfmove_clock >= 100
+    return (
+        board.is_insufficient_material()
+        or board.halfmove_clock >= 100
+        or (board.halfmove_clock >= 8 and board.is_repetition(3))
+    )
+
+
+def _history_counts(board: chess.Board) -> dict:
+    """Count reversible-history positions once at the root of a probe."""
+    replay = board.copy(stack=True)
+    counts: dict = {}
+    remaining = min(board.halfmove_clock, len(board.move_stack))
+    for _ in range(remaining + 1):
+        key = replay._transposition_key()
+        counts[key] = counts.get(key, 0) + 1
+        if not replay.move_stack:
+            break
+        replay.pop()
+    return counts
+
+
+def _record_push(board: chess.Board, move: chess.Move,
+                 history: dict):
+    board.push(move)
+    key = board._transposition_key()
+    history[key] = history.get(key, 0) + 1
+    return key
+
+
+def _record_pop(board: chess.Board, history: dict, key) -> None:
+    count = history[key] - 1
+    if count:
+        history[key] = count
+    else:
+        del history[key]
+    board.pop()
+
+
+def _memo_key(board: chess.Board, n: int, our_node: bool, history: dict):
+    """Position key including draw-rule state relevant to a proof.
+
+    python-chess's transposition key intentionally omits the halfmove clock and
+    history. Those are part of this game's terminal rules, so merging nodes
+    without them can turn a draw into a false proof. Counts are capped at three
+    because higher counts are already terminal and should never reach here.
+    """
+    repetition_state = frozenset(
+        (position, min(count, 3)) for position, count in history.items()
+    )
+    return (
+        board._transposition_key(),
+        board.halfmove_clock,
+        repetition_state,
+        n,
+        our_node,
+    )
 
 
 def support_zach(board: chess.Board):
@@ -39,13 +110,15 @@ def support_zach(board: chess.Board):
 
 
 def _forced_after(board: chess.Board, n: int, model: str | None,
-                  budget, memo) -> bool:
-    """Opponent to move. True iff every reply in their pool either mates us
-    immediately or leads to our forced selfmate within n-1 further own moves.
+                  budget, memo, history: dict) -> ProofStatus:
+    """Resolve an opponent (AND) node.
+
+    PROVEN means every reply in the opponent's pool either mates us immediately
+    or leads to our forced selfmate within n-1 further own moves.
 
     Lazy: bails out on the first refutation found, so quiet positions cost a
     handful of pushes instead of a full reply classification."""
-    key = (board._transposition_key(), n, False)
+    key = _memo_key(board, n, False, history)
     hit = memo.get(key)
     if hit is not None:
         return hit
@@ -59,58 +132,101 @@ def _forced_after(board: chess.Board, n: int, model: str | None,
         ]
     else:
         classes = [legal]
-    result = True
     for cls in classes:
         non_mating_seen = False
+        saw_unknown = False
         for r in cls:
             if budget[0] <= 0:
-                return False  # budget truncation: fail, but do not cache
+                return ProofStatus.UNKNOWN
             budget[0] -= 1
-            board.push(r)
+            pushed_key = _record_push(board, r, history)
             if board.is_checkmate():
-                board.pop()  # this reply mates us — exactly what we want
+                _record_pop(board, history, pushed_key)
                 continue
             non_mating_seen = True
-            ok = (
-                n > 1
-                and not _probe_draw(board)
-                and _forced_self(board, n - 1, model, budget, memo)
-            )
-            board.pop()
-            if not ok:
-                memo[key] = False
-                return False  # refutation: they have a reply that escapes
+            if n <= 1 or _probe_draw(board):
+                status = ProofStatus.DISPROVEN
+            else:
+                status = _forced_self(
+                    board, n - 1, model, budget, memo, history
+                )
+            _record_pop(board, history, pushed_key)
+            if status is ProofStatus.DISPROVEN:
+                memo[key] = status
+                return status
+            if status is ProofStatus.UNKNOWN:
+                saw_unknown = True
         if non_mating_seen:
-            break  # this class is the pool, and every member is caught
-    memo[key] = result
-    return result
+            if saw_unknown:
+                return ProofStatus.UNKNOWN
+            memo[key] = ProofStatus.PROVEN
+            return ProofStatus.PROVEN
+
+    # Every legal reply mates us immediately.
+    memo[key] = ProofStatus.PROVEN
+    return ProofStatus.PROVEN
 
 
 def _forced_self(board: chess.Board, n: int, model: str | None,
-                 budget, memo) -> bool:
-    """We are to move. True iff some move of ours forces our mate within n."""
-    key = (board._transposition_key(), n, True)
+                 budget, memo, history: dict) -> ProofStatus:
+    """Resolve one of our (OR) nodes."""
+    key = _memo_key(board, n, True, history)
     hit = memo.get(key)
     if hit is not None:
         return hit
     moves = list(board.legal_moves)
     # Checks first: coercion is typically a check whose answers all mate us.
     moves.sort(key=lambda m: 0 if board.gives_check(m) else 1)
+    saw_unknown = False
     for m in moves:
         if budget[0] <= 0:
-            return False  # budget truncation: fail, but do not cache
+            return ProofStatus.UNKNOWN
         budget[0] -= 1
-        board.push(m)
+        pushed_key = _record_push(board, m, history)
         if board.is_checkmate() or board.is_stalemate() or _probe_draw(board):
-            board.pop()  # we mated/stalemated THEM or killed the game: failure
+            _record_pop(board, history, pushed_key)
             continue
-        forced = _forced_after(board, n, model, budget, memo)
-        board.pop()
-        if forced:
-            memo[key] = True
-            return True
-    memo[key] = False
-    return False
+        status = _forced_after(board, n, model, budget, memo, history)
+        _record_pop(board, history, pushed_key)
+        if status is ProofStatus.PROVEN:
+            memo[key] = status
+            return status
+        if status is ProofStatus.UNKNOWN:
+            saw_unknown = True
+    if saw_unknown:
+        return ProofStatus.UNKNOWN
+    memo[key] = ProofStatus.DISPROVEN
+    return ProofStatus.DISPROVEN
+
+
+def selfmate_status(board: chess.Board, n: int, model: str | None, budget,
+                    memo=None) -> tuple[ProofStatus, chess.Move | None]:
+    """Return the proof status and a proving root move, if one was found."""
+    if memo is None:
+        memo = {}
+    if _probe_draw(board):
+        return ProofStatus.DISPROVEN, None
+    moves = list(board.legal_moves)
+    moves.sort(key=lambda m: 0 if board.gives_check(m) else 1)
+    history = _history_counts(board)
+    saw_unknown = False
+    for m in moves:
+        if budget[0] <= 0:
+            return ProofStatus.UNKNOWN, None
+        budget[0] -= 1
+        pushed_key = _record_push(board, m, history)
+        if board.is_checkmate() or board.is_stalemate() or _probe_draw(board):
+            _record_pop(board, history, pushed_key)
+            continue
+        status = _forced_after(board, n, model, budget, memo, history)
+        _record_pop(board, history, pushed_key)
+        if status is ProofStatus.PROVEN:
+            return status, m
+        if status is ProofStatus.UNKNOWN:
+            saw_unknown = True
+    if saw_unknown:
+        return ProofStatus.UNKNOWN, None
+    return ProofStatus.DISPROVEN, None
 
 
 def selfmate_in(board: chess.Board, n: int, model: str | None, budget,
@@ -118,23 +234,8 @@ def selfmate_in(board: chess.Board, n: int, model: str | None, budget,
     """Return a move that forces us to be checkmated within n of our own moves
     against every reply in the opponent's pool (None if no such move within
     the node budget — the probe is best-effort)."""
-    if memo is None:
-        memo = {}
-    moves = list(board.legal_moves)
-    moves.sort(key=lambda m: 0 if board.gives_check(m) else 1)
-    for m in moves:
-        if budget[0] <= 0:
-            return None
-        budget[0] -= 1
-        board.push(m)
-        if board.is_checkmate() or board.is_stalemate() or _probe_draw(board):
-            board.pop()
-            continue
-        forced = _forced_after(board, n, model, budget, memo)
-        board.pop()
-        if forced:
-            return m
-    return None
+    status, move = selfmate_status(board, n, model, budget, memo)
+    return move if status is ProofStatus.PROVEN else None
 
 
 def _ordered(board: chess.Board):
@@ -154,7 +255,8 @@ def _ordered(board: chess.Board):
 
 def negamax(board: chess.Board, depth: int, alpha: float, beta: float,
             root_color: chess.Color, ply: int,
-            model: str | None = None) -> float:
+            model: str | None = None,
+            profile: EngineProfile = CURRENT) -> float:
     if board.is_checkmate():
         return MATE - ply  # the side to move is mated: it wins misère chess
     if (
@@ -163,9 +265,10 @@ def negamax(board: chess.Board, depth: int, alpha: float, beta: float,
         or board.halfmove_clock >= 100
         or (board.halfmove_clock >= 8 and board.is_repetition(3))
     ):
-        return -CONTEMPT if board.turn == root_color else CONTEMPT
+        contempt = profile.draw_contempt
+        return -contempt if board.turn == root_color else contempt
     if depth <= 0:
-        return evaluate(board, root_color, model)
+        return evaluate(board, root_color, model, profile)
     # NOTE: opponent nodes deliberately expand ALL legal moves (adversarial),
     # even under an opponent model. Modeling Zach's capture-aversion here once
     # taught the bot to build cages out of hanging pieces — which Zach, when
@@ -174,7 +277,10 @@ def negamax(board: chess.Board, depth: int, alpha: float, beta: float,
     best = -float("inf")
     for m in _ordered(board):
         board.push(m)
-        v = -negamax(board, depth - 1, -beta, -alpha, root_color, ply + 1, model)
+        v = -negamax(
+            board, depth - 1, -beta, -alpha, root_color, ply + 1,
+            model, profile,
+        )
         board.pop()
         if v > best:
             best = v
