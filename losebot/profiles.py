@@ -63,6 +63,8 @@ class EngineProfile:
     modeled_herding_depth: int
     modeled_herding_cap: int
     modeled_herding_time_ms: int
+    modeled_herding_candidate_limit: int | None
+    modeled_herding_memoize: bool
 
 
 CURRENT = EngineProfile(
@@ -113,6 +115,8 @@ CURRENT = EngineProfile(
     modeled_herding_depth=0,
     modeled_herding_cap=0,
     modeled_herding_time_ms=0,
+    modeled_herding_candidate_limit=None,
+    modeled_herding_memoize=False,
 )
 
 
@@ -166,6 +170,8 @@ V03 = EngineProfile(
     modeled_herding_depth=0,
     modeled_herding_cap=0,
     modeled_herding_time_ms=0,
+    modeled_herding_candidate_limit=None,
+    modeled_herding_memoize=False,
 )
 
 
@@ -206,9 +212,23 @@ PLANNER = replace(
 )
 
 
+HERDING = replace(
+    PLANNER,
+    name="herding",
+    # The first depth-two attempt expanded every legal continuation. This
+    # profile retains all forcing checks, beams quiet setup moves, and caches
+    # only complete expectimax values under draw-history-safe keys.
+    modeled_herding_depth=2,
+    modeled_herding_cap=5_000,
+    modeled_herding_time_ms=250,
+    modeled_herding_candidate_limit=8,
+    modeled_herding_memoize=True,
+)
+
+
 PROFILES = {
     profile.name: profile
-    for profile in (CURRENT, PLANNER, TEMPLATE, V03)
+    for profile in (CURRENT, HERDING, PLANNER, TEMPLATE, V03)
 }
 
 

@@ -8,6 +8,7 @@ import chess
 from .arena import run_match
 from .bot import LoseBot
 from .opponents import RandomBot, WorstfishBot, ZachBot
+from .planning import modeled_herding_move
 from .profiles import PROFILES
 from .search import (
     ProofStatus,
@@ -123,6 +124,7 @@ def selftest() -> int:
     check(
         "versioned engine profiles are available",
         LoseBot(profile="current").profile.name == "current"
+        and LoseBot(profile="herding").profile.name == "herding"
         and LoseBot(profile="planner").profile.name == "planner"
         and LoseBot(profile="template").profile.name == "template"
         and LoseBot(profile="v03").profile.name == "v03",
@@ -213,6 +215,60 @@ def selftest() -> int:
         f"filtered={hold_bot.hold_moves_filtered}",
     )
 
+    # 12. The depth-two herding experiment must classify replies inside its
+    # budget, prune quiet setup moves, and populate only completed memo values.
+    selective_board = chess.Board(
+        "5R2/1k6/1p6/1B1N4/2K5/pPP5/P4PPP/7R w - - 36 61"
+    )
+    selective_plan = ConstructionPlan(
+        pawn_file=chess.square_file(chess.B6),
+        checked_side=1,
+        created_ply=0,
+    )
+    modeled = modeled_herding_move(
+        selective_board,
+        selective_plan,
+        chess.WHITE,
+        list(selective_board.legal_moves),
+        "zach",
+        max_n=2,
+        node_cap=5_000,
+        time_limit_ms=1_000,
+        candidate_limit=4,
+        memoize=True,
+    )
+    check(
+        "selective depth-two herding is bounded and memoized",
+        modeled.nodes <= 5_000
+        and modeled.candidates_pruned > 0
+        and modeled.memo_entries > 0,
+        f"nodes={modeled.nodes}; pruned={modeled.candidates_pruned}; "
+        f"cache={modeled.cache_hits}/{modeled.memo_entries}; "
+        f"complete={modeled.complete}",
+    )
+
+    # 13. A promoted piece means the king-and-pawns phase has ended. The
+    # construction must be dropped so the ordinary search can remove it.
+    promoted_board = chess.Board(
+        "1R6/k7/1p6/1BR5/PK6/1nP5/5PPP/8 w - - 13 61"
+    )
+    promoted_bot = LoseBot(
+        depth=1,
+        opponent_model="zach",
+        profile="herding",
+        probe_cap=0,
+        max_probe_n=1,
+    )
+    promoted_bot.plan = selective_plan
+    promoted_bot.choose_move(promoted_board)
+    check(
+        "planner suspends construction after an opponent promotion",
+        promoted_bot.plan is None
+        and promoted_bot.plan_invalidations == 1,
+        f"plan={promoted_bot.plan}; "
+        f"invalidations={promoted_bot.plan_invalidations}",
+    )
+
     print("selftest:", "OK" if failures == 0 else f"{failures} failure(s)")
     return 1 if failures else 0
 
@@ -300,7 +356,12 @@ def endgames(args) -> int:
             f"herd-proofs: {bot.herd_search_hits}; "
             f"herd-nodes: {bot.herd_search_nodes}; "
             f"modeled-herds: {bot.modeled_herding_hits}; "
-            f"modeled-replies: {bot.modeled_herding_replies}] "
+            f"modeled-replies: {bot.modeled_herding_replies}; "
+            f"modeled-nodes: {bot.modeled_herding_nodes}; "
+            f"modeled-cache: {bot.modeled_herding_cache_hits}/"
+            f"{bot.modeled_herding_memo_entries}; "
+            f"modeled-pruned: {bot.modeled_herding_candidates_pruned}; "
+            f"modeled-incomplete: {bot.modeled_herding_incomplete}] "
             f"[{dt:.0f}s]",
             flush=True,
         )

@@ -106,6 +106,12 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"herd proofs {focal.herd_search_hits}/"
                 f"{focal.herd_search_nodes} nodes; "
                 f"modeled herds {focal.modeled_herding_hits}/"
-                f"{focal.modeled_herding_replies} replies"
+                f"{focal.modeled_herding_replies} replies/"
+                f"{focal.modeled_herding_nodes} nodes; "
+                f"modeled cache {focal.modeled_herding_cache_hits} hits/"
+                f"{focal.modeled_herding_memo_entries} entries; "
+                f"modeled candidates pruned "
+                f"{focal.modeled_herding_candidates_pruned}; "
+                f"modeled incomplete {focal.modeled_herding_incomplete}"
             )
     return tallies

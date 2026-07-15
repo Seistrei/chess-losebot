@@ -47,6 +47,10 @@ docker run --rm losebot pypy3 -m losebot endgames --profile template `
 # Exercise the stateful construction planner with bounded tactical searches
 docker run --rm losebot pypy3 -m losebot endgames --profile planner `
   --seed 5 --max-plies 40 --probe-cap 10000 --probe-depth 3
+
+# Guarded depth-two herding experiment (beam search plus memoization)
+docker run --rm losebot pypy3 -m losebot endgames --profile herding `
+  --case 2 --seed 5 --max-plies 120 --probe-cap 10000 --probe-depth 3
 ```
 
 ## How LoseBot works
@@ -71,13 +75,18 @@ the tuning log, and experimental `template` couples both kings to one concrete
 opponent-pawn mating push. Experimental `planner` persists one such target,
 holds a defended blocker on the pawn's mating square until release, preserves
 the king cage, filters repetitions and plan regressions, and uses bounded
-short-horizon searches to herd the defending king. Deep proof searches are
-only unlocked when the selected target is close and partially caged.
+short-horizon searches to herd the defending king. The `herding` profile is a
+separate depth-two experiment: it retains every forcing check, limits quiet
+setup continuations to an eight-move beam, memoizes only fully evaluated
+modeled states, and accounts for Zach reply classification inside its cap.
+Deep proof searches are only unlocked when the selected target is close and
+partially caged.
 
-The modeled herding search deliberately defaults to one turn, 1,000 nodes,
-and 250 ms per invocation. Depth two currently branches too quickly to be a
-practical default; increasing it requires a more selective reply model or a
-stronger transposition strategy.
+The baseline `planner` modeled search deliberately remains at one turn, 1,000
+nodes, and 250 ms per invocation. `herding` retries two turns with an eight-
+move beam, a 5,000-node cap, a draw-history-safe transposition table, and the
+same hard 250 ms deadline. It is intentionally experimental: the tuning log
+records that the guarded search is fast but has not improved conversions.
 
 ## Roadmap
 

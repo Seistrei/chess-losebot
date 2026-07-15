@@ -51,11 +51,24 @@ class LoseBot:
         self.herd_search_exhaustions = 0
         self.modeled_herding_hits = 0
         self.modeled_herding_replies = 0
+        self.modeled_herding_nodes = 0
+        self.modeled_herding_cache_hits = 0
+        self.modeled_herding_memo_entries = 0
+        self.modeled_herding_candidates_pruned = 0
+        self.modeled_herding_incomplete = 0
         self._last_seen_ply: int | None = None
 
     def _update_construction_plan(self, board: chess.Board,
                                   their_pieces: int) -> None:
-        if not self.profile.stateful_plan or their_pieces != 0:
+        if not self.profile.stateful_plan:
+            return
+        if their_pieces != 0:
+            # A promotion or other surviving mobile piece ends the
+            # king-and-pawns phase. Continuing to preserve its old cage made
+            # the planner ignore the new piece while it chased our king.
+            if self.plan is not None:
+                self.plan_invalidations += 1
+                self.plan = None
             return
 
         target = (
@@ -308,8 +321,18 @@ class LoseBot:
                 self.profile.modeled_herding_depth,
                 self.profile.modeled_herding_cap,
                 self.profile.modeled_herding_time_ms,
+                self.profile.modeled_herding_candidate_limit,
+                self.profile.modeled_herding_memoize,
             )
             self.modeled_herding_replies += modeled.replies
+            self.modeled_herding_nodes += modeled.nodes
+            self.modeled_herding_cache_hits += modeled.cache_hits
+            self.modeled_herding_memo_entries += modeled.memo_entries
+            self.modeled_herding_candidates_pruned += (
+                modeled.candidates_pruned
+            )
+            if not modeled.complete:
+                self.modeled_herding_incomplete += 1
             if modeled.move is not None:
                 self.modeled_herding_hits += 1
                 return modeled.move

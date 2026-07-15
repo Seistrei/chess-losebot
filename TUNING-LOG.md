@@ -136,3 +136,53 @@ exhaustions. It kept a defended holder and ended at plan distance 3, with 52
 bounded modeled-herding choices. It still failed to convert before max plies,
 so the next algorithmic problem is productive long-horizon king herding rather
 than simply spending more nodes on the current branching tree.
+
+## Selective depth-two herding (2026-07-13)
+
+Added a separate experimental `herding` profile; the documented `planner`
+profile remains the depth-one comparison baseline. The new modeled search:
+
+- keeps every plan-preserving check and beams quiet setup moves to the best
+  eight candidates at both our root and recursive choice nodes;
+- charges candidate ranking and Zach reply classification to the 5,000-node
+  cap and observes a hard 250 ms deadline during both operations;
+- memoizes only complete expectimax values, with the halfmove clock and
+  repetition history in the transposition key; and
+- caches Zach's exact uniform reply pool separately from depth-dependent
+  values.
+
+A correctness regression surfaced during the first benchmark: after an
+opponent pawn promoted, the stateful bot kept enforcing a king-and-pawns plan
+while the new knight chased its king onto the selected pawn's runway. Plans are
+now invalidated whenever an opponent mobile piece exists and reconstructed if
+the position later returns to king+pawns. Docker regression suite: **14/14
+passing**.
+
+The five-drill bounded comparison (seed 5, 40 plies, probe cap 10,000, probe
+depth 3) remained **0/5** for both `planner` and `herding`. Wall time was about
+11.8 seconds for `planner` and 11.1 seconds for `herding`; drill 2 ended at the
+same distance 3/cage 4, although depth two closed one additional outward king
+escape at ply 40.
+
+The more relevant comparison used drill 2 for 120 plies across seeds 0-9:
+
+| profile | conversions | other result | mean final distance/cage | mean time |
+|---------|-------------|--------------|--------------------------|-----------|
+| planner | 0/10 | 10 max-plies | 3.1 / 3.8 | 4.8 s |
+| herding | 0/10 | 9 max-plies, 1 repetition | 3.2 / 4.1 | 4.1 s |
+
+Depth two was operationally bounded: all modeled invocations completed their
+selective tree, totaling 320,638 accounted nodes, 55,644 Zach replies, 86,278
+pruned quiet candidates, and 4,665 cache hits over 59,590 stored entries. It
+nevertheless produced no conversion or durable distance improvement and added
+one repetition regression. **Do not promote `herding` over `planner`.**
+
+The negative result argues against another move-level depth increase. The next
+experiment should search an abstract herding state: selected pawn/side,
+opponent king square, open outward squares, and cage/holder invariants. Piece
+moves then become macro-actions that close a required escape or force the
+next king-square transition. A small route/box policy (or value iteration over
+that abstraction) can represent the required 20+ ply objective; the existing
+exact probe should still seal the final tactical 4-6 plies. Promotion threats
+from non-selected pawns also need an explicit freeze/block priority rather than
+being left to the leaf gradient.
