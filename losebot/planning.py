@@ -154,8 +154,16 @@ def _herd_self(board: chess.Board, remaining: int,
 
 def herding_move(board: chess.Board, plan: ConstructionPlan,
                  us: chess.Color, max_n: int, model: str | None,
-                 node_cap: int) -> HerdSearchResult:
-    """Find a move forcing their king closer within ``max_n`` own moves."""
+                 node_cap: int,
+                 moves: list[chess.Move] | None = None) -> HerdSearchResult:
+    """Find a move forcing their king closer within ``max_n`` own moves.
+
+    ``moves`` restricts the ROOT candidates (the caller passes its filtered
+    safe list, so a proven net cannot start with a move the root filters
+    rejected — e.g. one that leaves Zach nothing but captures). Interior
+    nodes still search every legal move: they are inside a proof, and the
+    plan-preservation checks are the arbiter there.
+    """
     initial = plan.resolve(board, us)
     if (
         initial is None
@@ -178,8 +186,11 @@ def herding_move(board: chess.Board, plan: ConstructionPlan,
         minimum_cage=3,
         budget=budget,
     )
-    moves = list(board.legal_moves)
-    moves.sort(key=lambda move: 0 if board.gives_check(move) else 1)
+    if moves is None:
+        moves = list(board.legal_moves)
+    moves = sorted(
+        moves, key=lambda move: 0 if board.gives_check(move) else 1
+    )
     saw_unknown = False
     for move in moves:
         if not _spend(context):

@@ -114,4 +114,29 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.modeled_herding_candidates_pruned}; "
                 f"modeled incomplete {focal.modeled_herding_incomplete}"
             )
+        if getattr(getattr(focal, "profile", None), "vi_herding", False):
+            root = (
+                "n/a"
+                if focal.vi_root_value is None
+                else f"{focal.vi_root_value:.3f}"
+            )
+            print(
+                f"  vi herding: {focal.vi_builds} builds "
+                f"({focal.vi_build_failures} failed"
+                f"{': ' + focal.vi_last_failure if focal.vi_last_failure else ''}); "
+                f"{focal.vi_states} states; {focal.vi_edges} edges; "
+                f"{focal.vi_updates} updates; last root {root}; "
+                f"{focal.vi_build_ms:.0f}ms building; "
+                f"{focal.vi_moves_played} moves played; "
+                f"{focal.vi_state_misses} state misses; "
+                f"{focal.vi_zero_fallbacks} zero-value fallbacks; "
+                f"{focal.vi_goal_stalls} goal stalls; "
+                f"{focal.vi_releases} releases "
+                f"({focal.vi_release_nodes} probe nodes); "
+                f"{focal.vi_side_flips} side flips; "
+                f"{focal.vi_king_marches} king marches; "
+                f"{focal.vi_cage_builds} cage builds; "
+                f"{focal.vi_capture_guards} capture guards; "
+                f"{focal.vi_pool_mismatches} pool mismatches"
+            )
     return tallies

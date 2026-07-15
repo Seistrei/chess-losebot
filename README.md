@@ -51,6 +51,11 @@ docker run --rm losebot pypy3 -m losebot endgames --profile planner `
 # Guarded depth-two herding experiment (beam search plus memoization)
 docker run --rm losebot pypy3 -m losebot endgames --profile herding `
   --case 2 --seed 5 --max-plies 120 --probe-cap 10000 --probe-depth 3
+
+# Exact value iteration over the herding sub-MDP, with dead-side
+# certificates and prospective side-flips
+docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+  --case 2 --seed 5 --max-plies 240 --probe-cap 10000 --probe-depth 3
 ```
 
 ## How LoseBot works
@@ -87,6 +92,20 @@ nodes, and 250 ms per invocation. `herding` retries two turns with an eight-
 move beam, a 5,000-node cap, a draw-history-safe transposition table, and the
 same hard 250 ms deadline. It is intentionally experimental: the tuning log
 records that the guarded search is fast but has not improved conversions.
+
+The `vi` profile treats the herd phase as what it actually is against a fixed
+stochastic opponent: a Markov decision process. With the construction frozen
+(king parked, holder defended, pawns blocked), the only dynamic units are
+their king and one or two of our free pieces, and `losebot/herding_vi.py`
+solves that sub-MDP exactly by value iteration — the opponent edges reproduce
+`support_zach` move-for-move and are validated against it on every build.
+V(root) doubles as a herdability certificate: 0 proves the current static
+configuration can never walk their king into the goal zone, which triggers a
+prospective flip of the plan to the mirrored checked side when that side
+certifies live. Committed march/cage filters, a forced-capture guard, and a
+scored race-release round out the profile; the tuning log records the current
+frontier (piece-holder release geometry) that still separates delivered
+defenders from finished mates.
 
 ## Roadmap
 

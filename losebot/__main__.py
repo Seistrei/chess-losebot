@@ -32,6 +32,7 @@ def make_bot(kind: str, args, color_tag: str):
             profile=args.profile,
             probe_cap=args.probe_cap,
             max_probe_n=args.probe_depth,
+            vi_herders=getattr(args, "vi_herders", None),
         )
     if kind == "zach":
         return ZachBot(seed=args.seed)
@@ -247,6 +248,120 @@ def selftest() -> int:
         f"complete={modeled.complete}",
     )
 
+    # 13b. The herding sub-MDP: statics frozen, dynamics = their king plus two
+    # rook herders. The build must validate its bitboard Zach pool against
+    # support_zach, and value iteration must certify the goal zone reachable
+    # (V(root) > 0) with a quiet, legal recommended move.
+    from .herding_vi import HerdingPolicy
+
+    vi_board = chess.Board("k7/p7/Pp6/1B6/K7/PP6/8/6RR w - - 0 1")
+    vi_target = best_pawn_mate_template(vi_board, chess.WHITE)
+    vi_ok = (
+        vi_target is not None
+        and vi_target.uci == "b6b5"
+        and vi_target.checked_square == chess.A4
+        and vi_target.holding_blocker
+        and vi_target.holding_blocker_defended
+    )
+    vi_policy = None
+    if vi_ok:
+        vi_policy = HerdingPolicy.build(
+            vi_board, vi_target, max_herders=2, state_cap=200_000,
+            time_budget_ms=30_000, gamma=0.99,
+        )
+        ranked = vi_policy.ranked_moves(vi_board) or []
+        vi_ok = (
+            vi_policy.report.ok
+            and vi_policy.report.pool_mismatches == 0
+            and vi_policy.report.root_value > 0.0
+            and bool(ranked)
+            and ranked[0][0] > 0.0
+            and ranked[0][1] in vi_board.legal_moves
+            and not vi_board.is_capture(ranked[0][1])
+        )
+    check(
+        "herding sub-MDP solves and certifies the goal zone reachable",
+        vi_ok,
+        "no template" if vi_policy is None else (
+            f"root={vi_policy.report.root_value:.3f}; "
+            f"states={vi_policy.report.states}; "
+            f"edges={vi_policy.report.edges}; "
+            f"updates={vi_policy.report.updates}; "
+            f"terminals={vi_policy.report.terminals}; "
+            f"mismatches={vi_policy.report.pool_mismatches}; "
+            f"{vi_policy.report.build_ms:.0f}ms"
+        ),
+    )
+
+    # 13c. The vi profile follows the solved policy from inside the bot. The
+    # exact herd search legitimately outranks it in the waterfall (a proven
+    # forcing net beats a probabilistic one), so silence it here to exercise
+    # the policy path itself.
+    from dataclasses import replace as _replace
+
+    vi_bot = LoseBot(
+        depth=1,
+        opponent_model="zach",
+        profile="vi",
+        probe_cap=64,
+        max_probe_n=1,
+    )
+    vi_bot.profile = _replace(
+        vi_bot.profile, herd_search_cap=0, modeled_herding_cap=0
+    )
+    vi_bot.plan = ConstructionPlan(
+        pawn_file=chess.square_file(chess.B6),
+        checked_side=-1,
+        created_ply=0,
+    )
+    vi_move = vi_bot.choose_move(chess.Board("k7/p7/Pp6/1B6/K7/PP6/8/6RR w - - 0 1"))
+    check(
+        "vi profile plays a policy-guided herding move",
+        vi_move is not None
+        and vi_bot.vi_builds == 1
+        and vi_bot.vi_moves_played == 1
+        and vi_bot.vi_pool_mismatches == 0
+        and (vi_bot.vi_root_value or 0.0) > 0.0,
+        f"chose {chess.Board('k7/p7/Pp6/1B6/K7/PP6/8/6RR w - - 0 1').san(vi_move)}; "
+        f"builds={vi_bot.vi_builds}; played={vi_bot.vi_moves_played}; "
+        f"root={vi_bot.vi_root_value}; fail={vi_bot.vi_last_failure or '-'}",
+    )
+
+    # 13d. A dead certificate flips the plan to the live mirrored side. This
+    # position is drill 2's first real build: b-pawn/right is provably dead
+    # (their king is sealed in the corner box, every reachable defense square
+    # covered by unmovable statics), while b-pawn/left certifies live once
+    # the queen's coverage becomes dynamic.
+    flip_board = chess.Board("7R/2k5/1p6/1B1Q4/2K5/pPN5/P1P2PPP/R7 w - - 0 10")
+    flip_bot = LoseBot(
+        depth=1,
+        opponent_model="zach",
+        profile="vi",
+        probe_cap=64,
+        max_probe_n=1,
+    )
+    flip_bot.profile = _replace(
+        flip_bot.profile, herd_search_cap=0, modeled_herding_cap=0
+    )
+    flip_bot.plan = ConstructionPlan(
+        pawn_file=chess.square_file(chess.B6),
+        checked_side=1,
+        created_ply=0,
+    )
+    flip_bot.choose_move(flip_board)
+    check(
+        "dead certificate flips the plan to the live checked side",
+        flip_bot.vi_side_flips == 1
+        and flip_bot.plan is not None
+        and flip_bot.plan.checked_side == -1
+        and (flip_bot.vi_flip_value or 0.0) > 0.0
+        and (chess.square_file(chess.B6), 1) in flip_bot._vi_dead_sides,
+        f"flips={flip_bot.vi_side_flips}; "
+        f"prospect={flip_bot.vi_flip_value}; "
+        f"plan={flip_bot.plan.label if flip_bot.plan else None}; "
+        f"root={flip_bot.vi_root_value}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -365,6 +480,33 @@ def endgames(args) -> int:
             f"[{dt:.0f}s]",
             flush=True,
         )
+        if bot.profile.vi_herding:
+            root = (
+                "n/a"
+                if bot.vi_root_value is None
+                else f"{bot.vi_root_value:.3f}"
+            )
+            print(
+                f"  vi: builds={bot.vi_builds}"
+                f" (failed {bot.vi_build_failures}"
+                f"{': ' + bot.vi_last_failure if bot.vi_last_failure else ''});"
+                f" states={bot.vi_states}; edges={bot.vi_edges};"
+                f" updates={bot.vi_updates}; root={root};"
+                f" build={bot.vi_build_ms:.0f}ms;"
+                f" played={bot.vi_moves_played};"
+                f" misses={bot.vi_state_misses};"
+                f" zero-value={bot.vi_zero_fallbacks};"
+                f" goal-stalls={bot.vi_goal_stalls};"
+                f" releases={bot.vi_releases}"
+                f" ({bot.vi_release_nodes} probe nodes);"
+                f" side-flips={bot.vi_side_flips}"
+                f" (prospect={bot.vi_flip_value});"
+                f" king-marches={bot.vi_king_marches};"
+                f" cage-builds={bot.vi_cage_builds};"
+                f" capture-guards={bot.vi_capture_guards};"
+                f" pool-mismatches={bot.vi_pool_mismatches}",
+                flush=True,
+            )
         if args.show_fen:
             print(f"  final FEN: {board.fen()}", flush=True)
     print(
@@ -389,6 +531,8 @@ def main() -> int:
     eg.add_argument("--case", type=int, choices=range(1, len(ENDGAME_FENS) + 1))
     eg.add_argument("--probe-cap", type=int, default=None)
     eg.add_argument("--probe-depth", type=int, default=None)
+    eg.add_argument("--vi-herders", type=int, default=None,
+                    help="override the vi profile's mobile herder count")
     eg.add_argument("--show-fen", action="store_true")
     eg.add_argument("--pgn-dir", default=None)
 
@@ -407,6 +551,8 @@ def main() -> int:
     arena.add_argument("--profile", choices=sorted(PROFILES), default="current")
     arena.add_argument("--probe-cap", type=int, default=None)
     arena.add_argument("--probe-depth", type=int, default=None)
+    arena.add_argument("--vi-herders", type=int, default=None,
+                       help="override the vi profile's mobile herder count")
 
     args = parser.parse_args()
     if args.cmd == "selftest":

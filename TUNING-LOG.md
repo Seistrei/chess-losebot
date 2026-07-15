@@ -186,3 +186,113 @@ that abstraction) can represent the required 20+ ply objective; the existing
 exact probe should still seal the final tactical 4-6 plies. Promotion threats
 from non-selected pawns also need an explicit freeze/block priority rather than
 being left to the leaf gradient.
+
+## Sub-MDP value iteration and dead-side certificates (2026-07-15)
+
+Reframe: against the fixed Zach kernel this is not adversarial search but a
+Markov decision process. During the herd phase nearly every unit is static
+(king parked, holder frozen, cage and pawn blockers placed, opponent reduced
+to king plus frozen pawns), so the dynamic state is tiny: (their king, one or
+two of our free "herder" pieces, side to move). New `losebot/herding_vi.py`
+solves that sub-MDP exactly:
+
+- bitboard transition model whose opponent edges mirror `support_zach`
+  move-for-move (root pool validated against the real function on every
+  build; every fast-path dead end re-classified on a reconstructed board —
+  **0 pool mismatches across all runs**);
+- goal terminals where the surrounding machinery takes over (their king
+  adjacent to the arrival square and contained, or every quiet reply entering
+  the defense zone); stalemate/forced-capture/mated-them terminals at 0;
+- asynchronous value iteration over the BFS-reachable graph. PyPy solves
+  10k-350k states / 60k-2.5M edges in 0.1-4 s per build.
+
+V(root) is a **certificate**: 0 means no herder policy can ever walk their
+king into the goal zone under the frozen statics. The first drill runs
+returned 0 everywhere — and a coverage dump proved it genuine: in drill 2 the
+b-pawn/right construction seals every reachable defense square with pieces
+that can never move again (holder covers a6/c6, king-adjacency kills b4/c5,
+the b3 pawn kills a4; his king is boxed in a7-c8 with zero zone squares
+reachable). The 120-ply "stable plan, distance 3" stalls of the previous
+sessions were not search failures; they were geometric impossibilities the
+depth ladder could never have detected.
+
+Mechanisms added around the policy (all `vi`-profile only except the two
+marked bugfixes, which are shared):
+
+- herder selection prefers pieces whose current square covers defense-zone
+  squares (a static queen on d5 seals c5 forever; the same queen as a herder
+  is a door that can open);
+- dead-side memory plus **prospective side-flip**: on a dead certificate the
+  mirrored checked square is certified with the king hypothetically parked
+  there; if live, the plan re-commits (drill 2: right side 0.000, left side
+  0.94 — the flip fires in-game and the machinery rebuilds on the far flank);
+- king-march and cage-build filters: the depth-2 gradient never executes
+  either (checks always outscore a one-tempo march; the game_005 carousel
+  donated four majors this way), so once the hold is defended the bot commits
+  tempo like the hold filter always did;
+- forced-capture guard: never leave Zach a pool of nothing but non-mating
+  captures (he eats the construction: the bxc5 executioner loss, the Qc7+
+  Kxc7 donation), while the one good forced capture — one that mates us —
+  stays available because support_zach leaves that pool empty;
+- bugfix (shared): `herding_move` now searches only the caller's filtered
+  root moves instead of raw legal moves;
+- bugfix (shared): the plan-regression filter allows a *transient* runway
+  block for marching king steps — Kc4-b4-a4 crosses the runway square, and
+  with a5 covered by the executioner it is the only path; the old rule locked
+  the king out of its own checked square;
+- the policy keeps its waiting moves (twofold repetitions are legal; only the
+  bot's own threefold is vetoed) with a least-visited-successor tie-break
+  among near-optimal moves.
+
+Results (240 plies, probe cap 10,000, probe depth 3):
+
+| drill (seed 5) | planner | vi | vi certificate story |
+|---|---|---|---|
+| 1 g-pawn | 0, max-plies, d3 | 0, max-plies, d4 | dead both sides (root 0, mirror unposable) |
+| 2 b-pawn | 0, max-plies, d3 | 0, repetition, d3 | right dead / left 0.94 -> flip, herd, ds0, release-blocked |
+| 3 h-pawn | 0, max-plies | 0, max-plies | hold never established -> vi never engaged |
+| 4 e-pawn | 0, max-plies, d3 | 0, max-plies, d4 | dead both sides (prospect 0.0) |
+| 5 a-pawn | 0, max-plies | 0, max-plies | hold never established |
+
+Drill 2 across seeds 0-9: planner **0/10**, every game on the certified-dead
+right side, final distance d3, nine max-plies burns. vi **0/10**, every game
+flipped to the certified-live left side, four games delivered the defender to
+**defender_steps 0** (d2; seed 3: 16 goal-stalls with his king standing on
+the defense square), endings split between repetition and fifty-move.
+
+**The conversion blocker is now a single named fact: a piece holding the
+arrival square cannot release it.** Sliders re-attack the vacated square
+along their retreat line (so the pawn-push "mate" dies to Holder-x-arrival),
+knights always re-attack their previous square, and the retreat lines that
+could be blocked are covered or physically occupied by the defender himself
+(bishop on b5 with their king on c6 has no legal retreat at all; seed-3's 16
+goal-stalls are the release scorer correctly refusing every option). Rook and
+queen holders are worse: they cover the rank-adjacent defense squares and
+deny the zone outright. The one holder type immune to all of this is **our
+own king** — a defended arrival square bars a king capture (that is the
+load-bearing "only their king can defend the mate square" fact in reverse),
+so king-steps-aside is a clean release. The template/planner machinery
+currently forbids exactly that configuration (holder must be a non-king
+piece; our_king_steps gates assume the king parks on the checked square
+before the hold completes).
+
+Next steps, in expected-value order:
+
+1. **King-holder template mode**: king holds the arrival square while the
+   cage builds around the checked square, then steps aside as the release.
+   Requires template semantics (king-on-arrival during construction) and
+   march/cage re-ordering; kills the release problem structurally.
+2. In-graph winning-path extraction: Zach's endgame pools are often
+   singletons, so the MDP degenerates into a deterministic path problem the
+   greedy stationary policy executes badly under the arena's threefold rule
+   (repetition draws at plies 56-122). Extract and validate the full path
+   against real position history instead of re-argmaxing per ply.
+3. Exploit FORCED_MATE terminals (the Qc2+ Kxc2# capture-mate family needs no
+   holder release at all); currently none are reachable in the drill graphs,
+   which itself is certificate information about the cage shapes being built.
+4. Construction-phase gaps: drills 3 and 5 never establish a defended hold,
+   so none of this machinery engages; the hold itself needs the same
+   commitment treatment on those templates.
+5. Fifty-move awareness: the herd phase is inherently reversible, so
+   (herd + release + mate) has a hard 100-ply budget from the last capture;
+   gamma 0.96 is a proxy, clock-in-state is the real fix.

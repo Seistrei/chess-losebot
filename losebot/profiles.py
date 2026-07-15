@@ -66,6 +66,18 @@ class EngineProfile:
     modeled_herding_candidate_limit: int | None
     modeled_herding_memoize: bool
 
+    # Value-iteration herding (defaulted so the older literal profiles above
+    # stay byte-for-byte reproducible without spelling these out).
+    vi_herding: bool = False
+    vi_max_herders: int = 2
+    vi_state_cap: int = 200_000
+    vi_build_ms: int = 20_000
+    # The herd phase makes no irreversible moves, so the fifty-move rule
+    # caps it at 100 plies: discount hard enough that the policy values
+    # short routes, not eventual ones.
+    vi_gamma: float = 0.96
+    vi_race_max_losing: int = 1
+
 
 CURRENT = EngineProfile(
     name="current",
@@ -226,9 +238,20 @@ HERDING = replace(
 )
 
 
+VI = replace(
+    PLANNER,
+    name="vi",
+    # Herding is a Markov decision process against the fixed Zach kernel, not
+    # an adversarial search: solve the frozen-cage sub-MDP exactly and follow
+    # its optimal policy. V(root) == 0 is a certificate that the current
+    # static configuration can never walk their king into the goal zone.
+    vi_herding=True,
+)
+
+
 PROFILES = {
     profile.name: profile
-    for profile in (CURRENT, HERDING, PLANNER, TEMPLATE, V03)
+    for profile in (CURRENT, HERDING, PLANNER, TEMPLATE, V03, VI)
 }
 
 
