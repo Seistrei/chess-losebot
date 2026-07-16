@@ -355,11 +355,184 @@ def selftest() -> int:
         and flip_bot.plan is not None
         and flip_bot.plan.checked_side == -1
         and (flip_bot.vi_flip_value or 0.0) > 0.0
-        and (chess.square_file(chess.B6), 1) in flip_bot._vi_dead_sides,
+        and flip_bot.vi_dead_certificates == 1,
         f"flips={flip_bot.vi_side_flips}; "
         f"prospect={flip_bot.vi_flip_value}; "
         f"plan={flip_bot.plan.label if flip_bot.plan else None}; "
-        f"root={flip_bot.vi_root_value}",
+        f"root={flip_bot.vi_root_value}; "
+        f"dead-certs={flip_bot.vi_dead_certificates}",
+    )
+
+    # 14a. The dead/live certificate is exact graph reachability computed on
+    # the completed graph before any Bellman update, and the solver reports
+    # honestly when cut short. The old build marked every completed explore
+    # ok=True with whatever partial values the deadline left behind, so a
+    # starved solve of a LIVE configuration reported root 0.0 — read
+    # downstream as a dead certificate.
+    starved = None
+    if vi_target is not None:
+        starved = HerdingPolicy.build(
+            vi_board, vi_target, max_herders=2, state_cap=200_000,
+            time_budget_ms=30_000, gamma=0.99, max_updates=1,
+        )
+    starved_partial = None if starved is None else starved.report.converged
+    resumed = False
+    if starved is not None:
+        for _ in range(4):
+            resumed = starved.solve_more(30_000)
+            if resumed:
+                break
+    check(
+        "starved solve keeps its live certificate and resumes to convergence",
+        starved is not None
+        and starved.report.ok
+        and starved.report.root_live
+        and starved_partial is False
+        and resumed
+        and starved.report.root_value > 0.0,
+        "no template" if starved is None else (
+            f"root_live={starved.report.root_live}; "
+            f"converged={starved_partial} -> {starved.report.converged}; "
+            f"root={starved.report.root_value:.3f}; "
+            f"updates={starved.report.updates}"
+        ),
+    )
+
+    # 14b. A dead certificate is a reachability fact. The explored graph
+    # holds only root-reachable states, so a dead configuration has no goal
+    # terminal anywhere in it: certification costs zero Bellman updates and
+    # no deadline can fake it. contains() scopes the verdict to exactly the
+    # certified frozen configuration.
+    flip_plan = ConstructionPlan(
+        pawn_file=chess.square_file(chess.B6), checked_side=1, created_ply=0
+    )
+    flip_target = flip_plan.resolve(flip_board, chess.WHITE)
+    dead_policy = None
+    if flip_target is not None:
+        dead_policy = HerdingPolicy.build(
+            flip_board, flip_target, max_herders=2, state_cap=200_000,
+            time_budget_ms=30_000, gamma=0.96,
+        )
+    moved = flip_board.copy(stack=False)
+    moved.remove_piece_at(chess.F2)
+    moved.set_piece_at(chess.F4, chess.Piece(chess.PAWN, chess.WHITE))
+    check(
+        "dead certificate is exact, free, and configuration-scoped",
+        dead_policy is not None
+        and dead_policy.report.ok
+        and not dead_policy.report.root_live
+        and dead_policy.report.converged
+        and dead_policy.report.updates == 0
+        and dead_policy.report.root_value == 0.0
+        and dead_policy.contains(flip_board)
+        and not dead_policy.contains(moved),
+        "no template" if dead_policy is None else (
+            f"live={dead_policy.report.root_live}; "
+            f"updates={dead_policy.report.updates}; "
+            f"states={dead_policy.report.states}; "
+            f"scoped here/elsewhere={dead_policy.contains(flip_board)}/"
+            f"{dead_policy.contains(moved)}"
+        ),
+    )
+
+    # 14c. Audit mode cross-checks EVERY explored opponent pool against the
+    # real support_zach, not just the root and the empty-pool slow path that
+    # the routine build samples.
+    audited = None
+    if vi_target is not None:
+        audited = HerdingPolicy.build(
+            vi_board, vi_target, max_herders=1, state_cap=200_000,
+            time_budget_ms=60_000, gamma=0.99, validate_pools=True,
+        )
+    check(
+        "full pool audit finds zero mismatches against support_zach",
+        audited is not None
+        and audited.report.ok
+        and audited.report.states > 0
+        and audited.report.pool_mismatches == 0,
+        "no template" if audited is None else (
+            f"states={audited.report.states}; "
+            f"mismatches={audited.report.pool_mismatches}"
+        ),
+    )
+
+    # 15. Release scoring shares the arena's draw law. At halfmove clock 98
+    # the zugzwang release (Rb7) exists; at 99 every quiet holder retreat
+    # lands on the fifty-move adjudication BEFORE Zach ever replies, so
+    # there is no release at all. The old scorer checked only checkmate and
+    # stalemate, offered the "guaranteed" net anyway, and drew on the spot.
+    from types import SimpleNamespace
+
+    from .herding_vi import score_release_moves
+
+    release_stub = SimpleNamespace(arrival_square=chess.B1)
+    low_clock = chess.Board("8/8/5pkp/6p1/6K1/5PPP/8/1R6 w - - 98 80")
+    high_clock = chess.Board("8/8/5pkp/6p1/6K1/5PPP/8/1R6 w - - 99 80")
+    low_choice = score_release_moves(low_clock, release_stub, "zach", 0)
+    high_choice = score_release_moves(high_clock, release_stub, "zach", 0)
+    check(
+        "release scoring refuses moves the arena would adjudicate drawn",
+        low_choice is not None and high_choice is None,
+        "clock98="
+        + ("none" if low_choice is None else low_clock.san(low_choice.move))
+        + f"; clock99={'offered' if high_choice is not None else 'refused'}",
+    )
+
+    # 16. Successor visits must live on the keys _vi_choice queries: the
+    # position after our move, opponent to move. The old tally counted
+    # positions with us to move; side-to-move is part of the transposition
+    # key, so every candidate lookup returned zero and the anti-repetition
+    # tie-break was silently a no-op.
+    visit_bot = LoseBot(depth=1)
+    visit_board = chess.Board()
+    visit_move = visit_bot.choose_move(visit_board)
+    visit_board.push(visit_move)
+    check(
+        "successor visits are keyed with the opponent to move",
+        visit_bot._vi_visits == {visit_board._transposition_key(): 1},
+        f"tallies={len(visit_bot._vi_visits)}",
+    )
+
+    # 17. Negative memory is scoped to the plan era: replanning (here via a
+    # promotion ending the king-and-pawns phase) drops every certificate
+    # instead of letting a rebuilt plan inherit verdicts certified for a
+    # different frozen configuration and herder subset.
+    scope_bot = LoseBot(depth=1, profile="vi")
+    scope_bot.plan = flip_plan
+    if dead_policy is not None:
+        scope_bot._vi_dead_policies.append(dead_policy)
+    scope_bot._vi_unbuildable.add(("sentinel",))
+    scope_bot._update_construction_plan(flip_board, their_pieces=1)
+    check(
+        "certificates do not survive replanning",
+        scope_bot.plan is None
+        and not scope_bot._vi_dead_policies
+        and not scope_bot._vi_unbuildable
+        and scope_bot.plan_invalidations == 1,
+        f"plan={scope_bot.plan}; "
+        f"dead={len(scope_bot._vi_dead_policies)}; "
+        f"unbuildable={len(scope_bot._vi_unbuildable)}",
+    )
+
+    # 18. Certification answers from stored dead certificates without
+    # rebuilding: the sole maximal herder subset here is the very pair the
+    # dead policy certified, so the sweep completes with zero fresh builds
+    # and still returns the hopeless verdict that gates the side flip.
+    cache_bot = LoseBot(depth=1, opponent_model="zach", profile="vi")
+    cache_bot.plan = flip_plan
+    cached_policy, cached_hopeless = None, False
+    if dead_policy is not None and flip_target is not None:
+        cache_bot._vi_dead_policies.append(dead_policy)
+        cached_policy, cached_hopeless = cache_bot._certify_herding(
+            flip_board, flip_target, 2
+        )
+    check(
+        "certification reuses dead certificates without rebuilding",
+        dead_policy is not None
+        and cached_policy is None
+        and cached_hopeless
+        and cache_bot.vi_builds == 0,
+        f"hopeless={cached_hopeless}; builds={cache_bot.vi_builds}",
     )
 
     # 13. A promoted piece means the king-and-pawns phase has ended. The
@@ -501,6 +674,8 @@ def endgames(args) -> int:
                 f" ({bot.vi_release_nodes} probe nodes);"
                 f" side-flips={bot.vi_side_flips}"
                 f" (prospect={bot.vi_flip_value});"
+                f" dead-certs={bot.vi_dead_certificates};"
+                f" re-solves={bot.vi_resolves};"
                 f" king-marches={bot.vi_king_marches};"
                 f" cage-builds={bot.vi_cage_builds};"
                 f" capture-guards={bot.vi_capture_guards};"

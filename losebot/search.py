@@ -38,12 +38,25 @@ def gives_stalemate(board: chess.Board, move: chess.Move) -> bool:
     return result
 
 
+def arena_draw(board: chess.Board) -> str | None:
+    """The arena's automatic draw adjudications, in the arena's own order.
+
+    Single source of truth shared by the arena, the exact probes, and the
+    release scorer: any component that reasons about "the game continues from
+    here" must agree with the arena about when it does not. Checkmate and
+    stalemate are not draws and stay separate checks at each caller.
+    """
+    if board.is_insufficient_material():
+        return "insufficient-material"
+    if board.halfmove_clock >= 100:
+        return "fifty-move"
+    if board.halfmove_clock >= 8 and board.is_repetition(3):
+        return "repetition"
+    return None
+
+
 def _probe_draw(board: chess.Board) -> bool:
-    return (
-        board.is_insufficient_material()
-        or board.halfmove_clock >= 100
-        or (board.halfmove_clock >= 8 and board.is_repetition(3))
-    )
+    return arena_draw(board) is not None
 
 
 def _history_counts(board: chess.Board) -> dict:

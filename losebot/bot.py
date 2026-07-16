@@ -4,18 +4,22 @@ Per move: (1) never deliver mate or stalemate if any alternative exists,
 (2) run an exact forced-selfmate probe (deeper when the opponent is reduced),
 (3) otherwise fall back to heuristic misère negamax."""
 
+import time
+
 import chess
 
 from .herding_vi import (
     POSITION_DEPENDENT_FAILURES,
     HerdingPolicy,
-    prospective_flip_value,
+    herder_subsets,
+    prospective_flip_policy,
     score_release_moves,
 )
 from .planning import herding_move, modeled_herding_move
 from .profiles import EngineProfile, get_profile, probe_limits
 from .search import (
     ProofStatus,
+    arena_draw,
     gives_mate,
     gives_stalemate,
     negamax,
@@ -67,9 +71,16 @@ class LoseBot:
         self.modeled_herding_incomplete = 0
         self._last_seen_ply: int | None = None
 
-        # Value-iteration herding state and diagnostics.
+        # Value-iteration herding state and diagnostics. Negative memory is
+        # held as the dead-certified policies themselves: a position is only
+        # "known dead" if it maps into one of their explored graphs, so the
+        # verdict is scoped to exactly the frozen configuration (and herder
+        # subset) that was certified and can never be inherited by a rebuilt
+        # plan or a different arrangement.
         self._vi_policy: HerdingPolicy | None = None
-        self._vi_dead_sides: set[tuple[int, int]] = set()
+        self._vi_dead_policies: list[HerdingPolicy] = []
+        self._vi_unbuildable: set[tuple] = set()
+        self._vi_next_flip_ply = 0
         self._vi_visits: dict = {}
         self.vi_builds = 0
         self.vi_build_failures = 0
@@ -91,6 +102,21 @@ class LoseBot:
         self.vi_capture_guards = 0
         self.vi_cage_builds = 0
         self.vi_last_failure = ""
+        self.vi_dead_certificates = 0
+        self.vi_resolves = 0
+
+    def _reset_vi_state(self) -> None:
+        """Drop herding certificates along with the plan they were built for.
+
+        Certificates are already self-scoping (a dead policy only ever
+        matches the exact frozen configuration it certified), so this is
+        about bounded memory and hygiene, not correctness: a new plan era
+        starts with an empty ledger instead of dragging dead graphs around.
+        """
+        self._vi_policy = None
+        self._vi_dead_policies.clear()
+        self._vi_unbuildable.clear()
+        self._vi_next_flip_ply = 0
 
     def _update_construction_plan(self, board: chess.Board,
                                   their_pieces: int) -> None:
@@ -103,6 +129,7 @@ class LoseBot:
             if self.plan is not None:
                 self.plan_invalidations += 1
                 self.plan = None
+                self._reset_vi_state()
             return
 
         target = (
@@ -116,6 +143,7 @@ class LoseBot:
                 if self.plan is not None:
                     self.plan_invalidations += 1
                     self.plan = None
+                    self._reset_vi_state()
                 return
             if self.plan is not None:
                 self.plan_invalidations += 1
@@ -123,6 +151,7 @@ class LoseBot:
                 replacement, len(board.move_stack)
             )
             self.plans_created += 1
+            self._reset_vi_state()
             target = replacement
 
         distance = target.setup_distance
@@ -393,12 +422,6 @@ class LoseBot:
                 self.vi_goal_stalls += 1
                 return None
 
-        if self.plan is not None and (
-            (self.plan.pawn_file, self.plan.checked_side)
-            in self._vi_dead_sides
-        ):
-            return None
-
         limit = (
             self.vi_herders
             if self.vi_herders is not None
@@ -414,63 +437,29 @@ class LoseBot:
                 and policy.report.reason in POSITION_DEPENDENT_FAILURES
             )
         ):
-            policy = HerdingPolicy.build(
-                board,
-                target,
-                limit,
-                self.profile.vi_state_cap,
-                self.profile.vi_build_ms,
-                self.profile.vi_gamma,
-            )
+            policy, hopeless = self._certify_herding(board, target, limit)
             self._vi_policy = policy
-            report = policy.report
-            self.vi_builds += 1
-            self.vi_build_ms += report.build_ms
-            self.vi_states += report.states
-            self.vi_edges += report.edges
-            self.vi_updates += report.updates
-            self.vi_pool_mismatches += report.pool_mismatches
-            self.vi_root_value = report.root_value
-            if not report.ok:
-                self.vi_build_failures += 1
-                self.vi_last_failure = report.reason
-        if not policy.report.ok:
+            if hopeless:
+                # Every maximal herder subset of this frozen configuration
+                # is certified dead: the side is hopeless as built, so the
+                # only remaining question is the mirrored checked square.
+                self._consider_side_flip(board, limit)
+                return None
+        if policy is None or not policy.report.ok:
             return None
-
-        if policy.report.root_value <= 0.0 and self.plan is not None:
-            # Dead certificate: this static configuration can never walk
-            # their king into the goal zone. Remember the side as dead and,
-            # if the mirrored checked square certifies live, re-commit the
-            # plan there — the construction machinery then rebuilds the cage
-            # around the other flank.
-            dead_key = (self.plan.pawn_file, self.plan.checked_side)
-            self._vi_dead_sides.add(dead_key)
-            mirror_key = (self.plan.pawn_file, -self.plan.checked_side)
-            if mirror_key not in self._vi_dead_sides:
-                mirrored = ConstructionPlan(
-                    pawn_file=self.plan.pawn_file,
-                    checked_side=-self.plan.checked_side,
-                    created_ply=len(board.move_stack),
-                )
-                mirrored_target = mirrored.resolve(board, board.turn)
-                flip_value = None
-                if mirrored_target is not None:
-                    flip_value = prospective_flip_value(
-                        board,
-                        mirrored_target,
-                        limit,
-                        self.profile.vi_state_cap,
-                        self.profile.vi_build_ms,
-                        self.profile.vi_gamma,
-                    )
-                self.vi_flip_value = flip_value
-                if flip_value is not None and flip_value > 0.0:
-                    self.plan = mirrored
-                    self.vi_side_flips += 1
-                    self._vi_policy = None
-                else:
-                    self._vi_dead_sides.add(mirror_key)
+        if not policy.report.root_live:
             return None
+        if not policy.report.converged:
+            # The certificate is exact regardless; the *ranking* is not.
+            # Keep solving across moves rather than following a half-baked
+            # value table into the fallbacks' arms.
+            before = policy.report.updates
+            policy.solve_more(self.profile.vi_build_ms)
+            self.vi_updates += policy.report.updates - before
+            self.vi_resolves += 1
+            self.vi_root_value = policy.report.root_value
+            if not policy.report.converged:
+                return None
 
         ranked = policy.ranked_moves(board)
         if ranked is None:
@@ -481,6 +470,8 @@ class LoseBot:
         # deterministic and any strict argmax loop retraces exact positions
         # into the arena's threefold rule. Take every near-optimal candidate
         # and prefer the least-visited successor: same plan value, no cycle.
+        # (Visits are tallied in choose_move on the position AFTER our move,
+        # the same key space queried here.)
         safe_set = set(safe)
         top_value = None
         candidates: list[tuple[int, float, chess.Move]] = []
@@ -494,7 +485,7 @@ class LoseBot:
             elif value < top_value - 0.05:
                 break
             board.push(move)
-            drawn = board.halfmove_clock >= 8 and board.is_repetition(3)
+            drawn = arena_draw(board) is not None
             key = board._transposition_key()
             board.pop()
             if drawn:
@@ -506,19 +497,160 @@ class LoseBot:
         self.vi_zero_fallbacks += 1
         return None
 
+    def _absorb_vi_report(self, report) -> None:
+        self.vi_builds += 1
+        self.vi_build_ms += report.build_ms
+        self.vi_states += report.states
+        self.vi_edges += report.edges
+        self.vi_updates += report.updates
+        self.vi_pool_mismatches += report.pool_mismatches
+        self.vi_root_value = report.root_value
+        if not report.ok:
+            self.vi_build_failures += 1
+            self.vi_last_failure = report.reason
+
+    def _certify_herding(
+        self,
+        board: chess.Board,
+        target: PawnMateTemplate,
+        limit: int,
+    ) -> tuple[HerdingPolicy | None, bool]:
+        """Find a live herder subset, or certify the side hopeless.
+
+        Deadness is a property of one frozen configuration AND one herder
+        subset, so a single dead build never condemns the side. Walk the
+        maximal subsets (greedy preference first — the common live case
+        still costs one build): the first live certificate wins, and a
+        completed walk yielding nothing but dead certificates is the only
+        outcome that returns hopeless=True. Anything unresolved — sweep
+        budget exhausted, a subset too big to explore — blocks the hopeless
+        verdict instead of quietly counting toward it.
+        """
+        deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
+        subsets = herder_subsets(board, target, limit)
+        if not subsets:
+            # No candidates at all: build once for the diagnostic reason.
+            policy = HerdingPolicy.build(
+                board, target, limit, self.profile.vi_state_cap,
+                self.profile.vi_build_ms, self.profile.vi_gamma,
+            )
+            self._absorb_vi_report(policy.report)
+            return policy, False
+
+        # Subsets already certified dead at this exact position (herders may
+        # have wandered since certification; contains() covers that).
+        dead_squares = set()
+        for dead in self._vi_dead_policies:
+            squares = dead.dynamic_squares(board)
+            if squares is not None:
+                dead_squares.add(squares)
+
+        complete = True
+        for subset in subsets:
+            if frozenset(square for square, _ in subset) in dead_squares:
+                continue
+            remaining_ms = (deadline - time.monotonic()) * 1000.0
+            if remaining_ms <= 0:
+                complete = False
+                break
+            fair_budget = remaining_ms >= self.profile.vi_build_ms / 2
+            policy = HerdingPolicy.build(
+                board, target, limit, self.profile.vi_state_cap,
+                int(remaining_ms), self.profile.vi_gamma, herders=subset,
+                skip_fingerprints=self._vi_unbuildable,
+            )
+            report = policy.report
+            if report.reason == "skipped-unbuildable":
+                complete = False
+                continue
+            self._absorb_vi_report(report)
+            if report.ok:
+                if report.root_live:
+                    return policy, False
+                self._vi_dead_policies.append(policy)
+                if len(self._vi_dead_policies) > 8:
+                    self._vi_dead_policies.pop(0)
+                self.vi_dead_certificates += 1
+                continue
+            if report.reason in ("state-cap", "build-timeout"):
+                # Could not certify. Remember genuinely oversized subsets so
+                # later sweeps skip them; a timeout on a starved budget gets
+                # retried once earlier subsets are answered from cache.
+                # (State-cap is budget-independent and always remembered.)
+                oversized = report.reason == "state-cap" or fair_budget
+                if oversized and policy.fingerprint is not None:
+                    self._vi_unbuildable.add(policy.fingerprint)
+                complete = False
+                continue
+            # Configuration-level refusal (pawn not frozen, root already
+            # terminal, pool mismatch, ...): no subset choice can fix it.
+            return policy, False
+        return None, complete
+
+    def _consider_side_flip(self, board: chess.Board, limit: int) -> None:
+        """On a hopeless side, probe the mirrored checked square.
+
+        Only a completed build may speak: a live prospect re-commits the
+        plan to the mirror, a genuine dead certificate backs off for a while
+        (the construction shifts and may reopen it), and anything transient
+        — unposable hypothetical, refused or timed-out build — is unknown,
+        never dead. The old code marked the mirror dead on every non-live
+        outcome, so one slow or unlucky build could kill both flanks for
+        the rest of the game.
+        """
+        ply = len(board.move_stack)
+        if self.plan is None or ply < self._vi_next_flip_ply:
+            return
+        mirrored = ConstructionPlan(
+            pawn_file=self.plan.pawn_file,
+            checked_side=-self.plan.checked_side,
+            created_ply=ply,
+        )
+        mirrored_target = mirrored.resolve(board, board.turn)
+        prospect = None
+        if mirrored_target is not None:
+            prospect = prospective_flip_policy(
+                board,
+                mirrored_target,
+                limit,
+                self.profile.vi_state_cap,
+                self.profile.vi_build_ms,
+                self.profile.vi_gamma,
+            )
+        if prospect is not None and prospect.report.ok:
+            self.vi_flip_value = prospect.report.root_value
+            if prospect.report.root_live:
+                self.plan = mirrored
+                self.vi_side_flips += 1
+                self._reset_vi_state()
+                return
+            self._vi_next_flip_ply = ply + 16
+            return
+        self.vi_flip_value = None
+        self._vi_next_flip_ply = ply + 8
+
     def choose_move(self, board: chess.Board) -> chess.Move:
         ply = len(board.move_stack)
         if self._last_seen_ply is not None and ply < self._last_seen_ply:
             self.plan = None
             self.best_plan_distance = None
-            self._vi_policy = None
-            self._vi_dead_sides.clear()
+            self._reset_vi_state()
             self._vi_visits.clear()
         self._last_seen_ply = ply
-        self._vi_visits[board._transposition_key()] = (
-            self._vi_visits.get(board._transposition_key(), 0) + 1
-        )
+        move = self._choose(board)
+        # Successor-visit accounting for the herding tie-break: _vi_choice
+        # ranks candidates by the position AFTER our move (opponent to move),
+        # so the tally must live on those same keys. The old pre-move tally
+        # counted positions with us to move — side-to-move is part of the
+        # transposition key, so every candidate lookup returned zero and the
+        # anti-repetition tie-break was silently a no-op.
+        board.push(move)
+        key = board._transposition_key()
+        self._vi_visits[key] = self._vi_visits.get(key, 0) + 1
+        board.pop()
+        return move
 
+    def _choose(self, board: chess.Board) -> chess.Move:
         legal = list(board.legal_moves)
         if len(legal) == 1:
             return legal[0]

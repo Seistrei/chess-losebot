@@ -6,6 +6,8 @@ from pathlib import Path
 import chess
 import chess.pgn
 
+from .search import arena_draw
+
 
 def play_game(white, black, max_plies: int = 300, start_fen: str | None = None):
     """Returns (board, reason, mated_color_or_None)."""
@@ -15,12 +17,9 @@ def play_game(white, black, max_plies: int = 300, start_fen: str | None = None):
             return board, "checkmate", board.turn
         if board.is_stalemate():
             return board, "stalemate", None
-        if board.is_insufficient_material():
-            return board, "insufficient-material", None
-        if board.halfmove_clock >= 100:
-            return board, "fifty-move", None
-        if board.halfmove_clock >= 8 and board.is_repetition(3):
-            return board, "repetition", None
+        draw_reason = arena_draw(board)
+        if draw_reason is not None:
+            return board, draw_reason, None
         if len(board.move_stack) >= max_plies:
             return board, "max-plies", None
         bot = white if board.turn == chess.WHITE else black
@@ -134,6 +133,8 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.vi_releases} releases "
                 f"({focal.vi_release_nodes} probe nodes); "
                 f"{focal.vi_side_flips} side flips; "
+                f"{focal.vi_dead_certificates} dead certificates; "
+                f"{focal.vi_resolves} re-solves; "
                 f"{focal.vi_king_marches} king marches; "
                 f"{focal.vi_cage_builds} cage builds; "
                 f"{focal.vi_capture_guards} capture guards; "

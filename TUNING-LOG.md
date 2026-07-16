@@ -296,3 +296,91 @@ Next steps, in expected-value order:
 5. Fifty-move awareness: the herd phase is inherently reversible, so
    (herd + release + mate) has a hard 100-ply budget from the last capture;
    gamma 0.96 is a proxy, clock-in-state is the real fix.
+
+## Certificate integrity, draw-law alignment, visitation (2026-07-16)
+
+An external review of the VI reframe confirmed the architecture but found
+four certificate/scoring bugs, all reproduced and fixed here. The common
+thread: every bug lied in the **false-dead direction**, exactly the
+direction that misdirects side flips and future motif comparisons.
+
+1. **Partial solves masqueraded as certificates.** `build` marked the report
+   ok unconditionally; `_solve` stops silently on its deadline or update
+   limit. On the known-live 111,541-state selftest graph, an expired solve
+   reported root 0.0 (real value 0.923) — read downstream as a dead side.
+   Worse, `prospective_flip_value` used the same builder, and every non-live
+   flip outcome (including timeouts and *unposable hypotheticals*) was
+   permanently recorded as a dead mirror: one slow build could kill both
+   flanks for the rest of the game.
+
+   Fix: the dead/live certificate is now **exact reachability**. Our nodes
+   maximize, Zach nodes average a full support, all non-goal terminals are
+   0, so fixpoint V(s) > 0 iff s reaches a goal terminal — one backward BFS
+   from the goal terminals (`root_live`), computed on the completed graph
+   before any Bellman update. Corollary: the explored graph only contains
+   root-reachable states, so a dead graph has no goal terminal at all and
+   certification costs **zero updates**. Value iteration only ranks moves;
+   it now reports `converged` honestly and resumes across moves
+   (`solve_more`, worklist kept on the policy) instead of being trusted
+   half-baked. Flips fire only on a *completed* live certificate; a dead
+   prospect backs off 16 plies, transients 8, and nothing poisons anything.
+
+2. **Dead-side memory was scoped too broadly and survived replanning.** The
+   old key was `(pawn_file, checked_side)`, but a certificate is a fact
+   about one frozen configuration and one herder subset; a rebuilt plan
+   after a promotion inherited the stale verdict and was never recertified.
+   Negative memory is now the dead-certified policies themselves: a
+   position is known dead only if `contains()` maps it into a certified
+   graph (herders may wander — every state of a dead graph is dead — but
+   any static change misses and forces recertification). Replanning clears
+   the ledger outright.
+
+   And a single dead build no longer condemns the side: deadness is
+   monotone in the herder set (an unchosen candidate is frozen; a larger
+   subset can replay any smaller subset's trajectory by never moving the
+   extra piece), so `_certify_herding` walks every **maximal** herder
+   subset — greedy preference first, answered from certificates when
+   possible — and only a completed all-dead sweep returns the hopeless
+   verdict that gates a flip. Unbuildable subsets (state-cap) are
+   remembered and block the verdict rather than counting toward it.
+
+3. **Release scoring ignored the arena's draw law.** It checked only
+   checkmate/stalemate after the release, but the arena adjudicates
+   fifty-move, repetition, and insufficient material BEFORE Zach replies:
+   at halfmove 99 the scorer offered a "guaranteed" zugzwang release and
+   the game drew on the spot. The three draw rules now live in one shared
+   `arena_draw` predicate (arena, probes via `_probe_draw`, release scorer,
+   and the VI candidate veto all call it), so the components cannot drift.
+
+4. **The least-visited-successor tie-break queried keys that were never
+   written.** Visits were tallied on positions with LoseBot to move;
+   candidates are keyed after LoseBot's move, Zach to move — and
+   side-to-move is part of the transposition key, so every lookup returned
+   zero and the anti-repetition tie-break was a silent no-op. Visits are
+   now tallied on the post-move position of whatever `choose_move` returns.
+
+Also: the review noted "0 pool mismatches" only ever covered the root pool
+and the empty-pool slow path. A `validate_pools` audit mode now cross-checks
+every explored Zach node against `support_zach`; the selftest runs it (0
+mismatches) alongside seven other new regression checks covering all four
+fixes (starved-solve honesty, zero-update dead certificates, `contains`
+scoping, certificate clearing on replan, sweep reuse, draw-aware releases at
+clock 98/99, visit keying).
+
+Revised next steps (supersedes the list above):
+
+1. Extend the certificate through conversion: value goal terminals by
+   release feasibility (static holder-geometry test at build; the play-time
+   probe stays the exact gate) so "fraction of goal terminals convertible"
+   replaces raw delivery as the headline metric. Drill 2's four
+   delivered-but-stuck games were invisible to the current goal semantics.
+2. Engage-time clock feasibility: expected hitting time from the solved MDP
+   + release + mate depth vs the remaining fifty-move budget; release early
+   when the budget tightens (log item 5, now cheap to compute).
+3. Adjudicate motifs with the extended certificate: pose king-holder
+   endgame FENs (the vacate-then-enter race) and the FORCED_MATE
+   capture-mate family, and measure conversion probability before building
+   template machinery for either.
+4. Feed double-dead verdicts back into template selection: a both-flanks
+   hopeless certificate should ban the pawn file and re-plan, not shuffle
+   to max-plies (drills 1 and 4).

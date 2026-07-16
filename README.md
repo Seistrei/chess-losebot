@@ -98,12 +98,19 @@ stochastic opponent: a Markov decision process. With the construction frozen
 (king parked, holder defended, pawns blocked), the only dynamic units are
 their king and one or two of our free pieces, and `losebot/herding_vi.py`
 solves that sub-MDP exactly by value iteration — the opponent edges reproduce
-`support_zach` move-for-move and are validated against it on every build.
-V(root) doubles as a herdability certificate: 0 proves the current static
-configuration can never walk their king into the goal zone, which triggers a
-prospective flip of the plan to the mirrored checked side when that side
-certifies live. Committed march/cage filters, a forced-capture guard, and a
-scored race-release round out the profile; the tuning log records the current
+`support_zach` move-for-move and are validated against it on every build
+(plus a full-graph audit mode in the selftest). The dead/live certificate is
+exact graph reachability computed on the completed state graph, independent
+of the solver: a value-iteration pass cut short by its deadline can degrade
+move ranking (it reports `converged=False` and resumes across moves), never
+a certificate. A checked side is only declared hopeless once **every**
+maximal herder subset of the frozen configuration is certified dead; that
+verdict is scoped to the exact certified configuration (it cannot be
+inherited by a rebuilt plan) and triggers a prospective flip of the plan to
+the mirrored checked side when a completed build certifies that side live.
+Committed march/cage filters, a forced-capture guard, and a draw-aware
+scored race-release (it shares the arena's fifty-move/repetition/material
+adjudications) round out the profile; the tuning log records the current
 frontier (piece-holder release geometry) that still separates delivered
 defenders from finished mates.
 
