@@ -86,6 +86,10 @@ class LoseBot:
         # unaffordable.
         self._vi_unbuildable: set[tuple] = set()
         self._vi_next_flip_ply = 0
+        # The active policy's side-level conversion verdict: True when the
+        # certify sweep completed and every live subset's audit completed
+        # with nothing converting. Keyed to the same era as the policy.
+        self._vi_side_unconvertible = False
         self.vi_builds = 0
         self.vi_build_failures = 0
         self.vi_build_ms = 0.0
@@ -101,6 +105,8 @@ class LoseBot:
         self.vi_releases = 0
         self.vi_release_nodes = 0
         self.vi_side_flips = 0
+        self.vi_conversion_flips = 0
+        self.vi_unconvertible_sides = 0
         self.vi_flip_value: float | None = None
         self.vi_king_marches = 0
         self.vi_capture_guards = 0
@@ -131,6 +137,7 @@ class LoseBot:
         self._vi_dead_policies.clear()
         self._vi_unbuildable.clear()
         self._vi_next_flip_ply = 0
+        self._vi_side_unconvertible = False
         # The gauge describes the ACTIVE policy's burn set; dropping the
         # policy must drop it too or a replan followed by game end reports
         # burned states no live policy contains. vi_burn_updates stays
@@ -518,18 +525,41 @@ class LoseBot:
                 and policy.report.reason in POSITION_DEPENDENT_FAILURES
             )
         ):
-            policy, hopeless = self._certify_herding(board, target, limit)
+            policy, verdict = self._certify_herding(board, target, limit)
             self._vi_policy = policy
+            self._vi_side_unconvertible = verdict == "unconvertible"
             self.vi_burned_states = 0  # fresh builds carry no burns yet
-            if hopeless:
+            if verdict == "hopeless":
                 # Every maximal herder subset of this frozen configuration
                 # is certified dead: the side is hopeless as built, so the
-                # only remaining question is the mirrored checked square.
+                # only remaining question is the mirrored checked square —
+                # live there is enough, since here there is nothing to keep.
                 self._consider_side_flip(board, limit)
                 return None
+            if verdict == "unconvertible":
+                # The side herds but provably cannot finish at audit depth:
+                # abandon it only for a mirror that positively converts.
+                self.vi_unconvertible_sides += 1
+                if self._consider_side_flip(
+                    board, limit, require_conversion=True
+                ):
+                    return None
         if policy is None or not policy.report.ok:
             return None
         if not policy.report.root_live:
+            return None
+        if (
+            self._vi_side_unconvertible
+            and len(board.move_stack) >= self._vi_next_flip_ply
+            and self._consider_side_flip(
+                board, limit, require_conversion=True
+            )
+        ):
+            # The prospect's convertibility is position-dependent (their
+            # king drifts, forced-mate pockets open), so an unconvertible
+            # side re-probes the mirror whenever the cooldown expires —
+            # certification only reruns on rebuilds, which a stable herd
+            # never triggers.
             return None
         # Price the arena's threefold rule into the values before reading
         # them: every state whose position this era has already seen twice
@@ -621,18 +651,30 @@ class LoseBot:
         board: chess.Board,
         target: PawnMateTemplate,
         limit: int,
-    ) -> tuple[HerdingPolicy | None, bool]:
-        """Find a live herder subset, or certify the side hopeless.
+    ) -> tuple[HerdingPolicy | None, str]:
+        """Sweep the maximal herder subsets and pass a side-level verdict.
 
         Deadness is a property of one frozen configuration AND one herder
-        subset, so a single dead build never condemns the side. Walk the
-        maximal subsets (greedy preference first — the common live case
-        still costs one build): the first live certificate wins, and a
-        completed walk yielding nothing but dead certificates is the only
-        outcome that returns hopeless=True. Anything unresolved — sweep
-        budget exhausted, a subset too big to explore, a truncated
-        enumeration — blocks the hopeless verdict instead of quietly
-        counting toward it.
+        subset, so a single dead build never condemns the side; the same
+        asymmetry governs conversion. Walk the maximal subsets (greedy
+        preference first): a live subset whose audit found a conversion
+        wins outright — positives are facts at any coverage — while a
+        merely live subset is kept as the fallback and the sweep continues
+        hunting a convertible one. Verdicts, from best to worst:
+
+        - "converts": the returned policy is live and its audit found a
+          converting terminal (the common case still costs one build).
+        - "live": a live fallback, but the side-level negative is not
+          provable — the sweep or some live subset's audit was cut short
+          (deadline, or UNKNOWN-tainted refusals in the audit's case).
+        - "unconvertible": complete sweep, at least one live subset, and
+          every live subset's audit completed with nothing converting.
+          Play can still herd the fallback; the verdict is the honest flip
+          trigger, not a reachability fact (audit probes are depth-capped).
+        - "hopeless": complete sweep, every subset certified dead.
+        - "unknown": nothing usable — no candidates, a configuration-level
+          refusal, or an exhausted sweep with no live subset. Never a
+          verdict about the side.
         """
         deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
         build_options = dict(
@@ -649,7 +691,7 @@ class LoseBot:
                 **build_options,
             )
             self._absorb_vi_report(policy.report)
-            return policy, False
+            return policy, "unknown"
 
         # Subsets already certified dead at this exact position (herders may
         # have wandered since certification; contains() covers that).
@@ -659,6 +701,8 @@ class LoseBot:
             if squares is not None:
                 dead_squares.add(squares)
 
+        fallback: HerdingPolicy | None = None
+        negatives_complete = True
         for subset in subsets:
             if frozenset(square for square, _ in subset) in dead_squares:
                 continue
@@ -680,7 +724,13 @@ class LoseBot:
             self._absorb_vi_report(report)
             if report.ok:
                 if report.root_live:
-                    return policy, False
+                    if report.root_converts:
+                        return policy, "converts"
+                    if fallback is None:
+                        fallback = policy
+                    if not report.conversion_complete:
+                        negatives_complete = False
+                    continue
                 # The ledger must be able to hold a whole sweep's worth of
                 # certificates: evicting mid-sweep made later sweeps rebuild
                 # earlier subsets forever and the hopeless verdict never
@@ -709,24 +759,45 @@ class LoseBot:
                 complete = False
                 continue
             # Configuration-level refusal (pawn not frozen, root already
-            # terminal, pool mismatch, ...): no subset choice can fix it.
-            return policy, False
-        return None, complete
+            # terminal, pool mismatch, ...). With no fallback in hand this
+            # ends the sweep as before. Past a live fallback the reason must
+            # be subset-dependent (a configuration-wide one would have
+            # refused the fallback's build too), so treat the subset as
+            # unresolved rather than discarding a live policy over it.
+            if fallback is None:
+                return policy, "unknown"
+            complete = False
+        if fallback is not None:
+            if complete and negatives_complete:
+                return fallback, "unconvertible"
+            return fallback, "live"
+        return None, "hopeless" if complete else "unknown"
 
-    def _consider_side_flip(self, board: chess.Board, limit: int) -> None:
-        """On a hopeless side, probe the mirrored checked square.
+    def _consider_side_flip(self, board: chess.Board, limit: int,
+                            require_conversion: bool = False) -> bool:
+        """Probe the mirrored checked square; True when the plan flips.
 
-        Only a completed build may speak: a live prospect re-commits the
+        Only a completed build may speak: a good prospect re-commits the
         plan to the mirror, a genuine dead certificate backs off for a while
         (the construction shifts and may reopen it), and anything transient
         — unposable hypothetical, refused or timed-out build — is unknown,
         never dead. The old code marked the mirror dead on every non-live
         outcome, so one slow or unlucky build could kill both flanks for
         the rest of the game.
+
+        ``require_conversion`` is the audited-conversion gate: abandoning a
+        LIVE side is only worth it for a mirror that positively converts
+        (a fact at any audit coverage), while a hopeless side keeps taking
+        any live prospect — there is nothing to stay for. A live prospect
+        refused under the gate backs off long when its audit completed (an
+        honest negative at this depth) and short when the audit was cut
+        short or UNKNOWN-tainted (more budget could flip it); the prospect
+        is a single greedy-subset hypothetical either way, so a refusal
+        only ever sets a cooldown, never a verdict about the mirror.
         """
         ply = len(board.move_stack)
         if self.plan is None or ply < self._vi_next_flip_ply:
-            return
+            return False
         mirrored = ConstructionPlan(
             pawn_file=self.plan.pawn_file,
             checked_side=-self.plan.checked_side,
@@ -748,16 +819,27 @@ class LoseBot:
                 conversion_ms=self.profile.vi_conversion_ms,
             )
         if prospect is not None and prospect.report.ok:
-            self.vi_flip_value = prospect.report.root_value
-            if prospect.report.root_live:
+            report = prospect.report
+            self.vi_flip_value = report.root_value
+            if report.root_live and (
+                not require_conversion or report.root_converts
+            ):
                 self.plan = mirrored
                 self.vi_side_flips += 1
+                if require_conversion:
+                    self.vi_conversion_flips += 1
                 self._reset_vi_state()
-                return
+                return True
+            if report.root_live and not report.conversion_complete:
+                # Live but conversion unknown: a starved audit, not a
+                # refusal — retry sooner than a genuine negative.
+                self._vi_next_flip_ply = ply + 8
+                return False
             self._vi_next_flip_ply = ply + 16
-            return
+            return False
         self.vi_flip_value = None
         self._vi_next_flip_ply = ply + 8
+        return False
 
     def choose_move(self, board: chess.Board) -> chess.Move:
         ply = len(board.move_stack)

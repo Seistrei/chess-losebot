@@ -113,6 +113,14 @@ maximal herder subset of the frozen configuration is certified dead; that
 verdict is scoped to the exact certified configuration (it cannot be
 inherited by a rebuilt plan) and triggers a prospective flip of the plan to
 the mirrored checked side when a completed build certifies that side live.
+The certify sweep also carries the conversion audit's side-level verdict:
+it stops early only for a live subset that positively converts, keeps the
+first merely-live subset as the playable fallback, and — when the sweep and
+every live subset's audit completed with nothing converting — declares the
+side unconvertible, which triggers the same prospective flip under a
+stricter gate: abandoning a live side requires a mirror that positively
+converts (forced-mate pockets or accepted release races), while a hopeless
+side keeps accepting any live mirror.
 Committed march/cage filters, a forced-capture guard, and a draw-aware
 scored race-release (it shares the arena's fifty-move/repetition/material
 adjudications) round out the profile. At play time the policy also prices
@@ -127,9 +135,12 @@ one immune holder is our own king, and the `motifs` command adjudicates
 that motif with the conversion audit: king-holder graphs get a dedicated
 GOAL_VACATE goal (classified against the hypothetically vacated position),
 and the corner fixtures audit convertible at race odds 1/2 — the entry and
-the premature pawn push are legalized by the same vacate tempo. The tuning
-log records the geometry rules the probe taught; the next step is template
-machinery that builds king-holder constructions in real games.
+the premature pawn push are legalized by the same vacate tempo. King-holder
+template mode builds that construction in real games (cage-first,
+king-parks-last, vacate gated on the audited race) and converts the
+dedicated drill; the tuning log records the geometry rules the probe
+taught, and the next step is adoption pressure so full games route
+executioner pawns toward corner templates at all.
 
 ## Roadmap
 

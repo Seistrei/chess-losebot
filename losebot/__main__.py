@@ -916,19 +916,19 @@ def selftest() -> int:
     # and still returns the hopeless verdict that gates the side flip.
     cache_bot = LoseBot(depth=1, opponent_model="zach", profile="vi")
     cache_bot.plan = flip_plan
-    cached_policy, cached_hopeless = None, False
+    cached_policy, cached_verdict = None, ""
     if dead_policy is not None and flip_target is not None:
         cache_bot._vi_dead_policies.append(dead_policy)
-        cached_policy, cached_hopeless = cache_bot._certify_herding(
+        cached_policy, cached_verdict = cache_bot._certify_herding(
             flip_board, flip_target, 2
         )
     check(
         "certification reuses dead certificates without rebuilding",
         dead_policy is not None
         and cached_policy is None
-        and cached_hopeless
+        and cached_verdict == "hopeless"
         and cache_bot.vi_builds == 0,
-        f"hopeless={cached_hopeless}; builds={cache_bot.vi_builds}",
+        f"verdict={cached_verdict}; builds={cache_bot.vi_builds}",
     )
 
     # 18b. Dead certificates strip down to the membership certificate that
@@ -1371,6 +1371,100 @@ def selftest() -> int:
         f"exhaustions={probe_bot.probe_budget_exhaustions}",
     )
 
+    # 21a. The certify sweep carries a side-level conversion verdict. On the
+    # 14d fixture the greedy subset is live but audits complete with nothing
+    # converting; the old sweep stopped there and played it blind. The gated
+    # sweep must CONTINUE past a live-unconvertible subset hunting a
+    # convertible one (here the mirror rook, which resolves the same way),
+    # and only then pass "unconvertible" — the honest flip trigger — with
+    # the first live subset kept as the playable fallback. Both audits must
+    # have completed for the negative to count at all.
+    sweep_bot = LoseBot(depth=1, opponent_model="zach", profile="vi")
+    sweep_bot.profile = _replace(
+        sweep_bot.profile, vi_build_ms=120_000, vi_conversion_ms=30_000
+    )
+    sweep_policy, sweep_verdict = None, ""
+    if vi_target is not None:
+        sweep_policy, sweep_verdict = sweep_bot._certify_herding(
+            vi_board, vi_target, 1
+        )
+    check(
+        "certify sweep continues past live-unconvertible subsets",
+        sweep_policy is not None
+        and sweep_verdict == "unconvertible"
+        and sweep_policy.report.ok
+        and sweep_policy.report.root_live
+        and not sweep_policy.report.root_converts
+        and sweep_policy.report.conversion_complete
+        and sweep_bot.vi_builds == 2
+        and sweep_bot.vi_conversion_incomplete == 0,
+        f"verdict={sweep_verdict}; builds={sweep_bot.vi_builds}; "
+        + ("no policy" if sweep_policy is None else (
+            f"live={sweep_policy.report.root_live}; "
+            f"converts={sweep_policy.report.root_converts}; "
+            f"complete={sweep_policy.report.conversion_complete}"
+        )),
+    )
+
+    # 21b. The flip gate's decision table, white-boxed at the prospect (the
+    # suite has no organic position yet whose MIRROR prospect converts —
+    # king-holder mirrors have no corner, so the organic fire case is a
+    # piece-mode mirror with reachable forced mates). Leaving a LIVE side
+    # requires a positively converting prospect; a complete-audit refusal
+    # backs off long, a starved audit short. Leaving a hopeless side keeps
+    # accepting any live prospect — there is nothing to stay for.
+    from . import bot as _bot_module
+
+    def _flip_case(require_conversion, **report_fields):
+        report = dict(
+            ok=True, root_live=True, root_converts=False,
+            conversion_complete=True, root_value=0.5,
+        )
+        report.update(report_fields)
+        gate_bot = LoseBot(depth=1, opponent_model="zach", profile="vi")
+        gate_bot.plan = ConstructionPlan(
+            pawn_file=chess.square_file(chess.B6),
+            checked_side=1,
+            created_ply=0,
+        )
+        real = _bot_module.prospective_flip_policy
+        _bot_module.prospective_flip_policy = (
+            lambda *args, **kwargs: _NS(report=_NS(**report))
+        )
+        try:
+            fired = gate_bot._consider_side_flip(
+                flip_board, 2, require_conversion=require_conversion
+            )
+        finally:
+            _bot_module.prospective_flip_policy = real
+        return fired, gate_bot
+
+    converts_fired, converts_bot = _flip_case(True, root_converts=True)
+    refused_fired, refused_bot = _flip_case(True)
+    starved_fired, starved_bot = _flip_case(True, conversion_complete=False)
+    hopeless_fired, hopeless_bot = _flip_case(False)
+    check(
+        "side flips leave a live side only for a converting prospect",
+        converts_fired
+        and converts_bot.plan.checked_side == -1
+        and converts_bot.vi_side_flips == 1
+        and converts_bot.vi_conversion_flips == 1
+        and not refused_fired
+        and refused_bot.plan.checked_side == 1
+        and refused_bot._vi_next_flip_ply == 16
+        and not starved_fired
+        and starved_bot._vi_next_flip_ply == 8
+        and hopeless_fired
+        and hopeless_bot.vi_side_flips == 1
+        and hopeless_bot.vi_conversion_flips == 0,
+        f"converts fired={converts_fired} "
+        f"(flips={converts_bot.vi_side_flips}, "
+        f"gated={converts_bot.vi_conversion_flips}); "
+        f"refused cooldown={refused_bot._vi_next_flip_ply}; "
+        f"starved cooldown={starved_bot._vi_next_flip_ply}; "
+        f"hopeless fired={hopeless_fired}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -1523,7 +1617,9 @@ def endgames(args) -> int:
                 f" releases={bot.vi_releases}"
                 f" ({bot.vi_release_nodes} probe nodes);"
                 f" side-flips={bot.vi_side_flips}"
-                f" (prospect={bot.vi_flip_value});"
+                f" ({bot.vi_conversion_flips} conversion-gated,"
+                f" prospect={bot.vi_flip_value});"
+                f" unconvertible-sides={bot.vi_unconvertible_sides};"
                 f" dead-certs={bot.vi_dead_certificates};"
                 f" re-solves={bot.vi_resolves};"
                 f" king-marches={bot.vi_king_marches};"

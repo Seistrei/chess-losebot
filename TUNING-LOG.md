@@ -942,3 +942,97 @@ plan invalidated -> policy dropped -> game ends) reporting honestly.
 Motif verdicts and odds unchanged; case-2 seed-5 reproduces its
 reference line exactly (fifty-move, 125 plies, 47 VI moves, 0/18,
 173,353 probe nodes, burn-updates=13 with 0 burned at end).
+
+## Conversion-gated side flips and the side-level certify verdict (2026-07-17)
+
+Log item 2 built — the deferred half of "gate side-flips and terminal
+seeding on audited conversion". The seeding half landed with the audit
+itself (terminal seeds become audited race odds once anything converts);
+what remained was play and flips keying on `root_live` alone, which is
+how a live-but-unconvertible side herds into the 42-move stall with the
+flip machinery never even asked. Both now key on the audit:
+
+- `_certify_herding` returns a side-level verdict, not a hopeless bool.
+  The sweep short-circuits only on a live subset whose audit found a
+  conversion (`"converts"` — positives are facts at any coverage, and
+  the common case still costs one build), keeps the first merely-live
+  subset as the playable fallback, and continues hunting a convertible
+  one. `"unconvertible"` demands the whole ledger of negatives be
+  complete — sweep finished AND every live subset's audit complete
+  (deadline-clean and UNKNOWN-free) — mirroring exactly how
+  `"hopeless"` requires every maximal subset dead; anything less is
+  `"live"` and blocks the trigger. Play still herds the fallback under
+  every live verdict: gating PLAY on conversion would silence the
+  policy without offering a better move (the session-4 deferral
+  reasoning, unchanged) — the verdict's job is to arm the flip.
+- `_consider_side_flip(require_conversion=...)` -> bool: leaving a LIVE
+  side now requires a mirror prospect that positively converts
+  (`root_converts`: forced-mate pockets or accepted release races); a
+  hopeless side keeps accepting any live prospect, since there is
+  nothing to stay for. A live prospect refused under the gate backs off
+  16 plies when its audit completed, 8 when starved (more budget could
+  flip it); the prospect is a single greedy-subset hypothetical, so a
+  refusal only ever sets a cooldown, never a verdict about the mirror.
+  Unconvertible sides also RE-consider the flip whenever the cooldown
+  expires: certification only reruns on rebuilds, which a stable herd
+  never triggers, and the prospect's convertibility is
+  position-dependent (their king drifts, forced-mate pockets open).
+- No flip thrash by construction: leaving A for B requires B to convert
+  while A provably does not. And since plans are mode-committed and a
+  king-holder mirror has no corner (kh mirrors never pose), today the
+  gated flip can only fire toward a piece-mode mirror with reachable
+  FORCED_MATE terminals — precisely the fm-organic capture-mate family.
+- Diagnostics: `unconvertible-sides` (certify verdicts) and
+  `conversion-gated` flips in the vi line; a mid-sweep config-level
+  refusal after a live fallback exists no longer discards the fallback
+  (the reason must be subset-dependent — a config-wide one would have
+  refused the fallback's build too); it marks the sweep incomplete.
+
+Suite 46 -> 48. Regression 21a locks the sweep continuation on the 14d
+fixture: the greedy rook subset is live with a complete 0/7 audit, the
+sweep must BUILD THE SECOND rook subset too (builds=2 where the old
+sweep stopped at 1), and only then pass "unconvertible" with the first
+subset as the playable fallback. Regression 21b white-boxes the flip
+decision table at the prospect (the suite has no organic position whose
+MIRROR prospect converts yet): converting prospect fires the gated flip
+(and counts it), complete-audit refusal backs off 16, starved refusal
+8, and the hopeless path keeps firing on any live prospect. Test 18's
+unpack moved to the verdict ("hopeless").
+
+Full battery:
+
+- Case-6 drill, 10 seeds, `--profile vi --vi-herders 1`: **7 converted
+  (48/52/34/64/42/38/34 plies) / 1 fifty-move (seed 2) / 2 stalemates
+  (seeds 7/9), byte-identical to the session-6 reference** including the
+  race-loss gauges' honest `0 burned at end`. Every seed prints
+  `unconvertible-sides=0; side-flips=0`: the king-holder side certifies
+  "converts" on its first subset (goals-convert=6/8), so the gate adds
+  zero builds and zero behavior change where conversion already worked.
+- Case-2 seed-5: **same game to the move** — fifty-move in 125 plies,
+  47 VI moves, burn-updates=13 (0 burned at end) — but the diagnostics
+  now tell the story the postmortems used to reconstruct by hand:
+  builds=10 with the sweep continuing past live-unconvertible subsets
+  (48 goal states audited across configurations vs 18, all audits
+  complete, 0 converting, 489,394 audit probe nodes vs 173,353),
+  `unconvertible-sides=2` (the piece side's complete negative, twice),
+  side-flips=1 with 0 conversion-gated — the pre-existing hopeless-path
+  flip; every gated reconsideration declined (prospect=None / the piece
+  mirror never converts) and play correctly kept herding the live
+  fallback instead of being silenced. Wall ~43s (was ~13-16s): the
+  price of sweeping the whole subset ledger is the honest cost of
+  certifying the side-level negative. This entry's line is the new
+  case-2 seed-5 reference.
+- Motifs: verdicts and odds byte-identical (kh-corner-h/a and
+  kh-herd-h4 POSITIVE at 0.500; fm-organic-h/a and fm-deep-h POSITIVE
+  at 1.000; ph-contained-root NEGATIVE, all refusals DISPROVEN).
+
+Next, in expected-value order:
+
+1. Adoption pressure for king-holder plans in full games — now the
+   natural client of the verdict: plan REPLACEMENT (not just side
+   mirroring) should key on the same audited-conversion facts, steering
+   a piece plan whose side certifies unconvertible toward a corner
+   template instead of merely toward its own theorem-dead mirror.
+2. Fifty-move/clock feasibility from the solved MDP (unchanged; drill
+   seed 2 is still the standing repro).
+3. Multi-pawn race stacking (unchanged).

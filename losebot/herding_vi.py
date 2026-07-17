@@ -1307,7 +1307,12 @@ def prospective_flip_policy(board: chess.Board, target: PawnMateTemplate,
     occupied or adjacent to their king). Otherwise the caller must read the
     report: only ``ok and root_live`` is a live prospect, and only ``ok and
     not root_live`` is a dead certificate — a refused or timed-out build is
-    *unknown* and must never be treated as dead.
+    *unknown* and must never be treated as dead. The conversion fields
+    follow the usual asymmetry, one notch weaker because this is a single
+    greedy-subset hypothetical: ``root_converts`` is a positive fact worth
+    flipping toward at any coverage, while its absence — even with
+    ``conversion_complete`` — speaks only for this subset and should set a
+    cooldown, never condemn the mirror.
     """
     us = board.turn
     our_king = board.king(us)
