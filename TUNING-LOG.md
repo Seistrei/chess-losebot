@@ -513,3 +513,155 @@ the 14d build (an organically converting goal terminal IS the king-holder
 problem): one checked goal at 0.4 + audit cut short must converge to root
 0.277 — under the old unchecked-goals-seed-1.0 bug it converges to ~0.787,
 so the test fails loudly on regression. Suite now 30 checks.
+
+## Motif adjudication: the king-holder release converts (2026-07-16)
+
+Ran the planned motif experiments (log items 1+3 above) with a new
+`motifs` CLI harness (`losebot/motifs.py`): fixture FENs adjudicated by
+`HerdingPolicy.build` under research budgets (`--conversion-ms`/
+`--budget-ms` 60 s, `validate_pools=True`), with the reviewer's protocol
+built in — a root that classifies terminal (or has no free herders) cannot
+be audited by the build, so the harness calls `score_release_moves()` on
+it directly, which is what play would do on arrival. Negative verdicts are
+reported only under `conversion_complete`; positives are facts at any
+coverage.
+
+One structural gap had to be fixed first: with our KING as the arrival
+holder, every defense-zone square is adjacent to the arrival square and
+therefore king-attacked, so GOAL_CONTAINED/GOAL_RACE could never fire — a
+king-holder build read as dead for a reason that had nothing to do with
+the position (the false-dead direction again, this time by construction).
+King-holder graphs now classify a third goal, **GOAL_VACATE**, against the
+hypothetically vacated position: our-move states where the vacate (arrival
+-> checked square) is legal and every post-vacate quiet reply enters the
+defense zone. The mating pawn's premature push — legal the instant the
+king steps off — is deliberately invisible to the proxy and priced exactly
+by the audit, where it is the losing side of the scored race.
+`_release_plausible` also learned that a king's re-attack of the vacated
+square refutes nothing (the defender that makes the state a goal also bars
+the king capture), so king releases are probed first, not last.
+
+FEN design was itself probe-driven, and the failures were the lesson:
+
+- an escape-square occupant diagonally adjacent to the mating pawn is
+  pawn-food (`bxa5` ate the a5 knight of the first b-file design and
+  escaped the lock through the capture);
+- a rank pin on the mating pawn can gate the premature push, but the same
+  pin makes the mate illegal once the defender enters on the pin line, and
+  pinning through the entry square makes the entry unstandable — the pin
+  family is closed;
+- the sound economical geometry is the CORNER: checked square h1/a1,
+  escapes = own bishop on g1/b1 (uncapturable: the pawn's capture squares
+  are kept empty), one square covered by the entering defender itself, and
+  the arrival square (king capture barred). The closer is a knight move
+  that seals the defender's retreat without check — a rook check there
+  mates THEIR king (misère loss), which the graphs record as mated-them
+  traps the policy correctly prices at 0.
+
+Results (all audits complete; `pypy3 -m losebot motifs`):
+
+| fixture | family | verdict | odds | mechanism |
+|---|---|---|---|---|
+| kh-corner-h `5N2/8/8/R7/5P1k/5Pp1/6K1/6B1 w` | king-holder | **POSITIVE** | 0.500 | root is GOAL_VACATE -> root-already-terminal -> direct scoring: Kh1! accepted, {Kh3 -> Ng6! g2# forced} vs premature g2+ |
+| kh-corner-a (a1 mirror, b-pawn) | king-holder | **POSITIVE** | 0.500 | Ka1! / Nb6! / b2# — drill-2-flavored flank |
+| kh-herd-h4 `5NN1/.../R5B1 w` | king-holder | **POSITIVE** | 0.500 | full VI build: pocket {h4,h5}, policy waits out parity, Ra5+ on the h5 beat (Ra5 on the h4 beat is stalemate), 7 goal-vacate terminals, **6/7 audit convertible**, root 0.480 |
+| fm-organic-h (14g) | forced-mate | POSITIVE | 1.000 | 11 forced-mate terminals, zero goals — baseline |
+| fm-organic-a (a-side mirror) | forced-mate | POSITIVE | 1.000 | axb2# family mirrors cleanly |
+| fm-deep-h `R7/8/8/8/8/3P1k1p/6RP/3N2BK w` | forced-mate | POSITIVE | 1.000 | 2,750 states: rook must seal rank 5, shuffle, drop to rank 4 on the f3 beat; 6 forced mates deep in the graph, 56 junk proxy goals all audited 0 and seeded 0, root 0.990 |
+| ph-contained-root (bishop holder, Kc5 contained) | piece-holder | NEGATIVE | — | terminal root -> direct scoring refuses every retreat (each re-attacks b5 along the vacated diagonal) — the release theorem, now a regression fixture |
+
+The one refused king-holder goal is the best evidence the instrument
+works: with the herder rook on g5, the audit refuses the vacate because
+after g3-g2 the push itself vacates g3 and the rook re-attacks the mate
+square through it — the slider rule extends to lines the mating push
+opens, and the audit found that without being told.
+
+What the numbers say about the motif: the premature push puts a hard
+floor under the race — the vacate legalizes the push and the entry in the
+same tempo, so the post-vacate pool is never smaller than {enter, push}
+and a single-entry corner converts at 1/2 per attempt. The push branch is
+not a loss (our king recaptures, resetting the fifty-move clock) but it
+eats the mating pawn, so the race is one-shot per usable pawn. Verdict:
+**the king-holder template machinery is now justified** — the release
+that was structurally impossible for piece holders is probe-accepted and
+audit-visible end to end for king holders.
+
+Lock-ins (suite 30 -> 34): terminal-root fallback scores Kh1 at 1/2;
+GOAL_VACATE graph audits 6/7 with zero pool mismatches; the piece-holder
+terminal root stays refused; deep forced-mate reachability converts
+through 56 refused proxy goals with mated-them traps priced at 0.
+
+Next, in expected-value order:
+
+1. King-holder template mode in the planner/bot: allow holder==our king
+   (template semantics currently force a non-king holder and assume the
+   king parks on the checked square before the hold completes), order the
+   march/cage so the king takes the arrival square last, require a
+   knight-class closer to exist, and gate the vacate on the audited race
+   (GOAL_VACATE at play time = `score_release_moves` accepting).
+2. Then gate side-flips and terminal seeding on audited conversion
+   (deferred in the previous entry precisely until a convertible side
+   could exist — it now can).
+3. Multi-pawn race stacking: the push-reset consumes one pawn; a
+   construction whose reset re-poses a second template would compound
+   1/2 -> 3/4. Needs a fixture before any machinery.
+4. Fifty-move/clock feasibility from the solved MDP (unchanged).
+
+### Review round 3 follow-ups (2026-07-16, same day)
+
+External review of the motif work found two P1s and two P2s; all four
+taken. The reviewer's bottom line stands after the fixes: the positive
+king-holder conclusion was already credible (it rests on completed PROVEN
+releases), and the repairs are about making NEGATIVES trustworthy.
+
+1. **Post-vacate attack maps included their king as a slider blocker.**
+   `_white_attacks` deliberately leaves their king out of the occupancy so
+   rays pass through it (a king cannot step backward along the ray that
+   checks it); the new `_their_quiet_moves_vacated` reused one occupancy
+   mask for both destination filtering and attack generation, so a ray the
+   vacate opened onto their king stopped AT him and the square behind him
+   entered the fast pool as a legal retreat. Under-classification in the
+   false-dead direction. Fixed to mirror `_white_attacks`; the shipped
+   fixtures were unaffected (the reviewer cross-checked every state — no
+   through-king geometry occurs in them; the rerun reproduces 6/7 at race
+   0.500 exactly), and regression 19e now compares the fast vacated pool
+   against real-board legality on a position where the old code admits the
+   illegal retreat (rook ray opening across the vacated square, h4 behind
+   the checked king).
+
+2. **UNKNOWN counted as a losing reply, so refusals could be budget
+   artifacts.** Conservative and correct for ACCEPTANCE (a reply only
+   counts winning on a completed PROVEN probe, so offered races are sound
+   lower bounds — play is unchanged), but a refusal that leaned on an
+   UNKNOWN probe is the probe-tri-state lesson relearned: with
+   `--probe-cap 0` the known-positive kh-corner-h read NEGATIVE.
+   `score_release_moves` now reports unknown-tainted refusals
+   (`unknown_out`, same accumulator convention as `nodes_out`); the audit
+   counts tainted goals in the new `conversion_unknowns` and
+   `conversion_complete` is False whenever it is nonzero — so the protocol
+   ("negatives require conversion_complete") automatically rejects starved
+   negatives. The motif harness distinguishes the three outcomes in its
+   verdicts: POSITIVE / NEGATIVE (all refusals DISPROVEN) / UNKNOWN
+   (starved or cut short). Measured fallout: none — the 14d bishop-holder
+   audit, the ph-contained-root NEGATIVE, and the case-2 seed-5 in-game
+   audits (0/17 at the 6,000-node play cap, 156,163 probe nodes) all
+   re-verify as DISPROVEN-clean, so no previously recorded negative was
+   starved.
+
+3. **`motifs --probe-cap` only reached direct terminal scoring.** Graph
+   audits silently kept the 6,000-node play default. `build` now takes
+   `conversion_probe_cap` and the CLI passes its research cap (default
+   50,000) to both paths.
+
+4. **The vacate could teleport.** Nothing checked that the target's
+   checked square is one king step from the arrival square, so an ad-hoc
+   stub could classify GOAL_VACATE through an impossible move. King-holder
+   mode now requires `square_distance(checked, arrival) == 1` and shuts
+   itself off otherwise (regression 19h: a bogus checked square yields
+   zero goals and a dead root instead of teleport goals).
+
+Suite 34 -> 38 (through-king pool vs ground truth; starved refusal
+reporting with a clean-refusal contrast; audit taint through the
+`conversion_probe_cap` plumbing at cap 0, 7/7 tainted; teleport guard).
+Full motif suite re-run: verdicts and odds unchanged, with every audit
+line now carrying its starved-refusal count.

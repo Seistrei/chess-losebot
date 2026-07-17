@@ -22,6 +22,20 @@ Goal states (value 1) are where the surrounding machinery takes over:
 - every quiet reply entering the defense zone (the pre-release race state).
 Draws, stalemates, and static-breaking captures are value 0.
 
+When the arrival square is held by OUR KING (the one holder type the release
+theorem does not kill: a defended arrival square only bars a king capture,
+so king-steps-aside is a clean release), the two goals above are structurally
+unreachable — every defense-zone square is adjacent to the arrival square and
+therefore king-attacked, so their king can never enter the zone while the
+hold stands. Those graphs get a third goal instead, classified against the
+hypothetically *vacated* position (our king moved from the arrival square to
+the template's checked square): a state is GOAL_VACATE when the vacate is
+legal and every post-vacate quiet reply enters the defense zone. The mating
+pawn's own premature push (legal the moment the king steps off) is not a
+king move and is deliberately absent from this proxy; the conversion audit
+scores the actual vacate with ``score_release_moves``, where the push shows
+up as the losing side of the race.
+
 Those goals are proxies — they stop one move short of the release and the
 actual selfmate. The conversion audit closes the gap: every reachable goal
 terminal is reconstructed on a real board and scored with the same release
@@ -69,6 +83,7 @@ STALEMATE = 5
 CAPTURE_BREAK = 6
 DEAD_END = 7
 MATED_THEM = 8
+GOAL_VACATE = 9
 
 _TERMINAL_NAMES = {
     GOAL_CONTAINED: "goal-contained",
@@ -78,13 +93,14 @@ _TERMINAL_NAMES = {
     CAPTURE_BREAK: "capture-break",
     DEAD_END: "dead-end",
     MATED_THEM: "mated-them",
+    GOAL_VACATE: "goal-vacate",
 }
 
 # Build failures that depend on the current dynamic placement rather than the
 # static configuration; retrying them next move is cheap and meaningful.
 POSITION_DEPENDENT_FAILURES = frozenset({"root-already-terminal"})
 
-_WIN_KINDS = (GOAL_CONTAINED, GOAL_RACE, FORCED_MATE)
+_WIN_KINDS = (GOAL_CONTAINED, GOAL_RACE, FORCED_MATE, GOAL_VACATE)
 
 # Herder preference: rooks cut files (the classic boxing tool), bishops hold
 # diagonals cheaply, knights tempo, queens last (they widen branching without
@@ -121,8 +137,10 @@ class BuildReport:
     # release needed), or a proxy goal whose release probe accepts a race.
     # root_converts=True is a positive fact (every explored state is
     # root-reachable). conversion_complete=False means the audit deadline
-    # expired first: the absence of a converting goal is then unknown, never
-    # a verdict — negative verdicts require conversion_complete. Probes are
+    # expired before every goal was visited OR some goal's refusal leaned on
+    # an UNKNOWN reply probe (conversion_unknowns counts those): either way
+    # the absence of a converting goal is unknown, never a verdict —
+    # negative verdicts require conversion_complete. Probes are
     # depth-bounded, so even a complete all-refused audit is "no conversion
     # provable at this depth", not an exact impossibility — an honest flip
     # trigger, not a reachability fact. conversion_nodes bills every audit
@@ -132,6 +150,7 @@ class BuildReport:
     conversion_checked: int = 0
     converting_goals: int = 0
     conversion_nodes: int = 0
+    conversion_unknowns: int = 0
     conversion_complete: bool = False
     root_converts: bool = False
 
@@ -270,6 +289,11 @@ class HerdingPolicy:
         # the best acceptable release converts (0.0 = probed and refused).
         self._conversion: dict[int, float] = {}
         self._stripped = False
+        # King-holder mode (set by _split_board): our king is the arrival
+        # holder, goals are classified against the hypothetically vacated
+        # position, with the king on _vacate_square (the checked square).
+        self._king_holder = False
+        self._vacate_square: int | None = None
 
         # Static configuration (filled by build).
         self.static_map: dict[int, chess.Piece] = {}
@@ -312,7 +336,8 @@ class HerdingPolicy:
               skip_fingerprints=(),
               model: str | None = "zach",
               race_max_losing: int = 1,
-              conversion_ms: int = 3_000) -> "HerdingPolicy":
+              conversion_ms: int = 3_000,
+              conversion_probe_cap: int = 6_000) -> "HerdingPolicy":
         """Explore, certify, solve, and conversion-audit one configuration.
 
         ``herders`` forces an explicit subset (as enumerated by
@@ -323,7 +348,10 @@ class HerdingPolicy:
         cheap split when the configuration (or this exact root of it) is one
         the caller already knows it cannot afford to explore. ``model`` and
         ``race_max_losing`` feed the conversion audit's release probes;
-        ``conversion_ms`` caps the audit so it cannot starve the solver.
+        ``conversion_ms`` caps the audit's wall clock so it cannot starve
+        the solver, and ``conversion_probe_cap`` is the per-reply node cap
+        of its release probes (research audits raise it so refusals rest on
+        DISPROVEN, not budget exhaustion).
         """
         policy = cls(board.turn, target, gamma)
         started = time.monotonic()
@@ -349,7 +377,9 @@ class HerdingPolicy:
             audit_deadline = min(
                 deadline, time.monotonic() + conversion_ms / 1000.0
             )
-            policy._audit_conversions(audit_deadline, model, race_max_losing)
+            policy._audit_conversions(
+                audit_deadline, model, race_max_losing, conversion_probe_cap
+            )
             policy._solve(deadline, max_updates)
         else:
             policy.report.reason = reason
@@ -432,6 +462,61 @@ class HerdingPolicy:
             else:
                 self._static_sliders.append((square, piece.piece_type))
 
+        # King-holder mode: our king itself freezes the mating pawn from the
+        # arrival square, and the goal semantics must reason about the
+        # position AFTER the king steps aside to the template's checked
+        # square. If that hypothetical vacate could never be legal
+        # (no checked square on the target, destination occupied by a
+        # static, or covered by a static of theirs), the mode stays off and
+        # the graph honestly has no goals.
+        holder = self.static_map.get(self.arrival)
+        self._king_holder = (
+            holder is not None
+            and holder.color == us
+            and holder.piece_type == chess.KING
+        )
+        self._vacate_square = None
+        if self._king_holder:
+            vacate = getattr(self._target, "checked_square", None)
+            their_static_attacks = 0
+            for square, piece in self.static_map.items():
+                if piece.color != them:
+                    continue
+                if piece.piece_type != chess.PAWN:
+                    # A static opponent piece is outside this model's regime;
+                    # refuse the mode rather than mis-certify around it.
+                    their_static_attacks = ~0
+                    break
+                their_static_attacks |= chess.BB_PAWN_ATTACKS[them][square]
+            if (
+                vacate is None
+                # The vacate is one king step off the arrival square; an
+                # ad-hoc target whose checked square is further away would
+                # classify goals through an impossible teleport.
+                or chess.square_distance(vacate, self.arrival) != 1
+                or vacate in self.static_map
+                or their_static_attacks & chess.BB_SQUARES[vacate]
+            ):
+                self._king_holder = False
+            else:
+                self._vacate_square = vacate
+                vac_bb = chess.BB_SQUARES[vacate]
+                arr_bb = chess.BB_SQUARES[self.arrival]
+                self._static_occ_vacated = (self.static_occ & ~arr_bb) | vac_bb
+                fixed = 0
+                for square, piece in self.static_map.items():
+                    if piece.color != us:
+                        continue
+                    if piece.piece_type == chess.PAWN:
+                        fixed |= chess.BB_PAWN_ATTACKS[us][square]
+                    elif piece.piece_type == chess.KNIGHT:
+                        fixed |= chess.BB_KNIGHT_ATTACKS[square]
+                    elif piece.piece_type == chess.KING:
+                        fixed |= chess.BB_KING_ATTACKS[
+                            vacate if square == self.arrival else square
+                        ]
+                self._static_fixed_attacks_vacated = fixed
+
         return None
 
     # ------------------------------------------------------------------
@@ -460,6 +545,30 @@ class HerdingPolicy:
             chess.BB_KING_ATTACKS[zk]
             & ~occupied
             & ~self._white_attacks(herders)
+        )
+        return list(chess.scan_forward(moves_bb))
+
+    def _their_quiet_moves_vacated(self, zk: int, herders: tuple) -> list[int]:
+        """Zach's quiet king pool AFTER the hypothetical king vacate.
+
+        Their king is deliberately absent from the attack occupancy, exactly
+        as in ``_white_attacks``: a slider whose ray the vacate opens onto
+        their king must keep attacking the squares BEHIND it (the king
+        cannot step backward along the ray out of check). Including the king
+        as a blocker admitted exactly that illegal retreat.
+        """
+        occupied = self._static_occ_vacated
+        for _, square in herders:
+            occupied |= chess.BB_SQUARES[square]
+        attacks = self._static_fixed_attacks_vacated
+        for square, ptype in self._static_sliders:
+            attacks |= _piece_attacks(ptype, square, occupied)
+        for ptype, square in herders:
+            attacks |= _piece_attacks(ptype, square, occupied)
+        moves_bb = (
+            chess.BB_KING_ATTACKS[zk]
+            & ~(occupied | chess.BB_SQUARES[zk])
+            & ~attacks
         )
         return list(chess.scan_forward(moves_bb))
 
@@ -550,6 +659,8 @@ class HerdingPolicy:
 
     def _classify_our_state(self, zk: int, herders: tuple) -> int:
         """Terminal classification for a state with US to move."""
+        if self._king_holder:
+            return self._classify_vacate_state(zk, herders)
         in_zone = zk in self._defense_zone
         pool = self._their_quiet_moves(zk, herders)
         if in_zone:
@@ -562,6 +673,29 @@ class HerdingPolicy:
             # Every quiet reply steps into the defense zone: the release
             # race can be offered from here.
             return GOAL_RACE
+        return NORMAL_OUR
+
+    def _classify_vacate_state(self, zk: int, herders: tuple) -> int:
+        """King-holder goal: does stepping aside start a winnable race?
+
+        The vacate must be playable right now — destination unoccupied and
+        not adjacent to their king (static occupancy and their static pawn
+        attacks were checked once at build time) — and every post-vacate
+        quiet reply must enter the defense zone. The premature pawn push
+        the vacate legalizes is not a king move and is invisible to this
+        proxy by design; the conversion audit scores the actual vacate with
+        ``score_release_moves``, where the push is the losing side of the
+        race.
+        """
+        vacate = self._vacate_square
+        if chess.square_distance(zk, vacate) <= 1:
+            return NORMAL_OUR
+        for _, square in herders:
+            if square == vacate:
+                return NORMAL_OUR
+        pool = self._their_quiet_moves_vacated(zk, herders)
+        if pool and all(square in self._defense_zone for square in pool):
+            return GOAL_VACATE
         return NORMAL_OUR
 
     # ------------------------------------------------------------------
@@ -690,6 +824,12 @@ class HerdingPolicy:
         holder = self.static_map.get(self.arrival)
         if holder is None:
             return True
+        if holder.piece_type == chess.KING:
+            # A king's re-attack of the vacated arrival square never refutes
+            # the mate: the defender that makes this state a goal also bars
+            # the king capture — that is the point of the king-holder motif.
+            # Every king retreat is worth probing.
+            return True
         occupied = self.static_occ | chess.BB_SQUARES[zk]
         for _, square in herders:
             occupied |= chess.BB_SQUARES[square]
@@ -709,7 +849,8 @@ class HerdingPolicy:
         return False
 
     def _audit_conversions(self, deadline: float, model: str | None,
-                           race_max_losing: int) -> None:
+                           race_max_losing: int,
+                           probe_cap: int = 6_000) -> None:
         """Score the actual release at every reachable goal terminal.
 
         ``root_live`` certifies that a proxy goal is reachable; this audit
@@ -722,11 +863,16 @@ class HerdingPolicy:
         predicts exactly what play would discover on arrival. Every explored
         state is root-reachable, so one converting terminal makes
         ``root_converts`` a positive fact about the root.
+
+        A goal refused while any of its reply probes returned UNKNOWN is a
+        budget artifact, not a verdict: it counts in ``conversion_unknowns``
+        and forces ``conversion_complete=False``, so downstream negatives
+        stay inadmissible exactly as if the audit had been cut short.
         """
         goal_indices = []
         forced_mates = 0
         for index, kind in enumerate(self._kind):
-            if kind in (GOAL_CONTAINED, GOAL_RACE):
+            if kind in (GOAL_CONTAINED, GOAL_RACE, GOAL_VACATE):
                 goal_indices.append(index)
             elif kind == FORCED_MATE:
                 forced_mates += 1
@@ -751,18 +897,24 @@ class HerdingPolicy:
                 break
             _, zk, herders = self._states[index]
             board = self.board_for(zk, herders, our_move=True)
+            unknowns = [0]
             choice = score_release_moves(
                 board, self._target, model, race_max_losing,
-                nodes_out=nodes,
+                probe_cap=probe_cap, nodes_out=nodes,
+                unknown_out=unknowns,
             )
             self.report.conversion_checked += 1
             if choice is None:
                 self._conversion[index] = 0.0
+                if unknowns[0]:
+                    self.report.conversion_unknowns += 1
                 continue
             self._conversion[index] = choice.winning / choice.pool
             self.report.converting_goals += 1
         self.report.conversion_nodes = nodes[0]
-        self.report.conversion_complete = complete
+        self.report.conversion_complete = (
+            complete and self.report.conversion_unknowns == 0
+        )
         self.report.root_converts = forced_mates > 0 or any(
             fraction > 0.0 for fraction in self._conversion.values()
         )
@@ -1058,6 +1210,7 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                         model: str | None, max_losing: int,
                         probe_n: int = 2, probe_cap: int = 6_000,
                         nodes_out: list | None = None,
+                        unknown_out: list | None = None,
                         ) -> ReleaseChoice | None:
     """Find the holder retreat with the best forced-mate odds.
 
@@ -1065,6 +1218,14 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
     budgets) is credited with the probe nodes spent whatever the outcome —
     a refusal costs real search too, and callers billing an audit need the
     spend that ``None`` would otherwise discard.
+
+    ``unknown_out`` is credited with the number of candidate releases that
+    were REFUSED while at least one of their reply probes returned UNKNOWN
+    (budget exhaustion). Such a refusal is a budget artifact, never a
+    verdict — with a larger cap the unknown replies could prove out and the
+    candidate could flip to accepted. Acceptances are unaffected: a reply
+    only counts as winning on a completed PROVEN probe, so an accepted race
+    is a sound lower bound whatever the unknowns did.
 
     The exact probe only accepts guaranteed nets, so it refuses any release
     that leaves Zach a pool like {step onto the defense square, push the pawn
@@ -1094,6 +1255,7 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
         pool = support_zach(board)
         winning = 0
         losing = 0
+        unknowns = 0
         if not pool:
             # Every legal reply mates us: a guaranteed win the main probe
             # normally takes first, but accept it here as well.
@@ -1114,8 +1276,12 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                     winning += 1
                 else:
                     losing += 1
+                    if status is ProofStatus.UNKNOWN:
+                        unknowns += 1
         board.pop()
         if winning == 0 or losing > max_losing:
+            if unknowns and unknown_out is not None:
+                unknown_out[0] += 1
             continue
         candidate = ReleaseChoice(move, winning, losing, pool_size, 0)
         if (

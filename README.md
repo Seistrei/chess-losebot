@@ -56,6 +56,11 @@ docker run --rm losebot pypy3 -m losebot endgames --profile herding `
 # certificates and prospective side-flips
 docker run --rm losebot pypy3 -m losebot endgames --profile vi `
   --case 2 --seed 5 --max-plies 240 --probe-cap 10000 --probe-depth 3
+
+# Adjudicate conversion motifs (king-holder release, forced capture-mate)
+# with the conversion audit under research budgets
+docker run --rm losebot pypy3 -m losebot motifs
+docker run --rm losebot pypy3 -m losebot motifs --case 3 --conversion-ms 120000
 ```
 
 ## How LoseBot works
@@ -110,9 +115,15 @@ inherited by a rebuilt plan) and triggers a prospective flip of the plan to
 the mirrored checked side when a completed build certifies that side live.
 Committed march/cage filters, a forced-capture guard, and a draw-aware
 scored race-release (it shares the arena's fifty-move/repetition/material
-adjudications) round out the profile; the tuning log records the current
-frontier (piece-holder release geometry) that still separates delivered
-defenders from finished mates.
+adjudications) round out the profile. Piece holders provably cannot release
+the arrival square (every retreat re-attacks it and refutes the mate); the
+one immune holder is our own king, and the `motifs` command adjudicates
+that motif with the conversion audit: king-holder graphs get a dedicated
+GOAL_VACATE goal (classified against the hypothetically vacated position),
+and the corner fixtures audit convertible at race odds 1/2 — the entry and
+the premature pawn push are legalized by the same vacate tempo. The tuning
+log records the geometry rules the probe taught; the next step is template
+machinery that builds king-holder constructions in real games.
 
 ## Roadmap
 

@@ -757,6 +757,254 @@ def selftest() -> int:
         ),
     )
 
+    # 19a. The king-holder release: our KING on the arrival square is the one
+    # holder type the release theorem does not kill (a defended arrival
+    # square only bars a king capture). On the exact vacate position the
+    # root classifies GOAL_VACATE, the build exits root-already-terminal
+    # BEFORE any audit, and direct release scoring — the reviewer protocol
+    # for already-terminal roots — must accept the king-step-aside at race
+    # 1/2: {Kh3 enter -> Ng6! g2# forced} wins, the premature g2+ loses.
+    from types import SimpleNamespace as _MotifNS
+
+    from .herding_vi import score_release_moves as _score_release
+    from .motifs import FIXTURES
+
+    motif = {fixture.name: fixture for fixture in FIXTURES}
+
+    def _motif_target(fixture):
+        target = _MotifNS(
+            arrival_square=chess.parse_square(fixture.arrival)
+        )
+        if fixture.checked is not None:
+            target.checked_square = chess.parse_square(fixture.checked)
+        return target
+
+    kh = motif["kh-corner-h"]
+    kh_board = chess.Board(kh.fen)
+    kh_target = _motif_target(kh)
+    kh_build = HerdingPolicy.build(
+        kh_board, kh_target, max_herders=1, state_cap=100_000,
+        time_budget_ms=10_000, gamma=0.99,
+    )
+    kh_choice = _score_release(
+        kh_board, kh_target, "zach", 1, probe_n=2, probe_cap=50_000,
+    )
+    check(
+        "king-holder vacate is scored and accepted at the terminal root",
+        kh_build.report.reason == "root-already-terminal"
+        and kh_choice is not None
+        and kh_choice.move == chess.Move.from_uci("g2h1")
+        and kh_choice.winning == 1
+        and kh_choice.losing == 1
+        and kh_choice.pool == 2,
+        f"build={kh_build.report.reason or 'ok'}; release="
+        + ("refused" if kh_choice is None else
+           f"{kh_board.san(kh_choice.move)} "
+           f"{kh_choice.winning}/{kh_choice.pool}"),
+    )
+
+    # 19b. GOAL_VACATE makes king-holder herding positions visible to the
+    # sub-MDP: with our king static on the arrival square every defense-zone
+    # square is king-attacked, so the old goals could never fire and a
+    # king-holder build read as a structural false-dead. In the {h4,h5}
+    # pocket fixture the policy must time Ra5+ to the h5 parity (Ra5 with
+    # his king on h4 is stalemate), and the audit must convert 6 of the 7
+    # goal-vacate terminals — the seventh, rook on g5, re-attacks g2 through
+    # the square the mating push itself vacates, and the audit catches it.
+    khh = motif["kh-herd-h4"]
+    khh_board = chess.Board(khh.fen)
+    khh_policy = HerdingPolicy.build(
+        khh_board, _motif_target(khh), max_herders=1, state_cap=100_000,
+        time_budget_ms=30_000, gamma=0.99, validate_pools=True,
+        conversion_ms=30_000, conversion_probe_cap=50_000,
+    )
+    khh_report = khh_policy.report
+    khh_ranked = khh_policy.ranked_moves(khh_board) or []
+    check(
+        "goal-vacate herding graph audits king-holder conversions",
+        khh_report.ok
+        and khh_report.root_live
+        and khh_report.root_converts
+        and khh_report.conversion_complete
+        and khh_report.pool_mismatches == 0
+        and khh_report.terminals.get("goal-vacate") == 7
+        and khh_report.conversion_checked == 7
+        and khh_report.converting_goals == 6
+        and khh_report.forced_mates == 0
+        and khh_report.root_value > 0.4
+        and bool(khh_ranked)
+        and khh_ranked[0][0] > 0.4,
+        f"goals={khh_report.converting_goals}/{khh_report.conversion_checked}"
+        f" of {khh_report.terminals.get('goal-vacate')}; "
+        f"root={khh_report.root_value:.3f}; "
+        f"terminals={khh_report.terminals}",
+    )
+
+    # 19c. The contrast exhibit: a piece holder with the defender already
+    # contained is a terminal root the build cannot audit, and direct
+    # scoring must refuse every retreat — the bishop re-attacks b5 along
+    # the vacated diagonal from every destination (the release theorem).
+    ph = motif["ph-contained-root"]
+    ph_board = chess.Board(ph.fen)
+    ph_target = _motif_target(ph)
+    ph_build = HerdingPolicy.build(
+        ph_board, ph_target, max_herders=1, state_cap=100_000,
+        time_budget_ms=10_000, gamma=0.99,
+    )
+    ph_choice = _score_release(
+        ph_board, ph_target, "zach", 1, probe_n=2, probe_cap=50_000,
+    )
+    check(
+        "piece-holder release stays refused at the terminal root",
+        ph_build.report.reason == "root-already-terminal"
+        and ph_choice is None,
+        f"build={ph_build.report.reason or 'ok'}; "
+        f"release={'refused' if ph_choice is None else 'accepted'}",
+    )
+
+    # 19d. Multi-move forced-mate reachability with junk proxy goals: the
+    # stub arrival square breeds 56 goal terminals that all audit to zero,
+    # while six genuine FORCED_MATE terminals sit several plies deep behind
+    # rank-5 seal-and-shuffle rook play. root_converts must come from the
+    # forced mates, audited seeding must zero the refused goals rather than
+    # steer at them, and the mated-them traps (a rook check on the f-file
+    # mates HIS king — a misère loss) must stay avoidable, root near 1.
+    fmd = motif["fm-deep-h"]
+    fmd_policy = HerdingPolicy.build(
+        chess.Board(fmd.fen), _motif_target(fmd), max_herders=1,
+        state_cap=100_000, time_budget_ms=30_000, gamma=0.99,
+        conversion_ms=30_000,
+    )
+    fmd_report = fmd_policy.report
+    check(
+        "deep forced-mate reachability converts through refused proxy goals",
+        fmd_report.ok
+        and fmd_report.root_converts
+        and fmd_report.conversion_complete
+        and fmd_report.forced_mates == 6
+        and fmd_report.goal_states == 56
+        and fmd_report.converting_goals == 0
+        and fmd_report.terminals.get("mated-them") == 6
+        and fmd_report.root_value > 0.9,
+        f"forced-mates={fmd_report.forced_mates}; "
+        f"goals={fmd_report.converting_goals}/{fmd_report.goal_states}; "
+        f"root={fmd_report.root_value:.3f}",
+    )
+
+    # 19e. The post-vacate attack map must see THROUGH their king (the same
+    # king-danger semantics _white_attacks documents): when the vacate opens
+    # a slider ray onto their king, the squares behind the king along the
+    # ray stay attacked — a king cannot step backward out of check. The old
+    # computation included the king as an occupancy blocker, so the ray
+    # stopped at him and the fast pool admitted the illegal retreat (h4
+    # here, with the a4-rook ray opening across the vacated e4).
+    ray_board = chess.Board("8/8/8/4p3/R3K1k1/8/8/7N w - - 0 1")
+    ray_policy = HerdingPolicy.build(
+        ray_board,
+        _MotifNS(
+            arrival_square=chess.E4, checked_square=chess.D3
+        ),
+        max_herders=1, state_cap=100_000, time_budget_ms=10_000,
+        gamma=0.99, herders=((chess.H1, chess.KNIGHT),),
+    )
+    ray_ok = ray_policy.report.ok and ray_policy._king_holder
+    ray_fast: set = set()
+    ray_truth: set = set()
+    if ray_ok:
+        ray_fast = set(ray_policy._their_quiet_moves_vacated(
+            chess.G4, ray_policy._root_herders
+        ))
+        vac_board = chess.Board(None)
+        vac_board.set_piece_at(chess.A4, chess.Piece(chess.ROOK, chess.WHITE))
+        vac_board.set_piece_at(chess.D3, chess.Piece(chess.KING, chess.WHITE))
+        vac_board.set_piece_at(
+            chess.H1, chess.Piece(chess.KNIGHT, chess.WHITE)
+        )
+        vac_board.set_piece_at(chess.E5, chess.Piece(chess.PAWN, chess.BLACK))
+        vac_board.set_piece_at(chess.G4, chess.Piece(chess.KING, chess.BLACK))
+        vac_board.turn = chess.BLACK
+        ray_truth = {
+            m.to_square for m in vac_board.legal_moves
+            if m.from_square == chess.G4 and not vac_board.is_capture(m)
+        }
+    check(
+        "post-vacate pool sees through their king along opened rays",
+        ray_ok and ray_fast == ray_truth and chess.H4 not in ray_fast,
+        f"fast={sorted(chess.square_name(s) for s in ray_fast)}; "
+        f"real={sorted(chess.square_name(s) for s in ray_truth)}",
+    )
+
+    # 19f. A refusal that leaned on an UNKNOWN probe is a budget artifact,
+    # never a verdict. With probe_cap=0 every reply probe starves, so the
+    # known-positive king-holder vacate is refused — but unknown_out must
+    # say so, and the motif harness reads that as UNKNOWN, not NEGATIVE.
+    # The piece-holder refusal at a research cap stays clean (all replies
+    # DISPROVEN), which is what keeps ITS negative admissible.
+    starved_unknowns = [0]
+    starved_choice = _score_release(
+        chess.Board(kh.fen), kh_target, "zach", 1,
+        probe_n=2, probe_cap=0, unknown_out=starved_unknowns,
+    )
+    clean_unknowns = [0]
+    clean_choice = _score_release(
+        chess.Board(ph.fen), ph_target, "zach", 1,
+        probe_n=2, probe_cap=50_000, unknown_out=clean_unknowns,
+    )
+    check(
+        "starved release refusals are reported unknown, clean ones are not",
+        starved_choice is None
+        and starved_unknowns[0] > 0
+        and clean_choice is None
+        and clean_unknowns[0] == 0,
+        f"starved: refused with {starved_unknowns[0]} unknown-tainted"
+        f" candidate(s); clean: refused with {clean_unknowns[0]}",
+    )
+
+    # 19g. The same distinction folds into the graph audit through the
+    # conversion_probe_cap plumbing: at cap 0 every goal refusal is starved,
+    # so conversion_unknowns counts all seven, conversion_complete goes
+    # False, and root_converts=False is NOT an admissible negative — the
+    # same fixture that audits 6/7 convertible at a research cap.
+    starved_policy = HerdingPolicy.build(
+        chess.Board(khh.fen), _motif_target(khh), max_herders=1,
+        state_cap=100_000, time_budget_ms=30_000, gamma=0.99,
+        conversion_ms=30_000, conversion_probe_cap=0,
+    )
+    starved_report = starved_policy.report
+    check(
+        "starved audit refusals taint conversion_complete",
+        starved_report.ok
+        and starved_report.terminals.get("goal-vacate") == 7
+        and starved_report.conversion_checked == 7
+        and starved_report.converting_goals == 0
+        and starved_report.conversion_unknowns == 7
+        and not starved_report.conversion_complete
+        and not starved_report.root_converts,
+        f"unknowns={starved_report.conversion_unknowns}/7; "
+        f"complete={starved_report.conversion_complete}; "
+        f"converts={starved_report.root_converts}",
+    )
+
+    # 19h. The vacate is one king step: a target whose checked square is not
+    # adjacent to the arrival square must not enable king-holder goals (the
+    # old code would classify them through an impossible teleport).
+    teleport_policy = HerdingPolicy.build(
+        chess.Board(khh.fen),
+        _MotifNS(arrival_square=chess.G2, checked_square=chess.A8),
+        max_herders=1, state_cap=100_000, time_budget_ms=10_000, gamma=0.99,
+    )
+    check(
+        "non-adjacent checked squares disable king-holder goals",
+        teleport_policy.report.ok
+        and not teleport_policy._king_holder
+        and teleport_policy.report.goal_states == 0
+        and "goal-vacate" not in teleport_policy.report.terminals
+        and not teleport_policy.report.root_live,
+        f"king-holder={teleport_policy._king_holder}; "
+        f"goals={teleport_policy.report.goal_states}; "
+        f"terminals={teleport_policy.report.terminals}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -939,6 +1187,33 @@ def main() -> int:
     eg.add_argument("--show-fen", action="store_true")
     eg.add_argument("--pgn-dir", default=None)
 
+    mo = sub.add_parser(
+        "motifs",
+        help="adjudicate conversion motifs (king-holder release, forced "
+             "capture-mate) with the conversion audit under research budgets",
+    )
+    mo.add_argument("--case", type=int, default=None,
+                    help="run one fixture by number (see --list)")
+    mo.add_argument("--list", action="store_true")
+    mo.add_argument("--fen", default=None, help="ad-hoc position")
+    mo.add_argument("--arrival", default=None,
+                    help="arrival square for --fen (e.g. g2)")
+    mo.add_argument("--checked", default=None,
+                    help="checked square for --fen (king-holder motifs)")
+    mo.add_argument("--herders", default=None,
+                    help="comma-separated herder squares for --fen")
+    mo.add_argument("--max-herders", type=int, default=1)
+    mo.add_argument("--conversion-ms", type=int, default=60_000,
+                    help="research audit budget; negatives count only when "
+                         "the audit completes")
+    mo.add_argument("--budget-ms", type=int, default=60_000)
+    mo.add_argument("--state-cap", type=int, default=400_000)
+    mo.add_argument("--max-losing", type=int, default=1,
+                    help="release race tolerance (vi_race_max_losing)")
+    mo.add_argument("--probe-cap", type=int, default=50_000,
+                    help="per-reply node cap for release probes, in graph "
+                         "audits and direct terminal scoring alike")
+
     arena = sub.add_parser("arena")
     arena.add_argument("--white", required=True,
                        choices=["losebot", "zach", "worstfish", "random"])
@@ -962,6 +1237,10 @@ def main() -> int:
         return selftest()
     if args.cmd == "endgames":
         return endgames(args)
+    if args.cmd == "motifs":
+        from .motifs import run_motifs
+
+        return run_motifs(args)
 
     white = make_bot(args.white, args, "W")
     black = make_bot(args.black, args, "B")
