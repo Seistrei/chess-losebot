@@ -1147,6 +1147,31 @@ def selftest() -> int:
         f"(releases={unsealed_bot.vi_releases})",
     )
 
+    # 20e. A completed king-holder construction stays eligible for DEEP
+    # probes: the profile's deep_probe_min_cage (3) is a piece-holder
+    # reserve size, while a finished corner cage is exactly one bishop, so
+    # the gate must compare against the template's own required_cage. The
+    # exact probe is the only machinery that can find organic multi-move
+    # forced selfmates in king-holder positions (e.g. via a second mobile
+    # pawn); with none present it must complete its disproofs and fall
+    # through to the scored vacate unchanged.
+    probe_board = chess.Board(motif["kh-corner-h"].fen)
+    probe_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+        probe_cap=50_000,
+    )
+    probe_mv = probe_bot.choose_move(probe_board)
+    check(
+        "completed king-holder holds stay eligible for deep probes",
+        probe_mv == chess.Move.from_uci("g2h1")
+        and probe_bot.deep_probe_skips == 0
+        and probe_bot.deepest_probe_completed >= 2,
+        f"move={probe_board.san(probe_mv)}; "
+        f"skips={probe_bot.deep_probe_skips}; "
+        f"deepest={probe_bot.deepest_probe_completed}; "
+        f"exhaustions={probe_bot.probe_budget_exhaustions}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(

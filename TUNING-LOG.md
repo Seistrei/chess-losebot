@@ -745,6 +745,29 @@ early-park veto; march commitment; sealed-vs-unsealed vacate gating);
 motif suite verdicts and odds unchanged; case-2 seed-5 reproduces its
 documented line (fifty-move, 125 plies, 0/17, 156,163 probe nodes).
 
+### Review follow-up (2026-07-17, same day)
+
+External review found one P2, taken: the deep-probe gate compared every
+template against `deep_probe_min_cage=3`, a piece-holder reserve size,
+while a finished corner cage is exactly one bishop — so king-holder mode
+permanently reduced the exact probe to depth 1 (`deep_probe_skips=1`,
+`deepest_probe_completed=1` on kh-corner-h). The corner drill never
+misses a net that way (the premature push refutes any proof line through
+the vacate), but in general king-holder positions — a second mobile pawn,
+a half-built construction — organic multi-move forced selfmates are real
+(the fm-organic family), the probe is the only machinery that finds them,
+and a forced win must outrank a 1/2 race. The gate now compares against
+the template's own `required_cage`; regression 20e locks in skips=0 with
+disproofs completing at n>=2 and the choice still falling through to the
+scored vacate (suite 44). Deliberately NOT added: a "their king is the
+only mover, no net can exist" fast-out — it is unsound, because a frozen
+executioner unfreezes inside probe lines the moment the probe tries our
+king stepping off the arrival square. Measured cost: the pocket-phase
+moves now burn their full probe budget as disproofs (drill games ~1s ->
+~13-16s, ~1-1.5M nodes; outcomes and move sequences unchanged on re-run
+of a converted and a race-lost seed). If drill wall time ever matters,
+the knob is probe-cap tuning at low mobility, not re-blinding the gate.
+
 Next, in expected-value order:
 
 1. In-graph path extraction / anti-threefold herding (now 3/10 of drill

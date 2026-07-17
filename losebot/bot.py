@@ -818,10 +818,20 @@ class LoseBot:
                 if self.profile.stateful_plan
                 else best_pawn_mate_template(board, board.turn)
             )
+            # The profile's minimum cage is a piece-holder reserve size; a
+            # finished corner cage is exactly one bishop. Gating king-holder
+            # targets on the profile knob would blind the exact probe — the
+            # only machinery that finds organic multi-move forced selfmates
+            # — for the whole lifetime of a king-holder plan.
+            min_cage = (
+                target.required_cage
+                if target is not None and target.king_holder
+                else self.profile.deep_probe_min_cage
+            )
             if (
                 target is None
                 or target.setup_distance > gate_distance
-                or target.cage_occupancy < self.profile.deep_probe_min_cage
+                or target.cage_occupancy < min_cage
                 or target.arrival_blocked
             ):
                 max_n = 1
