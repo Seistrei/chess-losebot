@@ -22,6 +22,20 @@ Goal states (value 1) are where the surrounding machinery takes over:
 - every quiet reply entering the defense zone (the pre-release race state).
 Draws, stalemates, and static-breaking captures are value 0.
 
+Those goals are proxies — they stop one move short of the release and the
+actual selfmate. The conversion audit closes the gap: every reachable goal
+terminal is reconstructed on a real board and scored with the same release
+probe the bot uses at play time, so ``root_converts`` reports whether any
+reachable terminal actually finishes the game — a FORCED_MATE terminal (a
+conversion by definition), or a goal that releases into an acceptable race.
+It is a positive fact (all explored states are root-reachable) while
+``root_live`` keeps its proxy meaning; its absence is a verdict only when
+``conversion_complete``. Once anything converts, terminal values become
+real win probabilities — forced mates 1, audited goals their race odds,
+refused and *unchecked* goals 0, since a known conversion must outrank an
+unknown proxy. With no converting terminal anywhere, the flat proxy values
+are kept and the mismatch is reported rather than silently played into.
+
 The dead/live certificate is pure graph reachability, not a numeric result:
 our nodes maximize, their nodes average a full support with positive weights,
 and every non-goal terminal is 0, so the exact fixpoint has V(state) > 0 iff
@@ -101,6 +115,25 @@ class BuildReport:
     # its deadline or update limit before draining the worklist).
     root_live: bool = False
     converged: bool = False
+    # Conversion audit. root_live means a *proxy* goal terminal is reachable;
+    # these fields report whether any reachable terminal actually finishes
+    # the game in our favor: a FORCED_MATE terminal (a real conversion, no
+    # release needed), or a proxy goal whose release probe accepts a race.
+    # root_converts=True is a positive fact (every explored state is
+    # root-reachable). conversion_complete=False means the audit deadline
+    # expired first: the absence of a converting goal is then unknown, never
+    # a verdict — negative verdicts require conversion_complete. Probes are
+    # depth-bounded, so even a complete all-refused audit is "no conversion
+    # provable at this depth", not an exact impossibility — an honest flip
+    # trigger, not a reachability fact. conversion_nodes bills every audit
+    # probe, refusals included.
+    goal_states: int = 0
+    forced_mates: int = 0
+    conversion_checked: int = 0
+    converting_goals: int = 0
+    conversion_nodes: int = 0
+    conversion_complete: bool = False
+    root_converts: bool = False
 
 
 def _piece_attacks(piece_type: int, square: int, occupied: int) -> int:
@@ -186,8 +219,8 @@ def _herding_geometry(board: chess.Board, us: chess.Color, arrival: int):
 
 
 def herder_subsets(board: chess.Board, target: PawnMateTemplate,
-                   max_herders: int, candidate_cap: int = 8,
-                   subset_cap: int = 12) -> list[tuple]:
+                   max_herders: int,
+                   candidate_cap: int = 8) -> tuple[list[tuple], bool]:
     """Enumerate the maximal herder subsets for this static configuration.
 
     Deadness is monotone in the herder set: an unchosen candidate is frozen
@@ -198,20 +231,28 @@ def herder_subsets(board: chess.Board, target: PawnMateTemplate,
     (size = min(max_herders, candidates)) is certified dead; smaller subsets
     are covered by implication. The build's own greedy preference comes
     first, so the common live case still costs one build.
+
+    Returns ``(subsets, complete)``. The enumeration itself is never
+    silently truncated — builds are the expensive part and the caller's
+    sweep deadline bounds those — but ``candidate_cap`` still guards the
+    combinatorial blowup of a freakish position. When it bites, ``complete``
+    is False and no all-dead sweep over the returned subsets may be read as
+    a hopeless certificate: an omitted candidate could be the live one.
     """
     geometry = _herding_geometry(board, board.turn, target.arrival_square)
     if isinstance(geometry, str):
-        return []
-    candidates = geometry[-1][:candidate_cap]
+        return [], True
+    all_candidates = geometry[-1]
+    candidates = all_candidates[:candidate_cap]
+    complete = len(all_candidates) <= candidate_cap
     size = min(max(0, max_herders), len(candidates))
     if size == 0:
-        return []
-    subsets = []
-    for combo in combinations(candidates, size):
-        subsets.append(tuple((square, ptype) for _, _, square, ptype in combo))
-        if len(subsets) >= subset_cap:
-            break
-    return subsets
+        return [], complete
+    subsets = [
+        tuple((square, ptype) for _, _, square, ptype in combo)
+        for combo in combinations(candidates, size)
+    ]
+    return subsets, complete
 
 
 class HerdingPolicy:
@@ -223,7 +264,12 @@ class HerdingPolicy:
         self.them = not us
         self.gamma = gamma
         self.arrival = target.arrival_square
+        self._target = target
         self.report = BuildReport(ok=False)
+        # Conversion audit results: goal-terminal index -> probability that
+        # the best acceptable release converts (0.0 = probed and refused).
+        self._conversion: dict[int, float] = {}
+        self._stripped = False
 
         # Static configuration (filled by build).
         self.static_map: dict[int, chess.Piece] = {}
@@ -231,8 +277,14 @@ class HerdingPolicy:
         self.halfmove_clock = 0
         # (arrival, herder-type multiset, static placement) — herder squares
         # excluded because they wander. Scopes any negative memory a caller
-        # keeps to exactly the configuration that was certified.
+        # keeps to exactly the configuration that was certified. The rooted
+        # variant appends the dynamic root (their king + herder squares):
+        # reachable-graph size is a property of the root, so state-cap and
+        # timeout failures must be remembered per root, never per config —
+        # one oversized root would otherwise permanently suppress a later
+        # affordable root of the same static configuration.
         self.fingerprint: tuple | None = None
+        self.rooted_fingerprint: tuple | None = None
 
         # Graph.
         self._index: dict[tuple, int] = {}
@@ -257,23 +309,31 @@ class HerdingPolicy:
               gamma: float, herders: tuple | None = None,
               max_updates: int | None = None,
               validate_pools: bool = False,
-              skip_fingerprints=()) -> "HerdingPolicy":
-        """Explore, certify, and solve one static configuration.
+              skip_fingerprints=(),
+              model: str | None = "zach",
+              race_max_losing: int = 1,
+              conversion_ms: int = 3_000) -> "HerdingPolicy":
+        """Explore, certify, solve, and conversion-audit one configuration.
 
         ``herders`` forces an explicit subset (as enumerated by
         ``herder_subsets``) instead of the greedy pick. ``max_updates`` caps
         value-iteration work per call (tests). ``validate_pools`` cross-checks
         every explored opponent pool against ``support_zach`` — slow, for
         tests and audits only. ``skip_fingerprints`` aborts right after the
-        cheap split when the configuration is one the caller already knows it
-        cannot afford to explore.
+        cheap split when the configuration (or this exact root of it) is one
+        the caller already knows it cannot afford to explore. ``model`` and
+        ``race_max_losing`` feed the conversion audit's release probes;
+        ``conversion_ms`` caps the audit so it cannot starve the solver.
         """
         policy = cls(board.turn, target, gamma)
         started = time.monotonic()
         deadline = started + time_budget_ms / 1000.0
 
         reason = policy._split_board(board, max_herders, forced=herders)
-        if reason is None and policy.fingerprint in skip_fingerprints:
+        if reason is None and (
+            policy.fingerprint in skip_fingerprints
+            or policy.rooted_fingerprint in skip_fingerprints
+        ):
             reason = "skipped-unbuildable"
         if reason is None:
             reason = policy._explore(board, state_cap, deadline)
@@ -286,6 +346,10 @@ class HerdingPolicy:
             # The certificate never depends on the solver: reachability over
             # the completed graph is exact whatever the deadline does below.
             policy.report.root_live = policy._compute_live()
+            audit_deadline = min(
+                deadline, time.monotonic() + conversion_ms / 1000.0
+            )
+            policy._audit_conversions(audit_deadline, model, race_max_losing)
             policy._solve(deadline, max_updates)
         else:
             policy.report.reason = reason
@@ -346,6 +410,9 @@ class HerdingPolicy:
                 (square, piece.piece_type, piece.color)
                 for square, piece in self.static_map.items()
             )),
+        )
+        self.rooted_fingerprint = (
+            self.fingerprint, their_king, self._root_herders
         )
 
         # Precomputed static tables.
@@ -609,6 +676,98 @@ class HerdingPolicy:
         return root is not None and bool(live[root])
 
     # ------------------------------------------------------------------
+    # Conversion audit: do the reachable goals actually release?
+    # ------------------------------------------------------------------
+
+    def _release_plausible(self, zk: int, herders: tuple) -> bool:
+        """Cheap ordering heuristic: can the holder retreat anywhere that
+        stops attacking the arrival square? A retreat that keeps attacking
+        it refutes the mate itself (the retreated holder just captures the
+        checking pawn — their king's defense only bars OUR KING). Purely a
+        probe-ordering hint: multi-tempo escapes, interpositions, and checks
+        make static geometry unsound as a verdict, so the exact probe always
+        gets the final word."""
+        holder = self.static_map.get(self.arrival)
+        if holder is None:
+            return True
+        occupied = self.static_occ | chess.BB_SQUARES[zk]
+        for _, square in herders:
+            occupied |= chess.BB_SQUARES[square]
+        vacated = occupied & ~chess.BB_SQUARES[self.arrival]
+        arrival_bb = chess.BB_SQUARES[self.arrival]
+        retreats = (
+            _piece_attacks(holder.piece_type, self.arrival, occupied)
+            & ~occupied
+        )
+        for retreat in chess.scan_forward(retreats):
+            after = vacated | chess.BB_SQUARES[retreat]
+            if not (
+                _piece_attacks(holder.piece_type, retreat, after)
+                & arrival_bb
+            ):
+                return True
+        return False
+
+    def _audit_conversions(self, deadline: float, model: str | None,
+                           race_max_losing: int) -> None:
+        """Score the actual release at every reachable goal terminal.
+
+        ``root_live`` certifies that a proxy goal is reachable; this audit
+        asks whether any reachable terminal actually *converts*. FORCED_MATE
+        terminals convert by definition (every legal reply mates us — no
+        release needed). Proxy goals convert when the holder has a retreat
+        whose scored race the release machinery would accept: each goal
+        terminal is reconstructed on a real board and scored with the same
+        ``score_release_moves`` the bot uses at play time, so the audit
+        predicts exactly what play would discover on arrival. Every explored
+        state is root-reachable, so one converting terminal makes
+        ``root_converts`` a positive fact about the root.
+        """
+        goal_indices = []
+        forced_mates = 0
+        for index, kind in enumerate(self._kind):
+            if kind in (GOAL_CONTAINED, GOAL_RACE):
+                goal_indices.append(index)
+            elif kind == FORCED_MATE:
+                forced_mates += 1
+        self.report.forced_mates = forced_mates
+        self.report.goal_states = len(goal_indices)
+        self.report.root_converts = forced_mates > 0
+        if not goal_indices:
+            self.report.conversion_complete = True
+            return
+        # Probe plausible releases first so a tight deadline is spent where
+        # a positive fact could still be found.
+        goal_indices.sort(
+            key=lambda index: not self._release_plausible(
+                self._states[index][1], self._states[index][2]
+            )
+        )
+        complete = True
+        nodes = [0]
+        for index in goal_indices:
+            if time.monotonic() > deadline:
+                complete = False
+                break
+            _, zk, herders = self._states[index]
+            board = self.board_for(zk, herders, our_move=True)
+            choice = score_release_moves(
+                board, self._target, model, race_max_losing,
+                nodes_out=nodes,
+            )
+            self.report.conversion_checked += 1
+            if choice is None:
+                self._conversion[index] = 0.0
+                continue
+            self._conversion[index] = choice.winning / choice.pool
+            self.report.converting_goals += 1
+        self.report.conversion_nodes = nodes[0]
+        self.report.conversion_complete = complete
+        self.report.root_converts = forced_mates > 0 or any(
+            fraction > 0.0 for fraction in self._conversion.values()
+        )
+
+    # ------------------------------------------------------------------
     # Asynchronous value iteration (parent-driven worklist, resumable)
     # ------------------------------------------------------------------
 
@@ -616,13 +775,33 @@ class HerdingPolicy:
         terminals: dict[str, int] = {}
         self._worklist = deque()
         self._queued = bytearray(len(self._values))
+        # Once ANY terminal converts (a forced mate, or an audited goal),
+        # terminal values become real win probabilities: FORCED_MATE is 1
+        # (it converts by definition), audited goals get their race odds,
+        # and everything else — refused goals AND goals the audit deadline
+        # never reached — seeds 0. A known conversion must outrank an
+        # unknown proxy; defaulting the unchecked to 1.0 would steer the
+        # policy at exactly the goals the plausible-first ordering ranked
+        # least likely to release. With no converting terminal anywhere,
+        # keep the flat proxy values: zeroing everything would silence the
+        # policy without offering a better move, and root_converts already
+        # reports the mismatch honestly.
+        use_audit = self.report.root_converts
         for index, kind in enumerate(self._kind):
             if kind in (NORMAL_OUR, NORMAL_THEIR):
                 continue
             name = _TERMINAL_NAMES[kind]
             terminals[name] = terminals.get(name, 0) + 1
             if kind in _WIN_KINDS:
-                self._values[index] = 1.0
+                if not use_audit:
+                    value = 1.0
+                elif kind == FORCED_MATE:
+                    value = 1.0
+                else:
+                    value = self._conversion.get(index, 0.0)
+                if value <= 0.0:
+                    continue
+                self._values[index] = value
                 for parent in self._parents[index]:
                     if not self._queued[parent]:
                         self._queued[parent] = 1
@@ -690,7 +869,7 @@ class HerdingPolicy:
         monotone, so resuming across moves is sound: each call sharpens the
         move ranking. The certificate was never the solver's job.
         """
-        if not self.report.ok or self.report.converged:
+        if self._stripped or not self.report.ok or self.report.converged:
             return self.report.converged
         deadline = time.monotonic() + time_budget_ms / 1000.0
         self._solve(deadline, max_updates)
@@ -764,6 +943,8 @@ class HerdingPolicy:
 
     def ranked_moves(self, board: chess.Board) -> list | None:
         """Ranked (value, move) herder moves for this position, best first."""
+        if self._stripped:
+            return None
         state = self._dynamic_state(board)
         if state is None:
             return None
@@ -782,6 +963,8 @@ class HerdingPolicy:
         return ranked
 
     def state_value(self, board: chess.Board) -> float | None:
+        if self._stripped:
+            return None
         state = self._dynamic_state(board)
         if state is None:
             return None
@@ -790,11 +973,35 @@ class HerdingPolicy:
             return None
         return self._values[index]
 
+    def strip_to_certificate(self) -> None:
+        """Shed everything but the membership certificate.
+
+        A dead-certified policy only ever answers ``matches``/``contains``/
+        ``dynamic_squares`` again, and those need the state index keys plus
+        the static split — not the edge lists, values, or solver state that
+        dominate a large graph's memory. Stripping lets the caller keep a
+        whole sweep's worth of certificates without eviction, which is what
+        makes an all-dead sweep able to finish at all.
+        """
+        self._stripped = True
+        self._states = []
+        self._kind = []
+        self._children = []
+        self._parents = []
+        self._values = []
+        self._live = None
+        self._worklist = None
+        self._queued = None
+        self._conversion = {}
+
 
 def prospective_flip_policy(board: chess.Board, target: PawnMateTemplate,
                             max_herders: int, state_cap: int,
-                            time_budget_ms: int,
-                            gamma: float) -> "HerdingPolicy | None":
+                            time_budget_ms: int, gamma: float,
+                            model: str | None = "zach",
+                            race_max_losing: int = 1,
+                            conversion_ms: int = 3_000,
+                            ) -> "HerdingPolicy | None":
     """Certify the mirrored checked side by hypothetically parking our king.
 
     When the committed side is certified dead, the only question that
@@ -827,7 +1034,9 @@ def prospective_flip_policy(board: chess.Board, target: PawnMateTemplate,
     hypothetical.remove_piece_at(our_king)
     hypothetical.set_piece_at(destination, chess.Piece(chess.KING, us))
     return HerdingPolicy.build(
-        hypothetical, target, max_herders, state_cap, time_budget_ms, gamma
+        hypothetical, target, max_herders, state_cap, time_budget_ms, gamma,
+        model=model, race_max_losing=race_max_losing,
+        conversion_ms=conversion_ms,
     )
 
 
@@ -847,9 +1056,15 @@ class ReleaseChoice:
 
 def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                         model: str | None, max_losing: int,
-                        probe_n: int = 2,
-                        probe_cap: int = 6_000) -> ReleaseChoice | None:
+                        probe_n: int = 2, probe_cap: int = 6_000,
+                        nodes_out: list | None = None,
+                        ) -> ReleaseChoice | None:
     """Find the holder retreat with the best forced-mate odds.
+
+    ``nodes_out`` (a single-element list, same convention as the probe
+    budgets) is credited with the probe nodes spent whatever the outcome —
+    a refusal costs real search too, and callers billing an audit need the
+    spend that ``None`` would otherwise discard.
 
     The exact probe only accepts guaranteed nets, so it refuses any release
     that leaves Zach a pool like {step onto the defense square, push the pawn
@@ -909,6 +1124,8 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
             < (best.losing / best.pool, -best.winning)
         ):
             best = candidate
+    if nodes_out is not None:
+        nodes_out[0] += nodes_spent
     if best is None:
         return None
     # Report the whole scoring bill, not the prefix spent when the winning

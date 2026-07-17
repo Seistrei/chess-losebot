@@ -77,6 +77,9 @@ class EngineProfile:
     # short routes, not eventual ones.
     vi_gamma: float = 0.96
     vi_race_max_losing: int = 1
+    # Per-build cap on the conversion audit (release-probing the reachable
+    # goal terminals) so it can never starve exploration or the solver.
+    vi_conversion_ms: int = 3_000
 
 
 CURRENT = EngineProfile(

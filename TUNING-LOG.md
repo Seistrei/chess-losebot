@@ -384,3 +384,132 @@ Revised next steps (supersedes the list above):
 4. Feed double-dead verdicts back into template selection: a both-flanks
    hopeless certificate should ban the pawn file and re-plan, not shuffle
    to max-plies (drills 1 and 4).
+
+## Sweep honesty and the conversion audit (2026-07-16)
+
+A second review round (external) confirmed the reachability-certificate
+architecture and found three more bugs, all in the sweep layer that turns
+per-subset certificates into the hopeless verdict — i.e. all three could
+misdirect or starve the side flip. Fixed together with the first cut of
+revised-next-step 1: the conversion audit.
+
+1. **Subset enumeration silently truncated.** `herder_subsets` capped the
+   walk at 12 subsets (and 8 candidates) without telling anyone: six
+   candidates with two herders is C(6,2)=15 maximal subsets, so an all-dead
+   walk over 12 could return `hopeless=True` while three subsets — possibly
+   the live ones — were never examined. The subset cap is gone (builds are
+   the expensive part and the sweep deadline already bounds those); the
+   candidate cap survives as a combinatorial guard but the function now
+   returns `(subsets, complete)` and a truncated enumeration blocks the
+   hopeless verdict exactly like an exhausted budget does.
+
+2. **The dead-policy ledger evicted mid-sweep.** Eight retained policies
+   against sweeps that can hold 15+ subsets: with roughly one build fitting
+   per turn, eviction made later sweeps rebuild earlier subsets forever and
+   the all-dead verdict never arrived. Dead certificates now
+   `strip_to_certificate()` — a dead policy only ever answers
+   `contains()`/`dynamic_squares()` again, so it sheds edges, values, and
+   solver state and keeps just the state-index keys and the static split —
+   and the ledger cap rises to 64, comfortably above any real enumeration.
+   Play-time interfaces (`ranked_moves`, `state_value`, `solve_more`)
+   refuse on stripped policies rather than reading freed arrays.
+
+3. **Oversized-build memory ignored the dynamic root.** The unbuildable
+   fingerprint (arrival, herder types, static placement) deliberately
+   excludes their king and the herder squares — right for dead-graph reuse,
+   wrong for state-cap/timeout failures, whose reachable-graph size is a
+   property of the root. One king-in-open-space blowup permanently banned a
+   configuration that becomes affordable once the king is boxed. State-cap
+   failures are now remembered under a **rooted** fingerprint (fingerprint
+   + their king + herder squares); a configuration that blows up from a
+   second distinct root graduates to the config-wide skip.
+
+**The conversion audit (instrument first, gate later).** `root_live` means
+a *proxy* goal is reachable; the audit asks whether any reachable goal
+actually converts. At build time every goal terminal is reconstructed on a
+real board and scored with the same `score_release_moves` the bot runs at
+play time (plausible releases probed first, budget `vi_conversion_ms`,
+default 3s), so the report now carries `goal_states`, `converting_goals`,
+`conversion_complete`, and `root_converts` — and `root_converts=True` is a
+positive fact about the root, since every explored state is root-reachable.
+Once any goal converts, terminal seeds become the audited race
+probabilities (refused goals drop to 0) so the ranking steers toward goals
+that finish; with none, the flat proxy seeding is kept — silencing the
+policy without a better move on offer would only trade a confident stall
+for a fallback shuffle.
+
+Deliberately NOT gated yet: play and flips still key on `root_live`. Every
+current template is a piece-holder construction, so per the release theorem
+both flanks audit unconvertible — gating now would thrash flips between
+two dead sides with nothing to steer to. The gate lands with the
+king-holder template, when a convertible side can exist.
+
+Evidence the instrument works:
+
+- Standard fixture (13b): root_live, root 0.923 — and **0 of 260 goal
+  terminals convert** (audit complete). The bishop holder re-attacks b5
+  from every retreat; their king's defense only bars OUR king from
+  recapturing, so the retreated holder refutes the mate itself.
+- Case-2 seed-5 drill (the review's reproduction): same 42 VI moves,
+  root 0.528, 0 releases — but the vi line now reads
+  `goals-convert=0/17 (of 17 goal states, 0 audits cut short)`. The
+  120-ply stall announces itself at build time.
+
+Selftests: 24 -> 28 (subset truncation, rooted oversize memory, stripped
+certificates, live-but-unconvertible audit), all green.
+
+Next: pose the king-holder vacate-then-enter FENs and the FORCED_MATE
+capture-mate family and adjudicate them with the audit (log items 1+3
+above) BEFORE building template machinery; then gate flips/seeding on
+audited conversion and add the fifty-move clock feasibility check.
+
+### Review round 2 follow-ups (2026-07-16, same day)
+
+The reviewer re-checked the fixes above and caught three real problems in
+them; all three taken.
+
+1. **The two-strike escalation was the original sin at threshold 2.** Two
+   oversized roots prove nothing about a third, and since
+   `skipped-unbuildable` blocks the hopeless verdict anyway, the config-wide
+   skip never unblocked anything — it only saved wall time the sweep
+   deadline already bounds, at the price of permanently suppressing roots
+   that may become affordable as the king gets boxed. Removed: oversized
+   memory is rooted keys only, no strike count. (Bare config-level keys are
+   still honored by `build` for callers that pass one explicitly.)
+
+2. **Mixed-scale seeding.** Audited seeding kicked in as soon as one goal
+   converted, but goals the audit deadline never reached defaulted to 1.0 —
+   so an unknown proxy could outrank a known conversion worth less than 1,
+   and with plausible-first probing the unchecked goals are precisely the
+   ones ranked least likely to release. Now: once anything converts, forced
+   mates seed 1, audited goals seed their race odds, refused AND unchecked
+   goals seed 0. A known conversion always outranks an unknown proxy.
+
+3. **FORCED_MATE is a conversion.** It was excluded from the audit, so a
+   graph whose only real wins are forced mates reported
+   `root_converts=False` — the exact misread that would sink the
+   capture-mate-family motif experiment. The report now carries
+   `forced_mates` and `root_converts` is true when forced mates exist or
+   any audited goal converts (and seeding then steers to them).
+
+Also: refused release probes now bill their spend (`nodes_out` accumulator
+on `score_release_moves`), so `conversion_nodes` explains audit cost —
+case-2 seed-5 now reads `goals-convert=0/17 (of 17 goal states, 0 forced
+mates, 0 audits cut short, 156163 probe nodes)` with play unchanged.
+
+Protocol note for the motif experiments, per review: a NEGATIVE motif
+verdict (root_converts=False read as "this device cannot finish") is only
+admissible when `conversion_complete` — an audit cut short is unknown, and
+in-game 3s audits of large graphs will usually be cut short. Positive
+verdicts are facts at any coverage.
+
+Lock-in tests added per review: (a) an organic forced-mate-only fixture —
+`8/8/8/R7/8/3PPk1p/6RP/6BK w` — their king boxed by statics, hxg2 (a
+forced capture-mate) the only legal reply after most herder waits: 11
+FORCED_MATE terminals, zero proxy goals, and the report must read
+root_converts=True with conversion_checked=0 and the policy steering at
+the mate (root 0.990); (b) the mixed-seeding case, injected white-box into
+the 14d build (an organically converting goal terminal IS the king-holder
+problem): one checked goal at 0.4 + audit cut short must converge to root
+0.277 — under the old unchecked-goals-seed-1.0 bug it converges to ~0.787,
+so the test fails loudly on regression. Suite now 30 checks.

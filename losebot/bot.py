@@ -79,6 +79,10 @@ class LoseBot:
         # plan or a different arrangement.
         self._vi_policy: HerdingPolicy | None = None
         self._vi_dead_policies: list[HerdingPolicy] = []
+        # State-cap/timeout memory holds rooted fingerprints only
+        # (fingerprint + dynamic root): graph size is a property of the
+        # root, and no number of oversized roots proves the next one
+        # unaffordable.
         self._vi_unbuildable: set[tuple] = set()
         self._vi_next_flip_ply = 0
         self._vi_visits: dict = {}
@@ -104,6 +108,12 @@ class LoseBot:
         self.vi_last_failure = ""
         self.vi_dead_certificates = 0
         self.vi_resolves = 0
+        self.vi_goal_states = 0
+        self.vi_forced_mates = 0
+        self.vi_converting_goals = 0
+        self.vi_conversion_checked = 0
+        self.vi_conversion_nodes = 0
+        self.vi_conversion_incomplete = 0
 
     def _reset_vi_state(self) -> None:
         """Drop herding certificates along with the plan they were built for.
@@ -505,6 +515,13 @@ class LoseBot:
         self.vi_updates += report.updates
         self.vi_pool_mismatches += report.pool_mismatches
         self.vi_root_value = report.root_value
+        self.vi_goal_states += report.goal_states
+        self.vi_forced_mates += report.forced_mates
+        self.vi_converting_goals += report.converting_goals
+        self.vi_conversion_checked += report.conversion_checked
+        self.vi_conversion_nodes += report.conversion_nodes
+        if report.ok and not report.conversion_complete:
+            self.vi_conversion_incomplete += 1
         if not report.ok:
             self.vi_build_failures += 1
             self.vi_last_failure = report.reason
@@ -523,16 +540,23 @@ class LoseBot:
         still costs one build): the first live certificate wins, and a
         completed walk yielding nothing but dead certificates is the only
         outcome that returns hopeless=True. Anything unresolved — sweep
-        budget exhausted, a subset too big to explore — blocks the hopeless
-        verdict instead of quietly counting toward it.
+        budget exhausted, a subset too big to explore, a truncated
+        enumeration — blocks the hopeless verdict instead of quietly
+        counting toward it.
         """
         deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
-        subsets = herder_subsets(board, target, limit)
+        build_options = dict(
+            model=self.opponent_model,
+            race_max_losing=self.profile.vi_race_max_losing,
+            conversion_ms=self.profile.vi_conversion_ms,
+        )
+        subsets, complete = herder_subsets(board, target, limit)
         if not subsets:
             # No candidates at all: build once for the diagnostic reason.
             policy = HerdingPolicy.build(
                 board, target, limit, self.profile.vi_state_cap,
                 self.profile.vi_build_ms, self.profile.vi_gamma,
+                **build_options,
             )
             self._absorb_vi_report(policy.report)
             return policy, False
@@ -545,7 +569,6 @@ class LoseBot:
             if squares is not None:
                 dead_squares.add(squares)
 
-        complete = True
         for subset in subsets:
             if frozenset(square for square, _ in subset) in dead_squares:
                 continue
@@ -558,6 +581,7 @@ class LoseBot:
                 board, target, limit, self.profile.vi_state_cap,
                 int(remaining_ms), self.profile.vi_gamma, herders=subset,
                 skip_fingerprints=self._vi_unbuildable,
+                **build_options,
             )
             report = policy.report
             if report.reason == "skipped-unbuildable":
@@ -567,19 +591,31 @@ class LoseBot:
             if report.ok:
                 if report.root_live:
                     return policy, False
+                # The ledger must be able to hold a whole sweep's worth of
+                # certificates: evicting mid-sweep made later sweeps rebuild
+                # earlier subsets forever and the hopeless verdict never
+                # arrived. Stripped certificates are cheap to keep, and the
+                # cap is comfortably above any real enumeration.
+                policy.strip_to_certificate()
                 self._vi_dead_policies.append(policy)
-                if len(self._vi_dead_policies) > 8:
+                if len(self._vi_dead_policies) > 64:
                     self._vi_dead_policies.pop(0)
                 self.vi_dead_certificates += 1
                 continue
             if report.reason in ("state-cap", "build-timeout"):
-                # Could not certify. Remember genuinely oversized subsets so
-                # later sweeps skip them; a timeout on a starved budget gets
-                # retried once earlier subsets are answered from cache.
-                # (State-cap is budget-independent and always remembered.)
+                # Could not certify. Reachable-graph size is a property of
+                # the dynamic root, so remember the failure per root ONLY —
+                # no strike count ever graduates to a config-wide skip: two
+                # oversized roots say nothing about a third, and an
+                # unbuildable subset already blocks the hopeless verdict,
+                # so broader memory could only save wall time the sweep
+                # deadline bounds anyway. (A timeout on a starved budget is
+                # not remembered at all: it gets retried once earlier
+                # subsets are answered from cache. State-cap is
+                # budget-independent.)
                 oversized = report.reason == "state-cap" or fair_budget
-                if oversized and policy.fingerprint is not None:
-                    self._vi_unbuildable.add(policy.fingerprint)
+                if oversized and policy.rooted_fingerprint is not None:
+                    self._vi_unbuildable.add(policy.rooted_fingerprint)
                 complete = False
                 continue
             # Configuration-level refusal (pawn not frozen, root already
@@ -616,6 +652,9 @@ class LoseBot:
                 self.profile.vi_state_cap,
                 self.profile.vi_build_ms,
                 self.profile.vi_gamma,
+                model=self.opponent_model,
+                race_max_losing=self.profile.vi_race_max_losing,
+                conversion_ms=self.profile.vi_conversion_ms,
             )
         if prospect is not None and prospect.report.ok:
             self.vi_flip_value = prospect.report.root_value

@@ -252,7 +252,12 @@ def selftest() -> int:
     # rook herders. The build must validate its bitboard Zach pool against
     # support_zach, and value iteration must certify the goal zone reachable
     # (V(root) > 0) with a quiet, legal recommended move.
-    from .herding_vi import HerdingPolicy
+    from .herding_vi import (
+        GOAL_CONTAINED,
+        GOAL_RACE,
+        HerdingPolicy,
+        herder_subsets,
+    )
 
     vi_board = chess.Board("k7/p7/Pp6/1B6/K7/PP6/8/6RR w - - 0 1")
     vi_target = best_pawn_mate_template(vi_board, chess.WHITE)
@@ -456,6 +461,197 @@ def selftest() -> int:
         ),
     )
 
+    # 14d. The conversion audit measures the proxy gap. This construction is
+    # herdable (root_live) but its bishop holder re-attacks the arrival
+    # square from every retreat — their king's defense only bars OUR KING
+    # from recapturing, so the retreated holder refutes the mate itself and
+    # every reachable goal terminal fails the release probe. root_live
+    # without root_converts is exactly the delivered-but-stuck stall of the
+    # drills, now a measured per-build fact instead of a 120-ply postmortem.
+    # With no converting goal anywhere, terminal seeding stays flat (the
+    # proxy ranking is kept rather than silenced), so root_value survives.
+    conv = None
+    if vi_target is not None:
+        conv = HerdingPolicy.build(
+            vi_board, vi_target, max_herders=1, state_cap=200_000,
+            time_budget_ms=60_000, gamma=0.99, conversion_ms=30_000,
+        )
+    check(
+        "conversion audit exposes a live-but-unconvertible goal zone",
+        conv is not None
+        and conv.report.ok
+        and conv.report.root_live
+        and conv.report.goal_states > 0
+        and conv.report.conversion_complete
+        and conv.report.conversion_checked == conv.report.goal_states
+        and conv.report.converting_goals == 0
+        and conv.report.forced_mates == 0
+        and not conv.report.root_converts
+        and conv.report.conversion_nodes > 0
+        and conv.report.root_value > 0.0,
+        "no template" if conv is None else (
+            f"goals={conv.report.converting_goals}"
+            f"/{conv.report.conversion_checked}"
+            f" of {conv.report.goal_states}; "
+            f"forced-mates={conv.report.forced_mates}; "
+            f"complete={conv.report.conversion_complete}; "
+            f"live={conv.report.root_live}; "
+            f"probe-nodes={conv.report.conversion_nodes}; "
+            f"root={conv.report.root_value:.3f}"
+        ),
+    )
+
+    # 14e. Subset enumeration is never silently truncated. Six candidates
+    # with two herders is fifteen maximal subsets — the old cap returned
+    # twelve, so an all-dead walk over them could masquerade as a complete
+    # sweep and a false hopeless verdict could flip away from a live side.
+    # Past the candidate cap the enumeration must declare itself incomplete
+    # instead, which blocks the hopeless verdict downstream.
+    six_board = vi_board.copy(stack=False)
+    for sq in (chess.C1, chess.D1, chess.E1, chess.F1):
+        six_board.set_piece_at(sq, chess.Piece(chess.KNIGHT, chess.WHITE))
+    nine_board = six_board.copy(stack=False)
+    for sq in (chess.F4, chess.G4, chess.H4):
+        nine_board.set_piece_at(sq, chess.Piece(chess.KNIGHT, chess.WHITE))
+    six_subsets: list = []
+    six_complete = nine_complete = True
+    nine_subsets: list = []
+    if vi_target is not None:
+        six_subsets, six_complete = herder_subsets(six_board, vi_target, 2)
+        nine_subsets, nine_complete = herder_subsets(nine_board, vi_target, 2)
+    check(
+        "maximal herder subsets are enumerated without silent truncation",
+        vi_target is not None
+        and len(six_subsets) == 15 and six_complete
+        and len(nine_subsets) == 28 and not nine_complete,
+        f"six candidates={len(six_subsets)} complete={six_complete}; "
+        f"nine candidates={len(nine_subsets)} complete={nine_complete}",
+    )
+
+    # 14f. Oversized-build memory is scoped to the dynamic root: reachable
+    # graph size depends on where their king and the herders stand, so one
+    # blown state cap must not suppress a later affordable root of the same
+    # static configuration — no strike count ever widens the skip (two
+    # oversized roots prove nothing about a third). A bare config-level
+    # fingerprint remains honored for callers that pass one explicitly.
+    tiny = rooted_skip = other_root = bare_skip = None
+    if vi_target is not None:
+        tiny = HerdingPolicy.build(
+            vi_board, vi_target, max_herders=2, state_cap=50,
+            time_budget_ms=5_000, gamma=0.99,
+        )
+        moved_root = vi_board.copy(stack=False)
+        moved_root.remove_piece_at(chess.A8)
+        moved_root.set_piece_at(
+            chess.B8, chess.Piece(chess.KING, chess.BLACK)
+        )
+        rooted_skip = HerdingPolicy.build(
+            vi_board, vi_target, max_herders=2, state_cap=50,
+            time_budget_ms=5_000, gamma=0.99,
+            skip_fingerprints={tiny.rooted_fingerprint},
+        )
+        other_root = HerdingPolicy.build(
+            moved_root, vi_target, max_herders=2, state_cap=50,
+            time_budget_ms=5_000, gamma=0.99,
+            skip_fingerprints={tiny.rooted_fingerprint},
+        )
+        bare_skip = HerdingPolicy.build(
+            moved_root, vi_target, max_herders=2, state_cap=50,
+            time_budget_ms=5_000, gamma=0.99,
+            skip_fingerprints={tiny.fingerprint},
+        )
+    check(
+        "oversized-build memory is scoped to the dynamic root",
+        tiny is not None
+        and tiny.report.reason == "state-cap"
+        and rooted_skip.report.reason == "skipped-unbuildable"
+        and other_root.report.reason == "state-cap"
+        and bare_skip.report.reason == "skipped-unbuildable",
+        "no template" if tiny is None else (
+            f"cap={tiny.report.reason}; "
+            f"same-root={rooted_skip.report.reason}; "
+            f"other-root={other_root.report.reason}; "
+            f"config-wide={bare_skip.report.reason}"
+        ),
+    )
+
+    # 14g. FORCED_MATE is a conversion — no release needed. In this position
+    # their king is boxed by statics alone and hxg2 (a forced capture-mate,
+    # the Qc2+ Kxc2# family) is the only legal reply after most herder
+    # waits: the graph is forced-mate-only, with NO proxy goal terminal
+    # anywhere. root_converts must be true with zero goals audited, and the
+    # seeding must steer the policy at the mate. This is the case a
+    # goals-only audit misread as unconvertible.
+    from types import SimpleNamespace as _NS
+
+    fm_board = chess.Board("8/8/8/R7/8/3PPk1p/6RP/6BK w - - 0 1")
+    fm_policy = HerdingPolicy.build(
+        fm_board, _NS(arrival_square=chess.A8), max_herders=1,
+        state_cap=10_000, time_budget_ms=10_000, gamma=0.99,
+    )
+    fm_ranked = fm_policy.ranked_moves(fm_board) or []
+    check(
+        "forced-mate terminals count as conversions without goal audits",
+        fm_policy.report.ok
+        and fm_policy.report.root_live
+        and fm_policy.report.root_converts
+        and fm_policy.report.conversion_complete
+        and fm_policy.report.forced_mates > 0
+        and fm_policy.report.goal_states == 0
+        and fm_policy.report.conversion_checked == 0
+        and fm_policy.report.root_value > 0.9
+        and bool(fm_ranked)
+        and fm_ranked[0][0] > 0.9,
+        f"forced-mates={fm_policy.report.forced_mates}; "
+        f"goals={fm_policy.report.goal_states}; "
+        f"converts={fm_policy.report.root_converts}; "
+        f"root={fm_policy.report.root_value:.3f}; "
+        f"terminals={fm_policy.report.terminals}",
+    )
+
+    # 14h. Positive-but-incomplete audits must seed on one scale. When the
+    # audit finds a conversion and then hits its deadline, goals it never
+    # reached seed 0, not 1: a known conversion worth 0.4 must outrank
+    # every unknown proxy (the unchecked goals are precisely the ones the
+    # plausible-first ordering ranked least likely to release). An
+    # organically converting goal terminal requires the king-holder
+    # template (piece holders re-attack the arrival square — the release
+    # theorem), so until that lands this injects the reviewer's exact
+    # scenario into the 14d build and re-seeds the solver.
+    mixed_ok = False
+    mixed_detail = "no policy"
+    if conv is not None and conv.report.ok:
+        goals = [
+            index for index, kind in enumerate(conv._kind)
+            if kind in (GOAL_CONTAINED, GOAL_RACE)
+        ]
+        known = goals[0]
+        conv._conversion = {known: 0.4}
+        conv.report.root_converts = True
+        conv.report.conversion_complete = False
+        conv.report.converged = False
+        conv._worklist = None
+        conv._values = [0.0] * len(conv._values)
+        resolved = conv.solve_more(60_000)
+        unchecked_top = max(conv._values[index] for index in goals[1:])
+        mixed_ok = (
+            len(goals) >= 2
+            and resolved
+            and conv._values[known] == 0.4
+            and unchecked_top == 0.0
+            and 0.0 < conv.report.root_value < 0.4
+        )
+        mixed_detail = (
+            f"goals={len(goals)}; known-seed={conv._values[known]}; "
+            f"unchecked-top={unchecked_top}; "
+            f"root={conv.report.root_value:.3f}"
+        )
+    check(
+        "a known conversion outranks unchecked goals in mixed seeding",
+        mixed_ok,
+        mixed_detail,
+    )
+
     # 15. Release scoring shares the arena's draw law. At halfmove clock 98
     # the zugzwang release (Rb7) exists; at 99 every quiet holder retreat
     # lands on the fifty-move adjudication BEFORE Zach ever replies, so
@@ -533,6 +729,32 @@ def selftest() -> int:
         and cached_hopeless
         and cache_bot.vi_builds == 0,
         f"hopeless={cached_hopeless}; builds={cache_bot.vi_builds}",
+    )
+
+    # 18b. Dead certificates strip down to the membership certificate that
+    # contains()/dynamic_squares() need — the ledger can then afford a whole
+    # sweep's worth without eviction (the old 8-policy cap thrashed against
+    # 12-subset sweeps and the hopeless verdict never arrived). The
+    # play-time interfaces must refuse instead of reading freed solver
+    # state.
+    stripped_ok = False
+    if dead_policy is not None:
+        dead_policy.strip_to_certificate()
+        stripped_ok = (
+            dead_policy.contains(flip_board)
+            and not dead_policy.contains(moved)
+            and dead_policy.dynamic_squares(flip_board) is not None
+            and dead_policy.ranked_moves(flip_board) is None
+            and dead_policy.state_value(flip_board) is None
+            and dead_policy.solve_more(10) is True
+        )
+    check(
+        "stripped dead certificates keep exact membership only",
+        stripped_ok,
+        "no dead policy" if dead_policy is None else (
+            f"contains here/elsewhere={dead_policy.contains(flip_board)}"
+            f"/{dead_policy.contains(moved)}"
+        ),
     )
 
     # 13. A promoted piece means the king-and-pawns phase has ended. The
@@ -679,7 +901,13 @@ def endgames(args) -> int:
                 f" king-marches={bot.vi_king_marches};"
                 f" cage-builds={bot.vi_cage_builds};"
                 f" capture-guards={bot.vi_capture_guards};"
-                f" pool-mismatches={bot.vi_pool_mismatches}",
+                f" pool-mismatches={bot.vi_pool_mismatches};"
+                f" goals-convert={bot.vi_converting_goals}"
+                f"/{bot.vi_conversion_checked}"
+                f" (of {bot.vi_goal_states} goal states,"
+                f" {bot.vi_forced_mates} forced mates,"
+                f" {bot.vi_conversion_incomplete} audits cut short,"
+                f" {bot.vi_conversion_nodes} probe nodes)",
                 flush=True,
             )
         if args.show_fen:
