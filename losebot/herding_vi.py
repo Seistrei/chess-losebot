@@ -1085,14 +1085,26 @@ class HerdingPolicy:
     def apply_repetition_history(self, board: chess.Board) -> tuple:
         """Recount the reversible era and burn every twice-seen state.
 
-        Walks the game history back to the last irreversible move (the same
-        span ``is_repetition`` scans), maps each position onto a graph state
-        — their-turn positions included — and pins states already seen twice
-        at value 0: the arena adjudicates the third occurrence a draw before
-        anyone moves again, so re-entry is a losing terminal no matter what
-        the pristine graph promised. An era reset (any irreversible move)
-        makes the walk short and the burn set empty, restoring the pristine
-        values through the same diff.
+        Walks the game history back to the last IRREVERSIBLE move — the
+        exact boundary ``is_repetition`` scans to: captures, pawn moves,
+        castling-rights changes, and ceded en passant. The halfmove clock
+        is NOT that boundary (a first king or rook move strips rights
+        without resetting it), and graph states carry no rights, so a
+        clock-bounded walk merged positions from either side of a rights
+        change and burned states the arena would never draw on — falsely
+        rejecting live paths. Inside the true era every counted position
+        shares one castling/ep state, which is what makes placement plus
+        side-to-move a COMPLETE repetition identity here. Mirroring
+        ``is_repetition``, the position an irreversible move was played
+        FROM is not counted.
+
+        Each era position maps onto a graph state — their-turn positions
+        included — and states already seen twice pin at value 0: the arena
+        adjudicates the third occurrence a draw before anyone moves again,
+        so re-entry is a losing terminal no matter what the pristine graph
+        promised. An era reset (any irreversible move) makes the walk
+        short and the burn set empty, restoring the pristine values
+        through the same diff.
 
         Returns ``(counts, changed)``: per-state-index occurrence counts for
         the caller's freshness tie-break, and whether the burn set moved
@@ -1103,8 +1115,7 @@ class HerdingPolicy:
         counts: dict[int, int] = {}
         index_of = self._index
         replay = board.copy(stack=True)
-        remaining = min(board.halfmove_clock, len(board.move_stack))
-        for _ in range(remaining + 1):
+        while True:
             state = self._state_of(replay)
             if state is not None:
                 index = index_of.get(state)
@@ -1112,7 +1123,9 @@ class HerdingPolicy:
                     counts[index] = counts.get(index, 0) + 1
             if not replay.move_stack:
                 break
-            replay.pop()
+            move = replay.pop()
+            if replay.is_irreversible(move):
+                break
         burned = {index for index, count in counts.items() if count >= 2}
         return counts, self._set_burned(burned)
 

@@ -888,3 +888,57 @@ Next, in expected-value order:
    seed-2 result: with threefold priced, the clock is the herd's binding
    constraint, and the policy still cannot see it.
 4. Multi-pawn race stacking (unchanged).
+
+### Review follow-up (2026-07-17, same day)
+
+External review of the burn work found one P1 and one P3; both taken,
+plus one same-defect fix next door that the P1 exposed.
+
+1. **The era walk crossed real repetition boundaries (P1).** The walk
+   was bounded by the halfmove clock, but the boundary `is_repetition`
+   scans to is the last IRREVERSIBLE move — and a first king or rook
+   move strips castling rights (irreversible for repetition purposes)
+   without resetting the clock; ceded en passant is the same trap.
+   Graph states carry no rights, so the clock-bounded walk merged
+   positions from either side of a rights change: from
+   `k7/8/8/8/8/8/8/4K2R w K - 0 1`, the shuttle Rh2 Ka7 Rh1 Ka8 gives
+   `is_repetition(2) == False` — the start still has the right the
+   return position lost — yet the old walk counted one graph state
+   twice and burned it, falsely rejecting live paths. Reachable in
+   full games whenever a rights-bearing king holds while an original
+   rook herds; inert in every drill and fixture (rights are "-"
+   everywhere the log has numbers), which is why nothing caught it.
+   The walk now mirrors `is_repetition` exactly — pop, stop on
+   `is_irreversible` without counting the far-side position — and the
+   soundness argument is in the docstring: inside the true era every
+   position shares one castling/ep state, which is exactly what makes
+   placement plus side-to-move a complete repetition identity for
+   graph states. Regression 16c locks in both halves on a real build:
+   the rights-crossing shuttle burns nothing (walk max count 1), the
+   same shuttle replayed inside the stripped era is a genuine twofold
+   and burns all four of its states.
+
+2. **`_history_counts` had the same clock bound (adjacent fix).** The
+   probes' repetition law is under the same share-the-arena's-draw-law
+   contract, and its root walk had the identical defect. Overcounting
+   across a rights boundary can only declare phantom draws — false
+   refusals, never false proofs — and only in rights-bearing
+   positions. Same fix, same boundary semantics.
+
+3. **The burn gauge outlived its policy (P3).** `_reset_vi_state`
+   dropped the active policy but left `vi_burned_states` at its last
+   reading, so a replan, promotion, side flip, or rewind followed by
+   game end reported "N burned at end" that no live policy contained.
+   The gauge now zeroes wherever the active policy is dropped or
+   replaced (plan reset, state-miss drop, and rebuild — a fresh build
+   carries no burns until its first era recount) while
+   `vi_burn_updates` stays cumulative; folded into regression 17.
+
+Suite 45 -> 46. Full battery: the 10-seed drill reproduces byte-for-
+byte in moves, outcomes, and every counter EXCEPT the two race-loss
+seeds' gauges — seeds 7/9 now end `(0 burned at end)` instead of
+`(11/7 burned at end)`, which is the P3 scenario itself (lost race ->
+plan invalidated -> policy dropped -> game ends) reporting honestly.
+Motif verdicts and odds unchanged; case-2 seed-5 reproduces its
+reference line exactly (fifty-move, 125 plies, 47 VI moves, 0/18,
+173,353 probe nodes, burn-updates=13 with 0 burned at end).

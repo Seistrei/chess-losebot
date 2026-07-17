@@ -131,6 +131,11 @@ class LoseBot:
         self._vi_dead_policies.clear()
         self._vi_unbuildable.clear()
         self._vi_next_flip_ply = 0
+        # The gauge describes the ACTIVE policy's burn set; dropping the
+        # policy must drop it too or a replan followed by game end reports
+        # burned states no live policy contains. vi_burn_updates stays
+        # cumulative like every other counter.
+        self.vi_burned_states = 0
 
     def _update_construction_plan(self, board: chess.Board,
                                   their_pieces: int) -> None:
@@ -515,6 +520,7 @@ class LoseBot:
         ):
             policy, hopeless = self._certify_herding(board, target, limit)
             self._vi_policy = policy
+            self.vi_burned_states = 0  # fresh builds carry no burns yet
             if hopeless:
                 # Every maximal herder subset of this frozen configuration
                 # is certified dead: the side is hopeless as built, so the
@@ -553,6 +559,7 @@ class LoseBot:
         if ranked is None:
             self.vi_state_misses += 1
             self._vi_policy = None
+            self.vi_burned_states = 0
             return None
         # Take the candidates within ONE OPTIMAL PLY of the best value
         # (floor = top * gamma) and prefer the successor this era has

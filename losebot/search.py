@@ -60,16 +60,26 @@ def _probe_draw(board: chess.Board) -> bool:
 
 
 def _history_counts(board: chess.Board) -> dict:
-    """Count reversible-history positions once at the root of a probe."""
+    """Count reversible-era positions once at the root of a probe.
+
+    The era ends at the last IRREVERSIBLE move — ``is_repetition``'s own
+    boundary: captures, pawn moves, castling-rights changes, and ceded en
+    passant. The halfmove clock is NOT that boundary (rights changes do
+    not reset it), so a clock-bounded walk crossed into positions the
+    arena's rule keeps distinct and overcounted them. Mirroring
+    ``is_repetition``, the position an irreversible move was played FROM
+    is not counted.
+    """
     replay = board.copy(stack=True)
     counts: dict = {}
-    remaining = min(board.halfmove_clock, len(board.move_stack))
-    for _ in range(remaining + 1):
+    while True:
         key = replay._transposition_key()
         counts[key] = counts.get(key, 0) + 1
         if not replay.move_stack:
             break
-        replay.pop()
+        move = replay.pop()
+        if replay.is_irreversible(move):
+            break
     return counts
 
 

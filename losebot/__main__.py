@@ -827,6 +827,60 @@ def selftest() -> int:
         burn_detail,
     )
 
+    # 16c. The era walk stops at is_repetition's REAL boundary. A first
+    # rook move strips castling rights — irreversible for repetition
+    # purposes — without resetting the halfmove clock, and graph states
+    # carry no rights, so the old clock-bounded walk merged the
+    # rights-bearing start with the rights-stripped return and burned a
+    # state the arena would never draw on (review P1: Rh2 Ka7 Rh1 Ka8
+    # gives is_repetition(2) False, yet the walk counted the state
+    # twice). The same shuttle played again INSIDE the stripped era is a
+    # genuine twofold and must burn all four of its states.
+    rights_fen = "k7/8/8/8/8/8/8/4K2R w K - 0 1"
+    rights_policy = HerdingPolicy.build(
+        chess.Board(rights_fen), _NS(arrival_square=chess.B5),
+        max_herders=1, state_cap=50_000, time_budget_ms=30_000,
+        gamma=0.96,
+    )
+    rights_ok = rights_policy.report.ok
+    boundary_ok = twofold_ok = False
+    first_counts: dict = {}
+    first_gauge = -1
+    if rights_ok:
+        rights_board = chess.Board(rights_fen)
+        shuttle = ["h1h2", "a8a7", "h2h1", "a7a8"]
+        for uci in shuttle:
+            rights_board.push_uci(uci)
+        first_counts, first_changed = (
+            rights_policy.apply_repetition_history(rights_board)
+        )
+        first_gauge = rights_policy.burned_states
+        boundary_ok = (
+            not rights_board.is_repetition(2)
+            and not first_changed
+            and first_gauge == 0
+            and first_counts
+            and max(first_counts.values()) == 1
+        )
+        for uci in shuttle:
+            rights_board.push_uci(uci)
+        _, second_changed = (
+            rights_policy.apply_repetition_history(rights_board)
+        )
+        twofold_ok = (
+            rights_board.is_repetition(2)
+            and second_changed
+            and rights_policy.burned_states == 4
+        )
+    check(
+        "the repetition walk stops at the castling-rights boundary",
+        rights_ok and boundary_ok and twofold_ok,
+        f"build={rights_policy.report.reason or 'ok'}; "
+        f"first-walk-max={max(first_counts.values()) if first_counts else 0}; "
+        f"burned after rights-crossing shuttle={first_gauge}; "
+        f"after in-era shuttle={rights_policy.burned_states}",
+    )
+
     # 17. Negative memory is scoped to the plan era: replanning (here via a
     # promotion ending the king-and-pawns phase) drops every certificate
     # instead of letting a rebuilt plan inherit verdicts certified for a
@@ -836,16 +890,24 @@ def selftest() -> int:
     if dead_policy is not None:
         scope_bot._vi_dead_policies.append(dead_policy)
     scope_bot._vi_unbuildable.add(("sentinel",))
+    # The burn gauge describes the active policy; dropping the policy era
+    # must zero it (review P3) while the cumulative update counter stays.
+    scope_bot.vi_burned_states = 7
+    scope_bot.vi_burn_updates = 3
     scope_bot._update_construction_plan(flip_board, their_pieces=1)
     check(
         "certificates do not survive replanning",
         scope_bot.plan is None
         and not scope_bot._vi_dead_policies
         and not scope_bot._vi_unbuildable
-        and scope_bot.plan_invalidations == 1,
+        and scope_bot.plan_invalidations == 1
+        and scope_bot.vi_burned_states == 0
+        and scope_bot.vi_burn_updates == 3,
         f"plan={scope_bot.plan}; "
         f"dead={len(scope_bot._vi_dead_policies)}; "
-        f"unbuildable={len(scope_bot._vi_unbuildable)}",
+        f"unbuildable={len(scope_bot._vi_unbuildable)}; "
+        f"burn gauge={scope_bot.vi_burned_states}/"
+        f"updates={scope_bot.vi_burn_updates}",
     )
 
     # 18. Certification answers from stored dead certificates without
