@@ -86,7 +86,6 @@ class LoseBot:
         # unaffordable.
         self._vi_unbuildable: set[tuple] = set()
         self._vi_next_flip_ply = 0
-        self._vi_visits: dict = {}
         self.vi_builds = 0
         self.vi_build_failures = 0
         self.vi_build_ms = 0.0
@@ -115,6 +114,10 @@ class LoseBot:
         self.vi_conversion_checked = 0
         self.vi_conversion_nodes = 0
         self.vi_conversion_incomplete = 0
+        # Repetition burn: how often the era recount moved the burn set,
+        # and the active policy's current burned-state gauge.
+        self.vi_burn_updates = 0
+        self.vi_burned_states = 0
 
     def _reset_vi_state(self) -> None:
         """Drop herding certificates along with the plan they were built for.
@@ -522,6 +525,18 @@ class LoseBot:
             return None
         if not policy.report.root_live:
             return None
+        # Price the arena's threefold rule into the values before reading
+        # them: every state whose position this era has already seen twice
+        # is a draw on re-entry, and Zach's replies can funnel play into
+        # one from successors that are themselves fresh (the Rf5/Rf7
+        # shuttle drew on an our-turn position no successor tally of our
+        # own choices could see). Burning re-solves the sub-MDP with those
+        # states as losing terminals, so the ranking below already routes
+        # around — or honestly zeroes — every funnel.
+        counts, burn_changed = policy.apply_repetition_history(board)
+        if burn_changed:
+            self.vi_burn_updates += 1
+        self.vi_burned_states = policy.burned_states
         if not policy.report.converged:
             # The certificate is exact regardless; the *ranking* is not.
             # Keep solving across moves rather than following a half-baked
@@ -539,31 +554,36 @@ class LoseBot:
             self.vi_state_misses += 1
             self._vi_policy = None
             return None
-        # Zach's endgame pool is often a singleton, so his replies are
-        # deterministic and any strict argmax loop retraces exact positions
-        # into the arena's threefold rule. Take every near-optimal candidate
-        # and prefer the least-visited successor: same plan value, no cycle.
-        # (Visits are tallied in choose_move on the position AFTER our move,
-        # the same key space queried here.)
+        # Take the candidates within ONE OPTIMAL PLY of the best value
+        # (floor = top * gamma) and prefer the successor this era has
+        # entered least: burning already zeroed the continuations that MUST
+        # repeat, so the tie-break only needs room to dodge second visits —
+        # the ones that arm future burns. The window earns its keep there;
+        # any wider and it spends the fifty-move clock on freshness detours
+        # (the old absolute 0.05 admitted ~13-ply regressions at
+        # herd-typical values and the freed games died at ply 100). The
+        # arena_draw check keeps the one law the clockless sub-MDP cannot
+        # price: a quiet move that lands on the fifty-move adjudication.
         safe_set = set(safe)
         top_value = None
+        floor = 0.0
         candidates: list[tuple[int, float, chess.Move]] = []
-        for value, move in ranked:
+        for value, move, child in ranked:
             if value <= 1e-9:
                 break
             if move not in safe_set:
                 continue
             if top_value is None:
                 top_value = value
-            elif value < top_value - 0.05:
+                floor = value * self.profile.vi_gamma
+            elif value < floor:
                 break
             board.push(move)
             drawn = arena_draw(board) is not None
-            key = board._transposition_key()
             board.pop()
             if drawn:
                 continue
-            candidates.append((self._vi_visits.get(key, 0), value, move))
+            candidates.append((counts.get(child, 0), value, move))
         if candidates:
             candidates.sort(key=lambda item: (item[0], -item[1]))
             return candidates[0][2]
@@ -738,20 +758,12 @@ class LoseBot:
             self.plan = None
             self.best_plan_distance = None
             self._reset_vi_state()
-            self._vi_visits.clear()
         self._last_seen_ply = ply
-        move = self._choose(board)
-        # Successor-visit accounting for the herding tie-break: _vi_choice
-        # ranks candidates by the position AFTER our move (opponent to move),
-        # so the tally must live on those same keys. The old pre-move tally
-        # counted positions with us to move — side-to-move is part of the
-        # transposition key, so every candidate lookup returned zero and the
-        # anti-repetition tie-break was silently a no-op.
-        board.push(move)
-        key = board._transposition_key()
-        self._vi_visits[key] = self._vi_visits.get(key, 0) + 1
-        board.pop()
-        return move
+        # No repetition tally lives here anymore: _vi_choice recounts the
+        # game's reversible era from the board itself each move, which sees
+        # the positions Zach's replies created — the ones a tally of our
+        # own choices structurally missed — and resets with the era.
+        return self._choose(board)
 
     def _choose(self, board: chess.Board) -> chess.Move:
         legal = list(board.legal_moves)
@@ -788,7 +800,8 @@ class LoseBot:
         safe = self._filter_plan_regressions(board, safe, planned_now)
         # VI keeps the pre-repetition list: a herding policy's waiting moves
         # are legitimate second visits, and only threefold actually draws.
-        # The policy applies its own threefold veto in _vi_choice.
+        # _vi_choice prices threefold exactly by burning twice-seen states
+        # into the solved values instead of vetoing moves up front.
         safe_for_vi = safe
         safe = self._filter_plan_repetitions(board, safe)
         safe = self._filter_forced_captures(board, safe, planned_now)

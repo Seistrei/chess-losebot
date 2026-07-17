@@ -675,19 +675,156 @@ def selftest() -> int:
         + f"; clock99={'offered' if high_choice is not None else 'refused'}",
     )
 
-    # 16. Successor visits must live on the keys _vi_choice queries: the
-    # position after our move, opponent to move. The old tally counted
-    # positions with us to move; side-to-move is part of the transposition
-    # key, so every candidate lookup returned zero and the anti-repetition
-    # tie-break was silently a no-op.
-    visit_bot = LoseBot(depth=1)
-    visit_board = chess.Board()
-    visit_move = visit_bot.choose_move(visit_board)
-    visit_board.push(visit_move)
+    # 16. Anti-threefold: the arena draws the third occurrence of a
+    # position, and Zach's reply can complete it on an OUR-turn state, so
+    # no tally of our own successor choices can see it coming. This is the
+    # case-6 seed-6 shuttle (11.Rf5 Kh6 12.Rf7 Kh5 13.Rf5+ Kh6 14.Rf7 Kh5
+    # 15.Rf5+?? Kh6 = threefold): every rook move landed on a FRESH
+    # their-turn position; the funnel state (rook f5, king h6, us to move)
+    # was the twice-seen one. Replaying the drill's exact 28-ply prefix
+    # and burning the era must pin that state at 0, reprice the check that
+    # funnels into it (its child now averages Zach's pool over
+    # {Kh4 -> pocket, Kh6 -> burned draw}), keep the root live through the
+    # alternatives, and an era reset must restore the pristine values
+    # through the same diff.
+    shuttle_board = chess.Board(KING_HOLDER_DRILL_FEN)
+    for san in (
+        "Bg1 Kd5 Kg2 Kc6 Rb8 Kd5 Rc8 Kd6 Rc5 Ke7 Rd5 Kf7 Re5 Kg8 "
+        "Rf5 Kg7 Rf7+ Kg8 Rf6 Kg7 Rf5 Kh6 Rf7 Kh5 Rf5+ Kh6 Rf7 Kh5"
+    ).split():
+        shuttle_board.push_san(san)
+    shuttle_target = ConstructionPlan(
+        pawn_file=6, checked_side=1, created_ply=0, holder_mode="king"
+    ).resolve(shuttle_board, chess.WHITE)
+    shuttle_policy = None
+    shuttle_ok = shuttle_target is not None and shuttle_target.king_holder
+    if shuttle_ok:
+        shuttle_policy = HerdingPolicy.build(
+            shuttle_board, shuttle_target, max_herders=1,
+            state_cap=200_000, time_budget_ms=30_000, gamma=0.96,
+            model="zach",
+        )
+        shuttle_ok = (
+            shuttle_policy.report.ok
+            and shuttle_policy.report.root_live
+            and shuttle_policy.report.converged
+        )
+    funnel_burned = False
+    shuttle_live = False
+    shuttle_burn_gauge = 0
+    fresh_rf5 = burned_rf5 = restored_rf5 = None
+    if shuttle_ok:
+        rf5 = chess.Move.from_uci("f7f5")
+
+        def _shuttle_value(move):
+            for value, ranked_move, _ in (
+                shuttle_policy.ranked_moves(shuttle_board) or []
+            ):
+                if ranked_move == move:
+                    return value
+            return None
+
+        fresh_rf5 = _shuttle_value(rf5)
+        counts, changed = shuttle_policy.apply_repetition_history(
+            shuttle_board
+        )
+        shuttle_policy.solve_more(30_000)
+        shuttle_burn_gauge = shuttle_policy.burned_states
+        funnel = shuttle_policy._index.get(
+            (True, chess.H6, ((chess.ROOK, chess.F5),))
+        )
+        funnel_burned = (
+            changed
+            and shuttle_burn_gauge > 0
+            and funnel is not None
+            and counts.get(funnel, 0) >= 2
+            and funnel in shuttle_policy._burned_set
+            and shuttle_policy._values[funnel] == 0.0
+        )
+        burned_rf5 = _shuttle_value(rf5)
+        shuttle_live = any(
+            value > 1e-9
+            for value, _, _ in (
+                shuttle_policy.ranked_moves(shuttle_board) or []
+            )
+        )
+        shuttle_policy._set_burned(set())
+        shuttle_policy.solve_more(30_000)
+        restored_rf5 = _shuttle_value(rf5)
     check(
-        "successor visits are keyed with the opponent to move",
-        visit_bot._vi_visits == {visit_board._transposition_key(): 1},
-        f"tallies={len(visit_bot._vi_visits)}",
+        "twice-seen funnel states burn to zero, reprice, and restore",
+        shuttle_ok
+        and funnel_burned
+        and shuttle_policy.report.converged
+        and fresh_rf5 is not None
+        and burned_rf5 is not None
+        and burned_rf5 < fresh_rf5 - 1e-3
+        and shuttle_live
+        and restored_rf5 is not None
+        and abs(restored_rf5 - fresh_rf5) <= 1e-3,
+        "no kh target" if shuttle_target is None else (
+            f"fresh={fresh_rf5}; burned={burned_rf5}; "
+            f"restored={restored_rf5}; "
+            f"burned-states={shuttle_burn_gauge}; "
+            f"live-after-burn={shuttle_live}"
+        ),
+    )
+
+    # 16b. Burn mechanics stay honest on the two-rook fixture: pinning any
+    # state is an in-place losing terminal (value 0, parents repriced
+    # through the resumable worklist), un-burning restores NORMAL states
+    # via Bellman and WIN terminals via their seed values exactly, and the
+    # convergence flag deconverges on each diff and drains back to True.
+    burn_ok = False
+    burn_detail = "13b fixture unavailable"
+    if vi_policy is not None and vi_policy.report.ok:
+        vi_policy.solve_more(30_000)
+        base_ranked = vi_policy.ranked_moves(vi_board) or []
+        goal_index = next(
+            (
+                i for i, kind in enumerate(vi_policy._kind)
+                if kind in (GOAL_CONTAINED, GOAL_RACE)
+                and vi_policy._values[i] > 0.0
+            ),
+            None,
+        )
+        if base_ranked and goal_index is not None:
+            base_value, _, base_child = base_ranked[0]
+            goal_seed = vi_policy._values[goal_index]
+            changed = vi_policy._set_burned({base_child, goal_index})
+            deconverged = not vi_policy.report.converged
+            resolved = vi_policy.solve_more(30_000)
+            pinned_child = vi_policy._values[base_child]
+            pinned_goal = vi_policy._values[goal_index]
+            after_ranked = vi_policy.ranked_moves(vi_board) or []
+            after_top = after_ranked[0][0] if after_ranked else None
+            restored = vi_policy._set_burned(set())
+            reresolved = vi_policy.solve_more(30_000)
+            re_ranked = vi_policy.ranked_moves(vi_board) or []
+            burn_ok = (
+                changed
+                and deconverged
+                and resolved
+                and pinned_child == 0.0
+                and pinned_goal == 0.0
+                and after_top is not None
+                and after_top <= base_value + 1e-9
+                and restored
+                and reresolved
+                and vi_policy._values[goal_index] == goal_seed
+                and bool(re_ranked)
+                and abs(re_ranked[0][0] - base_value) <= 1e-3
+            )
+            burn_detail = (
+                f"base={base_value:.4f}; after-burn={after_top}; "
+                f"pinned=({pinned_child}, {pinned_goal}); "
+                f"goal-seed={goal_seed} -> {vi_policy._values[goal_index]}; "
+                f"restored-top={re_ranked[0][0] if re_ranked else None}"
+            )
+    check(
+        "burned states pin at zero and un-burning restores seed values",
+        burn_ok,
+        burn_detail,
     )
 
     # 17. Negative memory is scoped to the plan era: replanning (here via a
@@ -1330,6 +1467,8 @@ def endgames(args) -> int:
                 f" king-marches={bot.vi_king_marches};"
                 f" cage-builds={bot.vi_cage_builds};"
                 f" capture-guards={bot.vi_capture_guards};"
+                f" burn-updates={bot.vi_burn_updates}"
+                f" ({bot.vi_burned_states} burned at end);"
                 f" pool-mismatches={bot.vi_pool_mismatches};"
                 f" goals-convert={bot.vi_converting_goals}"
                 f"/{bot.vi_conversion_checked}"

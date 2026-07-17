@@ -783,3 +783,108 @@ Next, in expected-value order:
    from the standard fixtures.
 4. Multi-pawn race stacking; fifty-move feasibility from the solved MDP
    (unchanged).
+
+## Anti-threefold herding: repetition burning in the sub-MDP (2026-07-17)
+
+Log item 1 built. **Case-6 drill, 10 seeds: 7 converted / 1 fifty-move /
+2 stalemates / 0 repetitions** (baseline reproduced first: 5 / 0 / 2 / 3)
+— threefold, the biggest single loss source, is eliminated, and 7/10 is
+the best full-game conversion rate the project has produced.
+
+The diagnosis the baseline PGNs confirmed: the arena draws the third
+occurrence of a position, and during the herd it can complete AFTER
+Zach's reply, on an our-turn state that no tally of our own successor
+choices can see coming. In the seed-6 shuttle (11.Rf5 Kh6 12.Rf7 Kh5
+13.Rf5+ Kh6 14.Rf7 Kh5 15.Rf5+ Kh6 draw) every rook move landed on a
+FRESH their-turn position — the funnel state (rook f5, king h6, us to
+move) was the twice-seen one. The least-visited tie-break was
+structurally blind to that side of the move alternation, and its
+lifetime tallies also wandered value plateaus (seed 2's
+Re1/Re2/Re3/Re6/Re1 noodling), so it caused drift without preventing
+draws.
+
+The fix prices the rule into the model instead of patching the
+tie-break. Every sub-MDP state is one real position (the statics never
+move), so `HerdingPolicy.apply_repetition_history` recounts the game's
+reversible era each move — the same span `is_repetition` scans, walked
+on a stack copy — maps every position onto a graph state (their-turn
+positions included, via the new `_state_of`), and pins each twice-seen
+state at value 0: re-entry IS the draw, a losing terminal for as long as
+the era lasts. Decreases propagate through the same resumable worklist;
+resuming is still sound because discounted Bellman is a sup-norm
+contraction (the old monotone-from-below claim in `solve_more` is gone —
+burns approach the new fixpoint from above). An irreversible move resets
+the era and the same diff un-burns: NORMAL states re-derive by Bellman,
+WIN terminals restore their audited seed values exactly (the seeding
+logic now lives in `_terminal_seed_value`, shared by `_seed_solver` and
+the restore). Certificates are untouched: burning prices play, never
+deadness, and `root_live`/dead ledgers keep their build-time meaning.
+
+On the shuttle position the repricing is visibly correct: Rf5+'s child
+averages Zach's {Kh4 -> pocket, Kh6 -> burned draw} pool and drops
+0.417 -> 0.240 — the gamble is priced, not vetoed, and is taken only
+when nothing safer outranks it.
+
+Play-time consequences in `_vi_choice`:
+
+- Era counts (by graph state, from the same walk; `ranked_moves` now
+  returns the child index) replace the `_vi_visits` lifetime tally as
+  the freshness tie-break, and the tally is deleted — it counted the
+  wrong side of the alternation across the whole game instead of the
+  era, and its test (old 16) with it.
+- The near-optimal window shrinks from an absolute 0.05 to ONE OPTIMAL
+  PLY (floor = top * gamma). The wide window was the tie-break's escape
+  hatch back when it was the only threefold defense; with burning in the
+  values it only bought freshness detours — at herd-typical values under
+  gamma 0.96, 0.05 admits ~13-ply regressions. Measured: the burn-only
+  intermediate config converted 4/10 with the freed games dying at
+  exactly ply 100 (48 policy moves, zero goal states reached); the
+  tightened window converted 7/10.
+- The immediate arena_draw veto on candidates stays: it is the one law
+  the clockless sub-MDP cannot price (a quiet move that lands on the
+  fifty-move adjudication).
+
+Loss taxonomy after the change: both stalemates are the accepted
+1/2-race branch (9 of 10 seeds reached the goal and offered the scored
+release — seed 2 excepted — 7 races won, 2 lost; every conversion ends
+in the exact motif mate g3-g2#). Seeds 3/5/8 reproduce byte-identically
+(pure-argmax lines, burn-updates=0). The remaining fifty-move draw
+(seed 2, burn-updates=10, 13 states burned) is a slow-herd clock death:
+the rook holds the h6 door for 48 policy moves while Zach's king
+oscillates g7/g8/h8 and the clock expires with zero goal states reached
+— log item 4 (clock feasibility) now cleanly exposed instead of masked
+by the repetition rule. New diagnostics: `burn-updates=N (M burned at
+end)` in the endgames and arena vi lines.
+
+Suite 44 -> 45 (one test replaced by two): the seed-6 shuttle regression
+replays the drill's exact 28-ply prefix and asserts the funnel state is
+counted twice, burned, and pinned at 0.0; Rf5+ reprices 0.417 -> 0.240
+while the root stays live through alternatives; and an era reset
+restores 0.417 to 7 decimals. The mechanics test on the two-rook fixture
+locks in pin-in-place (child and WIN-terminal both 0.0 exactly),
+deconverge-then-drain honesty on each diff, and exact seed-value
+restoration.
+
+Full regression battery: selftest 45/45; motif suite verdicts and odds
+byte-unchanged (kh-corner-h/a and kh-herd-h4 POSITIVE 0.500, fm-organic
+and fm-deep POSITIVE 1.000, ph-contained-root NEGATIVE all-DISPROVEN).
+Case-2 seed-5 keeps its documented outcome and length — fifty-move in
+125 plies, 0 goals converting with 0 audits cut short and 0 pool
+mismatches, so the piece-holder unconvertibility fact stands — but the
+middle game legitimately diverges (47 VI moves vs 42, 18 goal states vs
+17, 173,353 audit probe nodes vs 156,163): the tie-break source and
+window changed, so this entry's line is the new reference. Its vi line
+also shows `burn-updates=13 (0 burned at end)` — the un-burn-on-era-
+reset path exercised by a real game, not just the white-box test.
+
+Next, in expected-value order:
+
+1. Gate side-flips and terminal seeding on audited conversion (log item
+   2, unchanged) — a convertible side now exists to steer toward.
+2. Adoption pressure for king-holder plans in full games (unchanged):
+   piece-holder plans freeze the executioner far from its pre-corner
+   square; needs freeze-release choreography.
+3. Fifty-move/clock feasibility from the solved MDP — promoted by the
+   seed-2 result: with threefold priced, the clock is the herd's binding
+   constraint, and the policy still cannot see it.
+4. Multi-pawn race stacking (unchanged).

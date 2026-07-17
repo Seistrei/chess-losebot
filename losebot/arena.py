@@ -138,6 +138,8 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.vi_king_marches} king marches; "
                 f"{focal.vi_cage_builds} cage builds; "
                 f"{focal.vi_capture_guards} capture guards; "
+                f"{focal.vi_burn_updates} burn updates "
+                f"({focal.vi_burned_states} burned at end); "
                 f"{focal.vi_pool_mismatches} pool mismatches"
             )
     return tallies

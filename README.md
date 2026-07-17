@@ -115,7 +115,13 @@ inherited by a rebuilt plan) and triggers a prospective flip of the plan to
 the mirrored checked side when a completed build certifies that side live.
 Committed march/cage filters, a forced-capture guard, and a draw-aware
 scored race-release (it shares the arena's fifty-move/repetition/material
-adjudications) round out the profile. Piece holders provably cannot release
+adjudications) round out the profile. At play time the policy also prices
+the arena's threefold rule into the solved values: each move it recounts
+the game's reversible era, maps every position (either side to move) onto
+a graph state, and pins twice-seen states at value 0 — re-entering one is
+the draw — so Zach's deterministic funnels reprice the moves that feed
+them instead of tripping repetition mid-herd, and an irreversible move
+lifts the burns with the era. Piece holders provably cannot release
 the arrival square (every retreat re-attacks it and refutes the mate); the
 one immune holder is our own king, and the `motifs` command adjudicates
 that motif with the conversion audit: king-holder graphs get a dedicated

@@ -59,6 +59,20 @@ O(states + edges), and immune to solver deadlines. Discounted value iteration
 (asynchronous, parent-driven worklist, resumable across moves) is only used
 to *rank* moves; ``converged`` reports honestly whether those ranks are
 final. A partial solve can degrade play, never a certificate.
+
+Play time adds the arena's threefold rule to the model. Every sub-MDP state
+is one real position (the statics never move), and the arena draws the third
+occurrence of a position whichever side is to move — including an our-turn
+position reached by ZACH's reply, which no tally of our own move choices can
+see (the drill's Rf5/Rf7 shuttle: both rook moves were fresh, the funnel
+state was not). ``apply_repetition_history`` therefore recounts the game's
+reversible era each move, maps every position onto a graph state, and clamps
+each twice-seen state to value 0: re-entering it IS the draw, so it is a
+losing terminal for as long as the era lasts. The decrease propagates through
+the same worklist solver (discounted Bellman is a sup-norm contraction, so
+resuming from clamped values converges from any start), and an irreversible
+move resets the era and lifts the burns. The build-time certificates are
+deliberately untouched: burning prices play, never deadness.
 """
 
 from __future__ import annotations
@@ -322,6 +336,14 @@ class HerdingPolicy:
         # Resumable solver state (seeded on the first _solve call).
         self._worklist: deque | None = None
         self._queued: bytearray | None = None
+
+        # Play-time repetition burn: states whose position the current
+        # reversible era has already seen twice. Entering one again is the
+        # arena's threefold draw, so their values are pinned at 0 until the
+        # era resets. Kept separate from the graph so certificates and the
+        # build-time solve never depend on game history.
+        self._burned: bytearray | None = None
+        self._burned_set: set[int] = set()
 
     # ------------------------------------------------------------------
     # Construction
@@ -923,41 +945,52 @@ class HerdingPolicy:
     # Asynchronous value iteration (parent-driven worklist, resumable)
     # ------------------------------------------------------------------
 
+    def _terminal_seed_value(self, index: int) -> float:
+        """The value a terminal seeds (and is restored to when un-burned).
+
+        Once ANY terminal converts (a forced mate, or an audited goal),
+        terminal values become real win probabilities: FORCED_MATE is 1
+        (it converts by definition), audited goals get their race odds,
+        and everything else — refused goals AND goals the audit deadline
+        never reached — seeds 0. A known conversion must outrank an
+        unknown proxy; defaulting the unchecked to 1.0 would steer the
+        policy at exactly the goals the plausible-first ordering ranked
+        least likely to release. With no converting terminal anywhere,
+        keep the flat proxy values: zeroing everything would silence the
+        policy without offering a better move, and root_converts already
+        reports the mismatch honestly.
+        """
+        kind = self._kind[index]
+        if kind not in _WIN_KINDS:
+            return 0.0
+        if not self.report.root_converts or kind == FORCED_MATE:
+            return 1.0
+        return self._conversion.get(index, 0.0)
+
+    def _enqueue(self, index: int) -> None:
+        if not self._queued[index]:
+            self._queued[index] = 1
+            self._worklist.append(index)
+
+    def _enqueue_parents(self, index: int) -> None:
+        for parent in self._parents[index]:
+            self._enqueue(parent)
+
     def _seed_solver(self) -> None:
         terminals: dict[str, int] = {}
         self._worklist = deque()
         self._queued = bytearray(len(self._values))
-        # Once ANY terminal converts (a forced mate, or an audited goal),
-        # terminal values become real win probabilities: FORCED_MATE is 1
-        # (it converts by definition), audited goals get their race odds,
-        # and everything else — refused goals AND goals the audit deadline
-        # never reached — seeds 0. A known conversion must outrank an
-        # unknown proxy; defaulting the unchecked to 1.0 would steer the
-        # policy at exactly the goals the plausible-first ordering ranked
-        # least likely to release. With no converting terminal anywhere,
-        # keep the flat proxy values: zeroing everything would silence the
-        # policy without offering a better move, and root_converts already
-        # reports the mismatch honestly.
-        use_audit = self.report.root_converts
         for index, kind in enumerate(self._kind):
             if kind in (NORMAL_OUR, NORMAL_THEIR):
                 continue
             name = _TERMINAL_NAMES[kind]
             terminals[name] = terminals.get(name, 0) + 1
             if kind in _WIN_KINDS:
-                if not use_audit:
-                    value = 1.0
-                elif kind == FORCED_MATE:
-                    value = 1.0
-                else:
-                    value = self._conversion.get(index, 0.0)
+                value = self._terminal_seed_value(index)
                 if value <= 0.0:
                     continue
                 self._values[index] = value
-                for parent in self._parents[index]:
-                    if not self._queued[parent]:
-                        self._queued[parent] = 1
-                        self._worklist.append(parent)
+                self._enqueue_parents(index)
         self.report.terminals = terminals
 
     def _solve(self, deadline: float, max_updates: int | None = None) -> None:
@@ -977,12 +1010,15 @@ class HerdingPolicy:
             max_updates if max_updates is not None
             else 80 * max(1, len(values))
         )
+        burned = self._burned
         while worklist and updates < limit:
             updates += 1
             if updates % 4096 == 0 and time.monotonic() > deadline:
                 break
             index = worklist.popleft()
             queued[index] = 0
+            if burned is not None and burned[index]:
+                continue  # pinned at 0 while re-entry would draw
             kids = children[index]
             if not kids:
                 continue
@@ -1017,9 +1053,12 @@ class HerdingPolicy:
                    max_updates: int | None = None) -> bool:
         """Continue an unfinished solve; returns True once converged.
 
-        Values start below the fixpoint and the Bellman operator here is
-        monotone, so resuming across moves is sound: each call sharpens the
-        move ranking. The certificate was never the solver's job.
+        Resuming across moves is sound from any starting values: discounted
+        Bellman is a sup-norm contraction, so the worklist converges to the
+        current system's fixpoint whether values approach it from below (a
+        cut-short build) or from above (a repetition burn just lowered
+        states other values still route through). The certificate was never
+        the solver's job.
         """
         if self._stripped or not self.report.ok or self.report.converged:
             return self.report.converged
@@ -1036,13 +1075,93 @@ class HerdingPolicy:
         return self.report.converged
 
     # ------------------------------------------------------------------
+    # Play-time repetition burn
+    # ------------------------------------------------------------------
+
+    @property
+    def burned_states(self) -> int:
+        return len(self._burned_set)
+
+    def apply_repetition_history(self, board: chess.Board) -> tuple:
+        """Recount the reversible era and burn every twice-seen state.
+
+        Walks the game history back to the last irreversible move (the same
+        span ``is_repetition`` scans), maps each position onto a graph state
+        — their-turn positions included — and pins states already seen twice
+        at value 0: the arena adjudicates the third occurrence a draw before
+        anyone moves again, so re-entry is a losing terminal no matter what
+        the pristine graph promised. An era reset (any irreversible move)
+        makes the walk short and the burn set empty, restoring the pristine
+        values through the same diff.
+
+        Returns ``(counts, changed)``: per-state-index occurrence counts for
+        the caller's freshness tie-break, and whether the burn set moved
+        (the solver must then be drained before values are read again).
+        """
+        if self._stripped or not self.report.ok:
+            return {}, False
+        counts: dict[int, int] = {}
+        index_of = self._index
+        replay = board.copy(stack=True)
+        remaining = min(board.halfmove_clock, len(board.move_stack))
+        for _ in range(remaining + 1):
+            state = self._state_of(replay)
+            if state is not None:
+                index = index_of.get(state)
+                if index is not None:
+                    counts[index] = counts.get(index, 0) + 1
+            if not replay.move_stack:
+                break
+            replay.pop()
+        burned = {index for index, count in counts.items() if count >= 2}
+        return counts, self._set_burned(burned)
+
+    def _set_burned(self, burned: set) -> bool:
+        """Pin the given states at 0, release the rest, requeue the fallout."""
+        if burned == self._burned_set:
+            return False
+        if self._worklist is None:
+            self._seed_solver()
+        if self._burned is None:
+            self._burned = bytearray(len(self._states))
+        for index in burned - self._burned_set:
+            self._burned[index] = 1
+            if self._values[index] != 0.0:
+                self._values[index] = 0.0
+                self._enqueue_parents(index)
+        for index in self._burned_set - burned:
+            self._burned[index] = 0
+            if self._kind[index] in (NORMAL_OUR, NORMAL_THEIR):
+                # Bellman recomputes it from its children; increases then
+                # propagate to parents through the normal worklist path.
+                self._enqueue(index)
+            else:
+                value = self._terminal_seed_value(index)
+                if value != self._values[index]:
+                    self._values[index] = value
+                    self._enqueue_parents(index)
+        self._burned_set = set(burned)
+        if self._worklist:
+            self.report.converged = False
+        return True
+
+    # ------------------------------------------------------------------
     # Play-time interface
     # ------------------------------------------------------------------
 
     def _dynamic_state(self, board: chess.Board) -> tuple | None:
-        """Map a real position onto a graph state, or None on any mismatch."""
+        """Map an our-turn position onto a graph state (None on mismatch)."""
         if board.turn != self.us:
             return None
+        return self._state_of(board)
+
+    def _state_of(self, board: chess.Board) -> tuple | None:
+        """Map a real position, either side to move, onto a graph state.
+
+        The repetition walk needs their-turn positions too: the arena draws
+        a third occurrence whoever is to move, and the funnel states Zach's
+        replies retrace are our-turn positions that only history exposes.
+        """
         herders = []
         zk = None
         for square, piece in board.piece_map().items():
@@ -1068,7 +1187,7 @@ class HerdingPolicy:
             sorted(self.herder_types)
         ):
             return None
-        return (True, zk, herders)
+        return (board.turn == self.us, zk, herders)
 
     def matches(self, board: chess.Board) -> bool:
         return self._dynamic_state(board) is not None
@@ -1094,7 +1213,11 @@ class HerdingPolicy:
         return frozenset(square for _, square in herders)
 
     def ranked_moves(self, board: chess.Board) -> list | None:
-        """Ranked (value, move) herder moves for this position, best first."""
+        """Ranked (value, move, child_index) herder moves, best first.
+
+        The child index lets the caller consult the era's occurrence counts
+        for the position each move lands on without rehashing boards.
+        """
         if self._stripped:
             return None
         state = self._dynamic_state(board)
@@ -1109,7 +1232,7 @@ class HerdingPolicy:
             if child is None:
                 continue
             ranked.append(
-                (self._values[child], chess.Move(from_sq, to_sq))
+                (self._values[child], chess.Move(from_sq, to_sq), child)
             )
         ranked.sort(key=lambda item: (-item[0], item[1].uci()))
         return ranked
@@ -1145,6 +1268,8 @@ class HerdingPolicy:
         self._worklist = None
         self._queued = None
         self._conversion = {}
+        self._burned = None
+        self._burned_set = set()
 
 
 def prospective_flip_policy(board: chess.Board, target: PawnMateTemplate,
