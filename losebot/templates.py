@@ -3,6 +3,25 @@
 The heuristic used to move our king toward one pawn and their king toward
 possibly another. A template couples both kings to one concrete mating pawn
 push, giving the planner a coherent position to build toward.
+
+Two holder modes exist:
+
+- PIECE holder (the original): one of our pieces freezes the mating pawn
+  from its arrival square while our king parks on the checked square. The
+  release theorem (tuning log, 2026-07-15) proved this mode unconvertible —
+  every holder retreat re-attacks the arrival square and refutes the mate.
+- KING holder (the corner motif, adjudicated positive 2026-07-16): our KING
+  is the arrival holder and the checked square is the adjacent CORNER. The
+  corner's rank-side escape holds our own bishop (the one piece type that
+  neither re-attacks the arrival square nor covers the defender's entry),
+  its file-side escape stays empty and is covered by the entering defender,
+  and the release is the king stepping aside into the corner — a race the
+  conversion audit prices at 1/2 per attempt. The mate itself needs a
+  knight-class closer: the sealing move must not give check (a rook check
+  there mates THEIR king, a misère loss), so a knight must exist in the
+  construction. The king takes the arrival square LAST — pre-park
+  construction can still reset the fifty-move clock, post-park play is all
+  reversible — so the march is gated on the cage being built.
 """
 
 from __future__ import annotations
@@ -10,6 +29,39 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import chess
+
+
+def _same_shade(a: chess.Square, b: chess.Square) -> bool:
+    light = chess.BB_LIGHT_SQUARES
+    return bool(chess.BB_SQUARES[a] & light) == bool(
+        chess.BB_SQUARES[b] & light
+    )
+
+
+def _kh_squares(arrival: chess.Square, checked: chess.Square) -> tuple:
+    """(cage, escape, entry, seal, far-capture) squares of a corner
+    king-holder template — all fixed by the arrival/checked pair.
+
+    cage: the corner's rank-side escape; must hold our bishop.
+    escape: the corner's file-side escape; must stay empty (it is also a
+        pawn-capture square) and is covered by the entering defender.
+    entry: where the defender stands at mate time — adjacent to the arrival
+        square (it must defend the mating pawn), covering the file escape,
+        not adjacent to the checked square (kings may not touch).
+    seal: the retreat behind the entry square the knight closer covers.
+    far capture: the mating pawn's other capture square; any of our pieces
+        parked there is pawn food that opens the freeze.
+    """
+    a_file, a_rank = chess.square_file(arrival), chess.square_rank(arrival)
+    c_file, c_rank = chess.square_file(checked), chess.square_rank(checked)
+    rank_step = c_rank - a_rank  # their pawn's push direction, in ranks
+    return (
+        chess.square(a_file, c_rank),
+        chess.square(c_file, a_rank),
+        chess.square(c_file, a_rank - rank_step),
+        chess.square(c_file, a_rank - 2 * rank_step),
+        chess.square(2 * a_file - c_file, a_rank),
+    )
 
 
 @dataclass(frozen=True)
@@ -24,10 +76,25 @@ class PawnMateTemplate:
     runway_blocked: bool
     holding_blocker: bool
     holding_blocker_defended: bool
+    # King-holder mode: our king is the arrival holder, the checked square
+    # is the adjacent corner, and our_king_steps measures the march to the
+    # ARRIVAL square (the vacate to the corner is the play-time release).
+    # race_clear tracks whether the fixed race squares (corner, escapes,
+    # entry) are free of construction debt right now.
+    king_holder: bool = False
+    race_clear: bool = True
 
     @property
     def setup_distance(self) -> int:
         """Optimistic number of king-placement steps still required."""
+        if self.king_holder:
+            return (
+                self.our_king_steps
+                + self.defender_steps
+                + (2 if self.cage_occupancy == 0 else 0)
+                + (2 if self.arrival_blocked else 0)
+                + (0 if self.race_clear else 1)
+            )
         return (
             self.our_king_steps
             + self.defender_steps
@@ -49,7 +116,25 @@ class PawnMateTemplate:
         )
 
     @property
+    def hold_established(self) -> bool:
+        """The arrival square is frozen by its designated holder."""
+        if self.king_holder:
+            return self.our_king_steps == 0
+        return self.holding_blocker
+
+    @property
+    def required_cage(self) -> int:
+        # The corner cage is a single bishop; the piece-holder construction
+        # wants a three-piece reserve around the checked square.
+        return 1 if self.king_holder else 3
+
+    @property
     def ready_to_release(self) -> bool:
+        if self.king_holder:
+            # The vacate is never granted by lifting the hold filter: play
+            # gates it on the audited race (score_release_moves accepting),
+            # which deliberately bypasses the filters.
+            return False
         # The holding blocker occupies a cage square itself. Require one extra
         # occupant so releasing it leaves a three-piece cage for the probe.
         required_cage = 4 if self.holding_blocker else 3
@@ -59,14 +144,43 @@ class PawnMateTemplate:
             and self.cage_occupancy >= required_cage
         )
 
+    # ------------------------------------------------------------------
+    # King-holder geometry (meaningful only when king_holder is True).
+    # ------------------------------------------------------------------
+
+    @property
+    def kh_cage_square(self) -> chess.Square:
+        return _kh_squares(self.arrival_square, self.checked_square)[0]
+
+    @property
+    def kh_escape_square(self) -> chess.Square:
+        return _kh_squares(self.arrival_square, self.checked_square)[1]
+
+    @property
+    def kh_entry_square(self) -> chess.Square:
+        return _kh_squares(self.arrival_square, self.checked_square)[2]
+
+    @property
+    def kh_seal_square(self) -> chess.Square:
+        return _kh_squares(self.arrival_square, self.checked_square)[3]
+
+    @property
+    def kh_far_capture_square(self) -> chess.Square:
+        return _kh_squares(self.arrival_square, self.checked_square)[4]
+
 
 @dataclass(frozen=True)
 class ConstructionPlan:
-    """A persistent commitment to one execution pawn and checking side."""
+    """A persistent commitment to one execution pawn, checking side, and
+    holder mode. Mixing holder modes inside one plan would let the resolver
+    flip between incompatible constructions move to move; committing the
+    mode keeps the filters and the herding machinery pointed at one device.
+    """
 
     pawn_file: int
     checked_side: int
     created_ply: int
+    holder_mode: str = "piece"  # "piece" | "king"
 
     @classmethod
     def from_template(cls, target: PawnMateTemplate,
@@ -75,15 +189,18 @@ class ConstructionPlan:
             pawn_file=chess.square_file(target.pawn_square),
             checked_side=target.checked_side,
             created_ply=created_ply,
+            holder_mode="king" if target.king_holder else "piece",
         )
 
     def resolve(self, board: chess.Board,
                 us: chess.Color) -> PawnMateTemplate | None:
+        wants_king_holder = self.holder_mode == "king"
         candidates = [
             target
             for target in pawn_mate_templates(board, us)
             if chess.square_file(target.pawn_square) == self.pawn_file
             and target.checked_side == self.checked_side
+            and target.king_holder == wants_king_holder
         ]
         if not candidates:
             return None
@@ -99,7 +216,8 @@ class ConstructionPlan:
     @property
     def label(self) -> str:
         side = "left" if self.checked_side < 0 else "right"
-        return f"{chess.FILE_NAMES[self.pawn_file]}-pawn/{side}"
+        mode = "/king" if self.holder_mode == "king" else ""
+        return f"{chess.FILE_NAMES[self.pawn_file]}-pawn/{side}{mode}"
 
 
 @dataclass(frozen=True)
@@ -107,6 +225,81 @@ class HerdingMetrics:
     open_outward: int
     controlled_outward: int
     open_total: int
+
+
+def _king_holder_template(
+    board: chess.Board,
+    us: chess.Color,
+    our_king: chess.Square,
+    their_king: chess.Square,
+    pawn_square: chess.Square,
+    arrival: chess.Square,
+    checked_square: chess.Square,
+    runway_blocked: bool,
+    knights: chess.SquareSet,
+    bishops: chess.SquareSet,
+) -> PawnMateTemplate | None:
+    """The corner king-holder variant of one (pawn, arrival, checked) triple.
+
+    Emitted only when the adjudicated geometry can possibly close: the
+    checked square is a corner, a knight-class closer exists somewhere (the
+    mate's sealing move must not check), and a bishop of the cage square's
+    color complex exists (no other piece type is sound on that square).
+    These are necessary conditions for steering only — the conversion audit
+    and the release probe remain the arbiters of the actual race.
+    """
+    if not (
+        chess.square_file(checked_square) in (0, 7)
+        and chess.square_rank(checked_square) in (0, 7)
+    ):
+        return None
+    if not knights:
+        return None
+    cage_square, escape, entry, _, far_capture = _kh_squares(
+        arrival, checked_square
+    )
+    cage_piece = board.piece_at(cage_square)
+    caged = (
+        cage_piece is not None
+        and cage_piece.color == us
+        and cage_piece.piece_type == chess.BISHOP
+    )
+    if not caged and not any(
+        _same_shade(square, cage_square) for square in bishops
+    ):
+        return None
+
+    occupant = board.piece_at(arrival)
+    blocked = occupant is not None and not (
+        occupant.color == us and occupant.piece_type == chess.KING
+    )
+
+    def ours_on(square: chess.Square) -> bool:
+        piece = board.piece_at(square)
+        return piece is not None and piece.color == us
+
+    race_clear = (
+        board.piece_at(checked_square) is None
+        and board.piece_at(escape) is None
+        and not ours_on(entry)
+        and not ours_on(far_capture)
+    )
+    return PawnMateTemplate(
+        pawn_square=pawn_square,
+        arrival_square=arrival,
+        checked_square=checked_square,
+        our_king_steps=chess.square_distance(our_king, arrival),
+        defender_steps=max(
+            0, chess.square_distance(their_king, arrival) - 1
+        ),
+        cage_occupancy=1 if caged else 0,
+        arrival_blocked=blocked,
+        runway_blocked=runway_blocked,
+        holding_blocker=False,
+        holding_blocker_defended=False,
+        king_holder=True,
+        race_clear=race_clear,
+    )
 
 
 def pawn_mate_templates(board: chess.Board,
@@ -124,6 +317,8 @@ def pawn_mate_templates(board: chess.Board,
         return []
 
     step = 8 if them == chess.WHITE else -8
+    knights = board.pieces(chess.KNIGHT, us)
+    bishops = board.pieces(chess.BISHOP, us)
     templates: list[PawnMateTemplate] = []
     for pawn_square in board.pieces(chess.PAWN, them):
         arrival = pawn_square + step
@@ -180,6 +375,12 @@ def pawn_mate_templates(board: chess.Board,
                     holding_blocker_defended=holding_blocker_defended,
                 )
             )
+            king_variant = _king_holder_template(
+                board, us, our_king, their_king, pawn_square, arrival,
+                checked_square, runway_blocked, knights, bishops,
+            )
+            if king_variant is not None:
+                templates.append(king_variant)
     return templates
 
 
@@ -188,9 +389,13 @@ def best_pawn_mate_template(board: chess.Board,
     templates = pawn_mate_templates(board, us)
     if not templates:
         return None
+    # King-holder templates outrank piece holders whatever their distance:
+    # the release theorem makes a completed piece-holder construction
+    # unconvertible, while the audited corner race converts at 1/2.
     return min(
         templates,
         key=lambda target: (
+            0 if target.king_holder else 1,
             target.setup_distance,
             -target.cage_occupancy,
             target.pawn_square,
@@ -230,3 +435,16 @@ def herding_metrics(board: chess.Board, us: chess.Color,
             else:
                 open_outward += 1
     return HerdingMetrics(open_outward, controlled_outward, open_total)
+
+
+def kh_bishop_distance(board: chess.Board, us: chess.Color,
+                       target: PawnMateTemplate) -> int:
+    """Chebyshev distance of our nearest cage-colored bishop to the cage
+    square of a king-holder template (99 when no such bishop survives)."""
+    cage_square = target.kh_cage_square
+    best = 99
+    for square in board.pieces(chess.BISHOP, us):
+        if not _same_shade(square, cage_square):
+            continue
+        best = min(best, chess.square_distance(square, cage_square))
+    return best

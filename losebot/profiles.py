@@ -80,6 +80,12 @@ class EngineProfile:
     # Per-build cap on the conversion audit (release-probing the reachable
     # goal terminals) so it can never starve exploration or the solver.
     vi_conversion_ms: int = 3_000
+    # King-holder construction pulls: route the cage-colored bishop toward
+    # the corner square and keep a knight-class closer in seal range.
+    # Defaulted to zero so the pre-king-holder profiles stay byte-for-byte
+    # reproducible.
+    kh_bishop_pull: float = 0.0
+    kh_knight_pull: float = 0.0
 
 
 CURRENT = EngineProfile(
@@ -224,6 +230,8 @@ PLANNER = replace(
     modeled_herding_depth=1,
     modeled_herding_cap=1_000,
     modeled_herding_time_ms=250,
+    kh_bishop_pull=6.0,
+    kh_knight_pull=4.0,
 )
 
 

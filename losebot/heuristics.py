@@ -18,6 +18,7 @@ from .templates import (
     ConstructionPlan,
     best_pawn_mate_template,
     herding_metrics,
+    kh_bishop_distance,
 )
 
 PIECE_VALS = {
@@ -130,9 +131,32 @@ def evaluate(board: chess.Board, root_color: chess.Color,
         else:
             v -= profile.template_distance_penalty * target.setup_distance
             v += profile.template_cage_bonus * target.cage_occupancy
-            if target.runway_blocked:
+            if target.runway_blocked and not target.king_holder:
+                # For a king holder the "runway" square IS the corner cage
+                # square; our bishop there is the construction, not a fault.
                 v -= profile.template_runway_penalty
-            if target.ready_to_release:
+            if target.king_holder:
+                if target.hold_established:
+                    v += profile.plan_hold_bonus
+                elif not target.arrival_blocked:
+                    v -= profile.plan_unfrozen_penalty
+                if target.cage_occupancy == 0:
+                    # Pull the cage-colored bishop toward the corner square;
+                    # the commitment filter only sees single-tempo progress.
+                    v -= profile.kh_bishop_pull * min(
+                        8, kh_bishop_distance(board, us, target)
+                    )
+                closer_distance = min(
+                    (
+                        chess.square_distance(sq, target.kh_seal_square)
+                        for sq in board.pieces(chess.KNIGHT, us)
+                    ),
+                    default=8,
+                )
+                # The closer must be one knight move from sealing when the
+                # race fires; inside radius two it can usually rearrange.
+                v -= profile.kh_knight_pull * max(0, closer_distance - 2)
+            elif target.ready_to_release:
                 if target.arrival_blocked:
                     v -= profile.plan_release_block_penalty
             elif target.holding_blocker:

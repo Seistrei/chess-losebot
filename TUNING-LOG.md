@@ -665,3 +665,98 @@ reporting with a clean-refusal contrast; audit taint through the
 `conversion_probe_cap` plumbing at cap 0, 7/7 tainted; teleport guard).
 Full motif suite re-run: verdicts and odds unchanged, with every audit
 line now carrying its starved-refusal count.
+
+## King-holder template mode: first full-game conversions (2026-07-17)
+
+Log item 1 built: the planner/bot can now construct, hold, and release the
+adjudicated corner king-holder device end to end. **Result: the new
+construction drill converts 5/10 seeds from an unassembled start — the
+first full-game conversions this project has ever produced** (every
+piece-holder drill in the log: 0).
+
+Template layer (`templates.py`): `pawn_mate_templates` emits a king-holder
+variant alongside each piece template when the adjudicated geometry can
+possibly close — checked square is a CORNER, a knight-class closer exists
+(the sealing move must not check), and a bishop of the cage square's color
+complex exists. The corner fixes every special square as a function of
+(arrival, checked): the cage square (arrival file at corner rank — our
+bishop, the only sound piece there: rook/queen re-attack the arrival
+square and refute the mate, a knight covers the defender's entry), the
+file escape (kept empty, defender-covered, also a pawn-capture square),
+the defender entry, the knight's seal square, and the far pawn-capture
+square. For king-holder templates `our_king_steps` measures the march to
+the ARRIVAL square, `cage_occupancy` is the single bishop, and
+`ready_to_release` is constant False — the vacate is never granted by
+filters. `ConstructionPlan` gains `holder_mode` ("piece"|"king"): plans
+are mode-committed so the resolver cannot flip constructions move to
+move. `best_pawn_mate_template` prefers king-holder over any piece
+distance (a completed piece hold is worth zero by the release theorem; the
+corner race is worth 1/2). Note this preference is enumeration-wide, so
+pre-planner profiles could in principle see it — but only when a corner
+template exists (pawn at its pre-corner square + knight + right-shade
+bishop), which no legacy fixture start position has.
+
+Bot layer (`bot.py`): the hold filter pivots on the new
+`hold_established` (piece: holding blocker; king: king parked on
+arrival) so the parked king cannot wander; the release still deliberately
+bypasses it. Ordering is committed as "cage first, king takes the arrival
+square LAST" (pre-park construction can still reset the fifty-move clock;
+post-park play is all reversible): a regression-filter clause vetoes
+parking before the cage exists, the march filter gates king mode on the
+cage bishop being placed, and the cage filter routes the cage-colored
+bishop with landing-dominates-approaching commitment — the fallback
+search cannot rank those two because an adversarial premature-push line
+washes every candidate to the same template loss (found by the failing
+selftest: it played Be3 over Bg1 on a tiebreak). The transient-runway
+regression clause is piece-only now, since for a king holder the "runway"
+square IS the cage square. `_vi_choice` gains king-mode entry gates
+(parked + caged + corner free) and the existing `defender_steps <= 1`
+release path is the vacate gate: GOAL_VACATE at play time IS
+`score_release_moves` accepting, exactly as specified. Side-flips carry
+`holder_mode` (the corner's mirror is never a corner, so king-holder
+flips resolve to nothing and back off harmlessly). Heuristics: runway
+penalty gated off for king mode; hold bonus via `hold_established`; two
+new defaulted profile weights (`kh_bishop_pull`, `kh_knight_pull`, set on
+PLANNER lineage only) pull the cage bishop toward the corner and keep a
+knight in seal range. `endgames` now actually forwards `--vi-herders`
+(the flag existed but was dropped on the floor).
+
+Drill (endgames case 6, `R4N2/8/2k5/8/3B1P2/5Pp1/8/5K2 w`): king f1,
+bishop d4, rook a8, knight f8, pawns f3/f4 vs king c6 + g3-pawn. The bot
+must cage (Bg1), march (Kg2 — two plies of premature-push exposure,
+~1/pool per Zach move), VI-herd the king from c6 through the h6 door into
+the {h4,h5} pocket, close the door and time Ra5+, then win the audited
+vacate race. Drill design lesson: the first pose kept BOTH knights
+(g6+h6 sealed) and certified live-but-unconvertible with the defender
+outside — a sealed pocket cannot be entered; the h6 door with the rook
+closing it behind him is what makes the herd reach the goal states
+(pre-flight: live, complete audit, 6/8 goals convert at race 1/2).
+
+10 seeds, `--profile vi --vi-herders 1`: **5 converted** (34-90 plies,
+each ending in the exact motif mate g3-g2# against Kh1), 3 threefold
+repetitions DURING the herd (the documented deterministic-Zach
+path-extraction item, unchanged — now with a 1-second repro), 2 races
+lost to the premature push (the accepted 1/2 branch; single executioner
+by design — both ended as stalemates because with the pawn burned the
+rook seal leaves Zach no moves). Releases offered 7, won 5. Regression
+sweep: selftest 38 -> 43 all green (enumeration/preference/mode
+commitment; knight+bishop existence gates; cage-before-march with the
+early-park veto; march commitment; sealed-vs-unsealed vacate gating);
+motif suite verdicts and odds unchanged; case-2 seed-5 reproduces its
+documented line (fifty-move, 125 plies, 0/17, 156,163 probe nodes).
+
+Next, in expected-value order:
+
+1. In-graph path extraction / anti-threefold herding (now 3/10 of drill
+   seeds and the biggest single loss source): Zach's endgame pools are
+   often singletons, so the stationary VI policy retraces positions into
+   the arena's threefold rule even with the least-visited tie-break.
+2. Gate side-flips and terminal seeding on audited conversion (log item
+   2, unchanged) — a convertible side now exists to steer toward.
+3. Adoption pressure for king-holder plans in full games: the corner
+   template only exists once the executioner reaches its pre-corner
+   square, but piece-holder plans freeze the pawn far from it. Needs a
+   freeze-release / pawn-advance choreography before the mode can fire
+   from the standard fixtures.
+4. Multi-pawn race stacking; fifty-move feasibility from the solved MDP
+   (unchanged).

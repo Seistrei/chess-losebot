@@ -30,6 +30,7 @@ from .templates import (
     ConstructionPlan,
     PawnMateTemplate,
     best_pawn_mate_template,
+    kh_bishop_distance,
 )
 
 
@@ -203,12 +204,25 @@ class LoseBot:
             if (
                 not current.runway_blocked
                 and future.runway_blocked
+                and not future.king_holder
                 and future.our_king_steps >= current.our_king_steps
             ):
                 # A transient runway block is the only way through when the
                 # march must cross the runway square (Kc4-b4-a4 with a5
                 # covered by the executioner): permit it for marching steps,
-                # forbid it for everything else.
+                # forbid it for everything else. King-holder templates are
+                # exempt: their "runway" square IS the corner cage square,
+                # and blocking it with the bishop is the construction.
+                continue
+            if (
+                future.king_holder
+                and future.our_king_steps == 0
+                and current.our_king_steps > 0
+                and future.cage_occupancy < future.required_cage
+            ):
+                # The king takes the arrival square LAST. Post-park play is
+                # all reversible, so parking before the cage exists burns
+                # fifty-move clock the herd and the race will need.
                 continue
             if (
                 current.holding_blocker_defended
@@ -262,21 +276,27 @@ class LoseBot:
         moves: list[chess.Move],
         current: PawnMateTemplate | None,
     ) -> list[chess.Move]:
-        """March the king to its checked square once the hold is established.
+        """March the king to its parking square once its precondition holds.
 
         A depth-2 gradient never executes the march: some check or sacrifice
         always outscores the one-tempo distance gain, and the king shuffles
-        while majors get donated (the game_005 carousel). Once the executioner
-        is held and defended, the march is the only remaining use of tempo, so
-        commit to it the way the hold filter commits to the hold. The
-        regression filter upstream already removed king steps that would drop
-        the holder's defense or the cage reserve.
+        while majors get donated (the game_005 carousel). Piece mode marches
+        to the checked square once the executioner is held and defended;
+        king mode marches to the ARRIVAL square once the corner cage bishop
+        is placed — the king takes the arrival square last, so pre-park
+        construction can still reset the fifty-move clock. The regression
+        filter upstream already removed king steps that would drop the
+        holder's defense or the cage reserve.
         """
         if not self.profile.vi_herding or current is None:
             return moves
-        if (
-            current.our_king_steps <= 0
-            or not current.holding_blocker
+        if current.our_king_steps <= 0:
+            return moves
+        if current.king_holder:
+            if current.cage_occupancy < current.required_cage:
+                return moves
+        elif (
+            not current.holding_blocker
             or not current.holding_blocker_defended
         ):
             return moves
@@ -307,13 +327,45 @@ class LoseBot:
         moves: list[chess.Move],
         current: PawnMateTemplate | None,
     ) -> list[chess.Move]:
-        """With the king parked and the hold defended, complete the cage.
+        """Commit tempo to completing the cage while its gate is shut.
 
-        The herding sub-MDP refuses to engage below three cage occupants, and
-        the gradient dawdles over the last occupant the same way it dawdled
-        over the march. Commit tempo to cage-building until the gate opens.
+        The herding sub-MDP refuses to engage below the template's cage
+        requirement, and the gradient dawdles over the last occupant the
+        same way it dawdled over the march. Piece mode builds around the
+        parked king; king mode routes the cage-colored bishop to the corner
+        square BEFORE the king parks (the king takes the arrival square
+        last), accepting distance progress because the route is usually
+        multi-tempo.
         """
         if not self.profile.vi_herding or current is None:
+            return moves
+        us = board.turn
+        if current.king_holder:
+            if current.cage_occupancy >= current.required_cage:
+                return moves
+            baseline = kh_bishop_distance(board, us, current)
+            completing = []
+            routing = []
+            for move in moves:
+                board.push(move)
+                future = self.planned_target(board, us)
+                if future is not None:
+                    if future.cage_occupancy > current.cage_occupancy:
+                        completing.append(move)
+                    elif (
+                        future.cage_occupancy == 0
+                        and kh_bishop_distance(board, us, future) < baseline
+                    ):
+                        routing.append(move)
+                board.pop()
+            # Landing the bishop dominates approaching it: the fallback
+            # search cannot rank the two (an adversarial premature-push
+            # line washes every candidate to the same template loss), so
+            # the commitment must.
+            building = completing or routing
+            if building:
+                self.vi_cage_builds += 1
+                return building
             return moves
         if (
             current.our_king_steps != 0
@@ -322,8 +374,7 @@ class LoseBot:
             or not current.holding_blocker_defended
         ):
             return moves
-        us = board.turn
-        building: list[chess.Move] = []
+        building = []
         for move in moves:
             board.push(move)
             future = self.planned_target(board, us)
@@ -405,9 +456,21 @@ class LoseBot:
     ) -> chess.Move | None:
         """Race-release when the defender is delivered; otherwise follow the
         solved herding sub-MDP. Returns None to fall through the waterfall."""
-        if (
-            target is None
-            or target.our_king_steps > 0
+        if target is None:
+            return None
+        if target.king_holder:
+            # King mode engages once the king holds the arrival square, the
+            # corner bishop is caged, and the corner itself is free for the
+            # vacate. Occupied race squares are left to the build and the
+            # audit: they price the actual position honestly.
+            if (
+                target.our_king_steps > 0
+                or target.cage_occupancy < target.required_cage
+                or board.piece_at(target.checked_square) is not None
+            ):
+                return None
+        elif (
+            target.our_king_steps > 0
             or target.cage_occupancy < 3
             or not target.holding_blocker
             or not target.holding_blocker_defended
@@ -641,6 +704,7 @@ class LoseBot:
             pawn_file=self.plan.pawn_file,
             checked_side=-self.plan.checked_side,
             created_ply=ply,
+            holder_mode=self.plan.holder_mode,
         )
         mirrored_target = mirrored.resolve(board, board.turn)
         prospect = None
@@ -710,9 +774,12 @@ class LoseBot:
         planned_now = self.planned_target(board, board.turn)
         if (
             planned_now is not None
-            and planned_now.holding_blocker
+            and planned_now.hold_established
             and not planned_now.ready_to_release
         ):
+            # Piece mode holds the blocker; king mode holds the king itself.
+            # For a king holder the vacate never comes from lifting this
+            # filter — _vi_choice's release scoring bypasses it by design.
             held = planned_now.arrival_square
             keep_holding = [m for m in safe if m.from_square != held]
             if keep_holding:

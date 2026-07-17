@@ -21,6 +21,7 @@ from .templates import (
     ConstructionPlan,
     best_pawn_mate_template,
     herding_metrics,
+    pawn_mate_templates,
 )
 
 
@@ -1005,6 +1006,147 @@ def selftest() -> int:
         f"terminals={teleport_policy.report.terminals}",
     )
 
+    # 20a. King-holder template mode: on the exact vacate fixture the
+    # enumeration must produce a king-holder variant — our KING is the
+    # arrival holder, the march metric measures to the ARRIVAL square, the
+    # corner cage is the single g1 bishop — and the mode must outrank every
+    # piece-holder template (the release theorem prices those at zero).
+    # Plans are mode-committed: a piece-mode plan on the same board must
+    # keep resolving piece templates.
+    kha_board = chess.Board(motif["kh-corner-h"].fen)
+    kha_best = best_pawn_mate_template(kha_board, chess.WHITE)
+    kha_plan = (
+        None
+        if kha_best is None
+        else ConstructionPlan.from_template(kha_best, created_ply=0)
+    )
+    kha_resolved = (
+        None if kha_plan is None else kha_plan.resolve(kha_board, chess.WHITE)
+    )
+    kha_piece_plan = ConstructionPlan(
+        pawn_file=6, checked_side=1, created_ply=0
+    )
+    kha_piece = kha_piece_plan.resolve(kha_board, chess.WHITE)
+    check(
+        "king-holder template is enumerated, preferred, and mode-committed",
+        kha_best is not None
+        and kha_best.king_holder
+        and kha_best.uci == "g3g2"
+        and kha_best.checked_square == chess.H1
+        and kha_best.our_king_steps == 0
+        and kha_best.hold_established
+        and kha_best.cage_occupancy == 1
+        and kha_best.required_cage == 1
+        and kha_best.race_clear
+        and not kha_best.ready_to_release
+        and kha_best.kh_cage_square == chess.G1
+        and kha_best.kh_escape_square == chess.H2
+        and kha_best.kh_entry_square == chess.H3
+        and kha_best.kh_seal_square == chess.H4
+        and kha_best.kh_far_capture_square == chess.F2
+        and kha_plan is not None
+        and kha_plan.holder_mode == "king"
+        and kha_resolved is not None
+        and kha_resolved.king_holder
+        and kha_piece is not None
+        and not kha_piece.king_holder,
+        "none" if kha_best is None else (
+            f"{kha_plan.label}: king_steps={kha_best.our_king_steps}, "
+            f"cage={kha_best.cage_occupancy}, "
+            f"piece-plan resolves king_holder={None if kha_piece is None else kha_piece.king_holder}"
+        ),
+    )
+
+    # 20b. The mode's existence gates: the mate's sealing move must not give
+    # check, so a knight-class closer must exist; and no piece but a bishop
+    # is sound on the corner cage square (rook/queen there re-attack the
+    # arrival square and refute the mate, a knight covers the defender's
+    # entry), so a cage-colored bishop must exist too.
+    kh_no_knight = chess.Board(motif["kh-corner-h"].fen)
+    kh_no_knight.remove_piece_at(chess.F8)
+    knightless = [
+        t for t in pawn_mate_templates(kh_no_knight, chess.WHITE)
+        if t.king_holder
+    ]
+    kh_no_bishop = chess.Board(motif["kh-corner-h"].fen)
+    kh_no_bishop.remove_piece_at(chess.G1)
+    bishopless = [
+        t for t in pawn_mate_templates(kh_no_bishop, chess.WHITE)
+        if t.king_holder
+    ]
+    check(
+        "king-holder mode requires a knight closer and a cage bishop",
+        not knightless and not bishopless,
+        f"knightless={len(knightless)}; bishopless={len(bishopless)}",
+    )
+
+    # 20c. Construction order: the cage is built first and the king takes
+    # the arrival square LAST. From the construction drill start the cage
+    # filter must commit to Bg1 (the regression filter must not veto the
+    # landing — for a king holder the "runway" square IS the cage square),
+    # the regression filter must veto parking the king before the cage
+    # exists, and once the bishop lands the march filter must commit to Kg2.
+    drill_board = chess.Board(KING_HOLDER_DRILL_FEN)
+    drill_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi",
+        probe_cap=0, max_probe_n=1, vi_herders=1,
+    )
+    drill_mv1 = drill_bot.choose_move(drill_board)
+    drill_target = drill_bot.planned_target(drill_board, chess.WHITE)
+    early_park = drill_bot._filter_plan_regressions(
+        drill_board,
+        [chess.Move.from_uci("f1g2"), chess.Move.from_uci("d4g1")],
+        drill_target,
+    )
+    check(
+        "king-holder construction cages before the king parks",
+        drill_bot.plan is not None
+        and drill_bot.plan.holder_mode == "king"
+        and drill_mv1 == chess.Move.from_uci("d4g1")
+        and early_park == [chess.Move.from_uci("d4g1")]
+        and drill_bot.vi_cage_builds >= 1,
+        f"move={drill_board.san(drill_mv1)}; "
+        f"plan={'none' if drill_bot.plan is None else drill_bot.plan.label}; "
+        f"early-park-filter={[m.uci() for m in early_park]}",
+    )
+    drill_board.push(drill_mv1)
+    drill_board.push(chess.Move.from_uci("c6b5"))
+    drill_mv2 = drill_bot.choose_move(drill_board)
+    check(
+        "king-holder march commits once the cage bishop lands",
+        drill_mv2 == chess.Move.from_uci("f1g2")
+        and drill_bot.vi_king_marches >= 1,
+        f"move={drill_board.san(drill_mv2)}; "
+        f"marches={drill_bot.vi_king_marches}",
+    )
+
+    # 20d. The vacate is gated at play time on the audited race. On the
+    # sealed corner (kh-corner-h: rook already on a5, their king h4) the
+    # release scorer accepts Kh1 at race 1/2 and the bot plays it. On the
+    # unsealed pose (kh-herd-h4: rook still on a1, so h5 leaks) the same
+    # release is refused and the bot must keep the king parked and herd.
+    sealed_board = chess.Board(motif["kh-corner-h"].fen)
+    sealed_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+    )
+    sealed_mv = sealed_bot.choose_move(sealed_board)
+    unsealed_board = chess.Board(motif["kh-herd-h4"].fen)
+    unsealed_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+    )
+    unsealed_mv = unsealed_bot.choose_move(unsealed_board)
+    check(
+        "play vacates exactly when the scored race accepts",
+        sealed_mv == chess.Move.from_uci("g2h1")
+        and sealed_bot.vi_releases == 1
+        and unsealed_mv.from_square != chess.G2
+        and unsealed_bot.vi_releases == 0,
+        f"sealed={sealed_board.san(sealed_mv)} "
+        f"(releases={sealed_bot.vi_releases}); "
+        f"unsealed={unsealed_board.san(unsealed_mv)} "
+        f"(releases={unsealed_bot.vi_releases})",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -1031,6 +1173,18 @@ def selftest() -> int:
     return 1 if failures else 0
 
 
+# King-holder construction drill (case 6): the full corner pipeline from an
+# unassembled start — cage Bg1 first, march Kg2 last (two plies of premature
+# g3-g2 push risk, priced ~1/pool per Zach move), VI-herd the king from c6
+# into the {h4,h5} pocket (knight seals g6, pawns g4/g5, the king h3; h6 is
+# the door the rook closes behind him before the Ra5+ timing), then the
+# audited vacate race. The post-construction pose certifies live with a
+# complete audit: 6/8 goal-vacate terminals convert at race 1/2. Run with
+# --vi-herders 1: a second herder blows the state cap. A lost race eats the
+# only executioner, so seeds converting at ~1/2 after surviving
+# construction is the theoretical ceiling.
+KING_HOLDER_DRILL_FEN = "R4N2/8/2k5/8/3B1P2/5Pp1/8/5K2 w - - 0 1"
+
 # Conversion drills: Zach is already stripped to king+pawns; can LoseBot
 # force him to deliver mate? This is the phase where full games stall.
 ENDGAME_FENS = [
@@ -1039,6 +1193,7 @@ ENDGAME_FENS = [
     "7k/7p/8/8/8/3B4/PPP1QPPP/2KR3R w - - 0 1",
     "4k3/3p1p2/4p3/8/8/2N5/PPPQBPPP/2KR3R w - - 0 1",
     "1k6/p1p5/8/8/5B2/2N5/PPP1QPPP/2KR4 w - - 0 1",
+    KING_HOLDER_DRILL_FEN,
 ]
 
 
@@ -1059,6 +1214,7 @@ def endgames(args) -> int:
             profile=args.profile,
             probe_cap=args.probe_cap,
             max_probe_n=args.probe_depth,
+            vi_herders=args.vi_herders,
         )
         zach = ZachBot(seed=args.seed + i)
         start_board = chess.Board(fen)
