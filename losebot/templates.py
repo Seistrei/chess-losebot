@@ -83,6 +83,14 @@ class PawnMateTemplate:
     # entry) are free of construction debt right now.
     king_holder: bool = False
     race_clear: bool = True
+    # Prospective king-holder walk: the corner geometry only becomes real
+    # once the executioner reaches its pre-corner square, so a template for
+    # a pawn still above it carries the number of Zach pushes outstanding
+    # (pawn_walk) and how many of OUR movable men currently stand on the
+    # walk path or the future arrival square (walk_blockers — the
+    # freeze-release debt). Both are 0 on every posed template.
+    pawn_walk: int = 0
+    walk_blockers: int = 0
 
     @property
     def setup_distance(self) -> int:
@@ -94,6 +102,8 @@ class PawnMateTemplate:
                 + (2 if self.cage_occupancy == 0 else 0)
                 + (2 if self.arrival_blocked else 0)
                 + (0 if self.race_clear else 1)
+                + 2 * self.pawn_walk
+                + self.walk_blockers
             )
         return (
             self.our_king_steps
@@ -168,6 +178,29 @@ class PawnMateTemplate:
     def kh_far_capture_square(self) -> chess.Square:
         return _kh_squares(self.arrival_square, self.checked_square)[4]
 
+    @property
+    def kh_closer_park_square(self) -> chess.Square:
+        """Where the knight closer waits out the herd.
+
+        The mate's seal move must land on a square covering the seal square
+        in ONE hop at release time, but any park inside seal range attacks
+        the pocket, the entry, or the rank-six gate their king must cross —
+        the b4-knight failure: parked at pull-satisfied range, its coverage
+        of a6/c6 sealed the only lane into the pocket and the side
+        certified dead against our own statics. Two files inward from the
+        corner on the FAR back rank is the unique park that hops to the
+        seal-cover square (c8-b6 mirroring the drill's f8-g6) while
+        attacking nothing their king needs; the construction drill's
+        hand-placed f8 knight is exactly this square, which is how the
+        geometry was discovered.
+        """
+        corner_file = chess.square_file(self.checked_square)
+        corner_rank = chess.square_rank(self.checked_square)
+        return chess.square(
+            2 if corner_file == 0 else 5,
+            7 - corner_rank,
+        )
+
 
 @dataclass(frozen=True)
 class ConstructionPlan:
@@ -238,6 +271,8 @@ def _king_holder_template(
     runway_blocked: bool,
     knights: chess.SquareSet,
     bishops: chess.SquareSet,
+    pawn_walk: int = 0,
+    walk_blockers: int = 0,
 ) -> PawnMateTemplate | None:
     """The corner king-holder variant of one (pawn, arrival, checked) triple.
 
@@ -299,6 +334,88 @@ def _king_holder_template(
         holding_blocker_defended=False,
         king_holder=True,
         race_clear=race_clear,
+        pawn_walk=pawn_walk,
+        walk_blockers=walk_blockers,
+    )
+
+
+def _prospective_king_holder_template(
+    board: chess.Board,
+    us: chess.Color,
+    our_king: chess.Square,
+    their_king: chess.Square,
+    pawn_square: chess.Square,
+    knights: chess.SquareSet,
+    bishops: chess.SquareSet,
+) -> PawnMateTemplate | None:
+    """The corner king-holder template a pawn WILL support once it walks.
+
+    A corner template only exists once the executioner stands on its
+    pre-corner square, but every plan built before that freezes the pawn far
+    away — so adoption needs a template that names the future geometry while
+    the pawn is still walking. Only b- and g-file pawns have a corner at
+    all, and the walk is Zach-paced: we release the freeze and keep the file
+    clear; his uniform kernel supplies the pushes.
+
+    Emitted only when the walk is possible at all: no piece of theirs on
+    the path (we cannot clear it), no pawn of ours on the path or the
+    future arrival square (pawns cannot leave the file — a push merely
+    plugs the walk higher up). Our movable men on those squares are counted
+    as walk_blockers instead: stepping aside is the freeze-release debt.
+    All corner squares are computed from the FINAL arrival, so the fixed
+    race geometry (cage shade, knight closer) is checked against the
+    construction that will actually pose.
+    """
+    them = not us
+    file = chess.square_file(pawn_square)
+    if file not in (1, 6):
+        return None
+    step = 8 if them == chess.WHITE else -8
+    rank = chess.square_rank(pawn_square)
+    pre_rank = 5 if them == chess.WHITE else 2
+    walking = rank < pre_rank if them == chess.WHITE else rank > pre_rank
+    if not walking:
+        return None
+
+    final_pawn = chess.square(file, pre_rank)
+    arrival = final_pawn + step
+    corner_file = 0 if file == 1 else 7
+    corner_rank = 7 if them == chess.WHITE else 0
+    checked_square = chess.square(corner_file, corner_rank)
+
+    occupant = board.piece_at(arrival)
+    if occupant is not None and (
+        occupant.color != us or occupant.piece_type == chess.PAWN
+    ):
+        return None
+    blockers = 0
+    square = pawn_square + step
+    while True:
+        piece = board.piece_at(square)
+        if piece is not None:
+            if piece.color != us:
+                return None
+            if piece.piece_type == chess.PAWN:
+                return None
+            if piece.piece_type != chess.KING:
+                # The king's own transit is already priced by its march.
+                blockers += 1
+        if square == final_pawn:
+            break
+        square += step
+
+    # One Zach push covers two ranks from the home square.
+    home_rank = 1 if them == chess.WHITE else 6
+    walk = abs(pre_rank - rank) - (1 if rank == home_rank else 0)
+    runway_square = arrival + step
+    runway_piece = (
+        board.piece_at(runway_square) if 0 <= runway_square < 64 else None
+    )
+    runway_blocked = runway_piece is not None and runway_piece.color == us
+    return _king_holder_template(
+        board, us, our_king, their_king, pawn_square, arrival,
+        checked_square, runway_blocked, knights, bishops,
+        pawn_walk=walk, walk_blockers=blockers,
     )
 
 
@@ -381,12 +498,26 @@ def pawn_mate_templates(board: chess.Board,
             )
             if king_variant is not None:
                 templates.append(king_variant)
+        walking_variant = _prospective_king_holder_template(
+            board, us, our_king, their_king, pawn_square, knights, bishops,
+        )
+        if walking_variant is not None:
+            templates.append(walking_variant)
     return templates
 
 
 def best_pawn_mate_template(board: chess.Board,
                             us: chess.Color) -> PawnMateTemplate | None:
     templates = pawn_mate_templates(board, us)
+    # Walking (prospective) king-holder templates are resolution targets for
+    # a plan that has already committed to the adoption, never fresh-plan
+    # material: the walk is speculative Zach-paced work, and steering toward
+    # it is keyed on the committed side's audited-conversion verdict, not on
+    # template ranking.
+    templates = [
+        target for target in templates
+        if not (target.king_holder and target.pawn_walk > 0)
+    ]
     if not templates:
         return None
     # King-holder templates outrank piece holders whatever their distance:

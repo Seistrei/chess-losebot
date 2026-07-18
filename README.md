@@ -57,6 +57,12 @@ docker run --rm losebot pypy3 -m losebot endgames --profile herding `
 docker run --rm losebot pypy3 -m losebot endgames --profile vi `
   --case 2 --seed 5 --max-plies 240 --probe-cap 10000 --probe-depth 3
 
+# King-holder corner drills: case 6 builds the corner from a delivered
+# pawn; case 7 starts from a certified-dead piece construction, adopts
+# the corner plan, and walks the executioner to it
+docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+  --case 7 --seed 1 --vi-herders 1 --max-plies 240 --show-fen
+
 # Adjudicate conversion motifs (king-holder release, forced capture-mate)
 # with the conversion audit under research budgets
 docker run --rm losebot pypy3 -m losebot motifs
@@ -139,8 +145,16 @@ the premature pawn push are legalized by the same vacate tempo. King-holder
 template mode builds that construction in real games (cage-first,
 king-parks-last, vacate gated on the audited race) and converts the
 dedicated drill; the tuning log records the geometry rules the probe
-taught, and the next step is adoption pressure so full games route
-executioner pawns toward corner templates at all.
+taught. Adoption pressure routes full games there: a side whose certify
+verdict comes back hopeless or unconvertible replaces its piece plan
+with the corner king-holder plan of a walkable b/g-file pawn (walking
+templates name the corner geometry before it exists), releases the
+freeze, marches the king to the arrival square FIRST (pending pushes
+make the walk clock-free, and the parked king stops the premature
+push), cages the bishop, parks the knight closer on its template
+square, and waits out Zach's uniform pushes behind a funnel guard that
+shares the arena's draw adjudications — then the ordinary certify,
+herd, and audited-race machinery finishes the game.
 
 ## Roadmap
 

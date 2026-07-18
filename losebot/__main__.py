@@ -1465,6 +1465,250 @@ def selftest() -> int:
         f"hopeless fired={hopeless_fired}",
     )
 
+    # 22a. Prospective king-holder templates name the corner geometry while
+    # the executioner is still walking: fixed corner, cage, entry, seal and
+    # park squares from the FINAL arrival, the outstanding Zach pushes in
+    # pawn_walk, our men on the path in walk_blockers. They are resolution
+    # targets for a committed king-mode plan only — fresh-plan selection
+    # must keep returning the piece template, because steering toward a
+    # walk is keyed on the committed side's audited verdict, not ranking.
+    adopt_board = chess.Board(ADOPTION_DRILL_FEN)
+    walking = [
+        t for t in pawn_mate_templates(adopt_board, chess.WHITE)
+        if t.king_holder
+    ]
+    adopt_best = best_pawn_mate_template(adopt_board, chess.WHITE)
+    adopt_plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king"
+    )
+    adopt_resolved = adopt_plan.resolve(adopt_board, chess.WHITE)
+    check(
+        "walking king-holder templates carry the corner and the debt",
+        len(walking) == 1
+        and walking[0].uci == "b6b2"
+        and walking[0].checked_square == chess.A1
+        and walking[0].pawn_walk == 3
+        and walking[0].walk_blockers == 2
+        and walking[0].kh_cage_square == chess.B1
+        and walking[0].kh_entry_square == chess.A3
+        and walking[0].kh_seal_square == chess.A4
+        and walking[0].kh_closer_park_square == chess.C8
+        and kha_best is not None
+        and kha_best.kh_closer_park_square == chess.F8
+        and adopt_best is not None
+        and not adopt_best.king_holder
+        and adopt_resolved is not None
+        and adopt_resolved.pawn_walk == 3,
+        f"kh={[t.uci for t in walking]}; "
+        f"best={'none' if adopt_best is None else adopt_best.uci}; "
+        + (
+            "unresolved" if adopt_resolved is None else
+            f"resolves walk={adopt_resolved.pawn_walk}"
+            f"/blockers={adopt_resolved.walk_blockers}"
+        ),
+    )
+
+    # 22b. Walk feasibility vetoes. Our pawn on the final arrival square can
+    # never leave the file (case 2's b2 pawn — which is also why that
+    # battery reference cannot shift). A piece of theirs on the path is
+    # uncleanable by us, but the LOWER pawn then walks a shorter path and
+    # emits instead. No knight closer or no cage-shade bishop: no template.
+    case2_board = chess.Board(ENDGAME_FENS[1])
+    case2_kh = [
+        t for t in pawn_mate_templates(case2_board, chess.WHITE)
+        if t.king_holder
+    ]
+    lower_board = chess.Board("8/8/1p1k4/RR6/Kp6/1NPB4/8/8 w - - 0 1")
+    lower_kh = [
+        t for t in pawn_mate_templates(lower_board, chess.WHITE)
+        if t.king_holder
+    ]
+    knightless_board = chess.Board(ADOPTION_DRILL_FEN)
+    knightless_board.remove_piece_at(chess.B3)
+    shadeless_board = chess.Board(ADOPTION_DRILL_FEN)
+    shadeless_board.remove_piece_at(chess.D3)
+    shadeless_board.set_piece_at(
+        chess.E3, chess.Piece(chess.BISHOP, chess.WHITE)
+    )
+    check(
+        "walk vetoes: arrival pawns, their path men, missing kit",
+        not case2_kh
+        and len(lower_kh) == 1
+        and lower_kh[0].uci == "b4b2"
+        and lower_kh[0].pawn_walk == 1
+        and not [
+            t for t in pawn_mate_templates(knightless_board, chess.WHITE)
+            if t.king_holder
+        ]
+        and not [
+            t for t in pawn_mate_templates(shadeless_board, chess.WHITE)
+            if t.king_holder
+        ],
+        f"case2={len(case2_kh)}; lower={[t.uci for t in lower_kh]}",
+    )
+
+    # 22c. The adoption trigger. On the drill start the piece side's only
+    # herder subset (the d3 bishop — everything else is holder or cage)
+    # certifies dead, so the verdict is hopeless, the mirror cannot even
+    # pose (c4 is our own pawn), and the plan must be REPLACED: commit the
+    # corner king-holder plan, remember it, reset the policy era. The
+    # trigger is one-way — a king-mode plan never re-adopts.
+    adopt_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    adopt_bot._update_construction_plan(adopt_board, their_pieces=0)
+    piece_plan_first = (
+        adopt_bot.plan is not None
+        and adopt_bot.plan.holder_mode == "piece"
+    )
+    adopt_target = adopt_bot.planned_target(adopt_board, chess.WHITE)
+    _, adopt_verdict = adopt_bot._certify_herding(adopt_board, adopt_target, 1)
+    adopt_bot._vi_policy = object()  # observe the reset
+    adopted = adopt_bot._consider_kh_adoption(adopt_board)
+    readopted = adopt_bot._consider_kh_adoption(adopt_board)
+    check(
+        "a hopeless piece side adopts the corner king-holder plan once",
+        piece_plan_first
+        and adopt_verdict == "hopeless"
+        and adopted
+        and adopt_bot.plan.holder_mode == "king"
+        and adopt_bot.plan.label == "b-pawn/left/king"
+        and adopt_bot._kh_adoption == (1, -1)
+        and adopt_bot.vi_kh_adoptions == 1
+        and adopt_bot._vi_policy is None
+        and not readopted
+        and adopt_bot.vi_kh_adoptions == 1,
+        f"verdict={adopt_verdict}; adopted={adopted}; "
+        f"plan={'none' if adopt_bot.plan is None else adopt_bot.plan.label}",
+    )
+
+    # 22d. Adoption memory survives the plan era. A promotion mid-walk
+    # invalidates the plan; on the next king-and-pawns replan the sticky
+    # target must re-commit the king-holder plan directly instead of
+    # rebuilding a piece plan that would have to re-certify unconvertible
+    # before steering back here.
+    sticky_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    sticky_bot._kh_adoption = (1, -1)
+    sticky_bot._update_construction_plan(adopt_board, their_pieces=0)
+    check(
+        "remembered adoptions re-commit without a fresh piece plan",
+        sticky_bot.plan is not None
+        and sticky_bot.plan.holder_mode == "king"
+        and sticky_bot.plan.label == "b-pawn/left/king"
+        and sticky_bot.vi_kh_adoptions == 1,
+        f"plan={'none' if sticky_bot.plan is None else sticky_bot.plan.label}",
+    )
+
+    # 22e. Walk choreography gates. During the walk the ordering inverts:
+    # the king marches BEFORE the cage exists (pending pushes make the
+    # construction clock-free, and the parked king is the freeze that
+    # stops the premature push), and the early-park regression veto lifts
+    # for the same reason — while at arrival (pawn_walk == 0) both gates
+    # restore the drill's cage-first order. The walk-clear commitment
+    # keeps only freeze-releasing moves, and never one that shuffles a
+    # blocker along the path.
+    walk_board = chess.Board("8/8/1p1k4/R7/K1P5/2PB4/4N3/7R w - - 0 1")
+    walk_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    walk_bot.plan = adopt_plan
+    walk_target = walk_bot.planned_target(walk_board, chess.WHITE)
+    walk_march = walk_bot._filter_king_march(
+        walk_board,
+        [chess.Move.from_uci("a4b3"), chess.Move.from_uci("h1h2")],
+        walk_target,
+    )
+    arrived_board = chess.Board("8/8/3k4/R7/K1P5/1pPB4/4N3/7R w - - 0 1")
+    arrived_target = walk_bot.planned_target(arrived_board, chess.WHITE)
+    arrived_march = walk_bot._filter_king_march(
+        arrived_board,
+        [chess.Move.from_uci("a4b3"), chess.Move.from_uci("h1h2")],
+        arrived_target,
+    )
+    park_board = chess.Board("8/8/1p1k4/R7/2P5/2PB4/4N3/2K4R w - - 0 1")
+    park_target = walk_bot.planned_target(park_board, chess.WHITE)
+    walk_park = walk_bot._filter_plan_regressions(
+        park_board,
+        [chess.Move.from_uci("c1b2"), chess.Move.from_uci("h1h2")],
+        park_target,
+    )
+    parked_board = chess.Board("8/8/3k4/R7/2P5/1pPB4/4N3/2K4R w - - 0 1")
+    parked_target = walk_bot.planned_target(parked_board, chess.WHITE)
+    arrived_park = walk_bot._filter_plan_regressions(
+        parked_board,
+        [chess.Move.from_uci("c1b2"), chess.Move.from_uci("h1h2")],
+        parked_target,
+    )
+    clear_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    clear_bot.plan = adopt_plan
+    clear_target = clear_bot.planned_target(adopt_board, chess.WHITE)
+    cleared = clear_bot._filter_walk_clear(
+        adopt_board,
+        [
+            chess.Move.from_uci("b5e5"),
+            chess.Move.from_uci("b5b4"),
+            chess.Move.from_uci("a5a6"),
+        ],
+        clear_target,
+    )
+    check(
+        "walk gates invert the construction order until arrival",
+        walk_march == [chess.Move.from_uci("a4b3")]
+        and len(arrived_march) == 2
+        and chess.Move.from_uci("c1b2") in walk_park
+        and chess.Move.from_uci("c1b2") not in arrived_park
+        and cleared == [chess.Move.from_uci("b5e5")]
+        and clear_bot.vi_walk_clears == 1,
+        f"march walk={[m.uci() for m in walk_march]}"
+        f"/arrived={[m.uci() for m in arrived_march]}; "
+        f"park walk={[m.uci() for m in walk_park]}"
+        f"/arrived={[m.uci() for m in arrived_park]}; "
+        f"clear={[m.uci() for m in cleared]}",
+    )
+
+    # 22f. The wait phase shares the arena's adjudication oracle: a move
+    # whose own landing — or ANY Zach reply to it — the arena would call
+    # drawn is a funnel no tally of our own choices can see (the session-6
+    # lesson replayed outside the sub-MDP, where no policy exists to burn
+    # states). At halfmove 98 the quiet rook shuffle hands Zach a
+    # fifty-move completion; the wall push resets the clock and survives.
+    # The sub-MDP itself stays gated off while the pawn walks: geometry
+    # that is not posed cannot be certified, flipped, or released.
+    funnel_board = chess.Board("8/8/1p1k4/R7/K1P5/2PB4/4N3/7R w - - 98 60")
+    funnel_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    funnel_bot.plan = adopt_plan
+    funnel_target = funnel_bot.planned_target(funnel_board, chess.WHITE)
+    guarded_moves = funnel_bot._filter_wait_funnels(
+        funnel_board,
+        [chess.Move.from_uci("h1h2"), chess.Move.from_uci("c4c5")],
+        funnel_target,
+    )
+    gate_vi_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    gate_vi_bot.plan = adopt_plan
+    gate_walk_target = gate_vi_bot.planned_target(walk_board, chess.WHITE)
+    gate_choice = gate_vi_bot._vi_choice(
+        walk_board, gate_walk_target, list(walk_board.legal_moves)
+    )
+    check(
+        "the wait phase dodges adjudication funnels and skips the sub-MDP",
+        guarded_moves == [chess.Move.from_uci("c4c5")]
+        and funnel_bot.vi_wait_funnel_guards == 1
+        and gate_walk_target is not None
+        and gate_walk_target.pawn_walk == 3
+        and gate_choice is None
+        and gate_vi_bot.vi_builds == 0,
+        f"guarded={[m.uci() for m in guarded_moves]}; "
+        f"vi builds during walk={gate_vi_bot.vi_builds}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -1503,6 +1747,20 @@ def selftest() -> int:
 # construction is the theoretical ceiling.
 KING_HOLDER_DRILL_FEN = "R4N2/8/2k5/8/3B1P2/5Pp1/8/5K2 w - - 0 1"
 
+# King-holder ADOPTION drill (case 7): the full-game shape of the corner
+# motif. The b6 executioner is frozen by a completed piece-holder
+# construction (Rb5 holder defended, king parked a4, cage Ra5/Nb3/Rb5) whose
+# audit certifies the side unconvertible in one build — the release theorem
+# live and measured. The mirror flip cannot even pose (c4 is our own pawn),
+# so the gated reconsideration declines and the bot must REPLACE the plan:
+# adopt the a1-corner king-holder template for the same pawn (walk 3,
+# blockers Rb5+Nb3), release the freeze, march the king to b2 FIRST (during
+# a walk the pending pushes make construction clock-free and the parked
+# king stops the premature push structurally), cage Bd3-b1, wait out Zach's
+# uniform pushes, then herd into the {a4,a5} pocket behind the c3/c4 walls
+# — the drill-6 terminal mirrored to the queenside — and race the vacate.
+ADOPTION_DRILL_FEN = "8/8/1p1k4/RR6/K1P5/1NPB4/8/8 w - - 0 1"
+
 # Conversion drills: Zach is already stripped to king+pawns; can LoseBot
 # force him to deliver mate? This is the phase where full games stall.
 ENDGAME_FENS = [
@@ -1512,6 +1770,7 @@ ENDGAME_FENS = [
     "4k3/3p1p2/4p3/8/8/2N5/PPPQBPPP/2KR3R w - - 0 1",
     "1k6/p1p5/8/8/5B2/2N5/PPP1QPPP/2KR4 w - - 0 1",
     KING_HOLDER_DRILL_FEN,
+    ADOPTION_DRILL_FEN,
 ]
 
 
@@ -1572,6 +1831,8 @@ def endgames(args) -> int:
                 f"/hold{int(planned_target.holding_blocker)}"
                 f"/def{int(planned_target.holding_blocker_defended)}"
             )
+            if planned_target.king_holder:
+                plan_progress += f"/walk{planned_target.pawn_walk}"
         print(
             f"endgame {i}: {'CONVERTED (got mated)' if won else reason}"
             f" in {len(board.move_stack)} plies"
@@ -1620,11 +1881,15 @@ def endgames(args) -> int:
                 f" ({bot.vi_conversion_flips} conversion-gated,"
                 f" prospect={bot.vi_flip_value});"
                 f" unconvertible-sides={bot.vi_unconvertible_sides};"
+                f" kh-adoptions={bot.vi_kh_adoptions};"
                 f" dead-certs={bot.vi_dead_certificates};"
                 f" re-solves={bot.vi_resolves};"
                 f" king-marches={bot.vi_king_marches};"
+                f" walk-clears={bot.vi_walk_clears};"
+                f" closer-parks={bot.vi_closer_parks};"
                 f" cage-builds={bot.vi_cage_builds};"
                 f" capture-guards={bot.vi_capture_guards};"
+                f" funnel-guards={bot.vi_wait_funnel_guards};"
                 f" burn-updates={bot.vi_burn_updates}"
                 f" ({bot.vi_burned_states} burned at end);"
                 f" pool-mismatches={bot.vi_pool_mismatches};"

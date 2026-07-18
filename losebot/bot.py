@@ -31,6 +31,7 @@ from .templates import (
     PawnMateTemplate,
     best_pawn_mate_template,
     kh_bishop_distance,
+    pawn_mate_templates,
 )
 
 
@@ -90,6 +91,13 @@ class LoseBot:
         # certify sweep completed and every live subset's audit completed
         # with nothing converting. Keyed to the same era as the policy.
         self._vi_side_unconvertible = False
+        # King-holder adoption memory: (pawn_file, checked_side) of the last
+        # corner adoption, surviving plan eras deliberately — a promotion
+        # mid-walk invalidates the plan, and without this the rebuilt piece
+        # plan would have to re-certify its side unconvertible before
+        # re-steering at the same corner. Feasibility is re-checked at every
+        # use, so a stale target can only cost the one resolve that fails.
+        self._kh_adoption: tuple[int, int] | None = None
         self.vi_builds = 0
         self.vi_build_failures = 0
         self.vi_build_ms = 0.0
@@ -107,6 +115,10 @@ class LoseBot:
         self.vi_side_flips = 0
         self.vi_conversion_flips = 0
         self.vi_unconvertible_sides = 0
+        self.vi_kh_adoptions = 0
+        self.vi_walk_clears = 0
+        self.vi_closer_parks = 0
+        self.vi_wait_funnel_guards = 0
         self.vi_flip_value: float | None = None
         self.vi_king_marches = 0
         self.vi_capture_guards = 0
@@ -165,20 +177,37 @@ class LoseBot:
         )
         if target is None:
             replacement = best_pawn_mate_template(board, board.turn)
-            if replacement is None:
+            remembered = self._resolve_kh_adoption(board)
+            if remembered is not None and (
+                replacement is None or not replacement.king_holder
+            ):
+                # A remembered corner adoption outranks a fresh piece plan:
+                # the piece side would only re-certify unconvertible and
+                # re-steer here, at the cost of a full sweep. A posed
+                # king-holder best template still wins over the memory —
+                # it is real, not speculative.
+                if self.plan is not None:
+                    self.plan_invalidations += 1
+                self.plan = remembered
+                self.plans_created += 1
+                self.vi_kh_adoptions += 1
+                self._reset_vi_state()
+                target = self.plan.resolve(board, board.turn)
+            elif replacement is None:
                 if self.plan is not None:
                     self.plan_invalidations += 1
                     self.plan = None
                     self._reset_vi_state()
                 return
-            if self.plan is not None:
-                self.plan_invalidations += 1
-            self.plan = ConstructionPlan.from_template(
-                replacement, len(board.move_stack)
-            )
-            self.plans_created += 1
-            self._reset_vi_state()
-            target = replacement
+            else:
+                if self.plan is not None:
+                    self.plan_invalidations += 1
+                self.plan = ConstructionPlan.from_template(
+                    replacement, len(board.move_stack)
+                )
+                self.plans_created += 1
+                self._reset_vi_state()
+                target = replacement
 
         distance = target.setup_distance
         if self.best_plan_distance is None:
@@ -212,6 +241,18 @@ class LoseBot:
             board.pop()
             if future is None:
                 continue
+            if (
+                current.king_holder
+                and board.piece_type_at(move.from_square) == chess.PAWN
+                and not (future.race_clear and not current.race_clear)
+            ):
+                # In king-holder mode every one of our pawns is either a
+                # pocket wall or inert: a push can only strip audited
+                # coverage (the clock-urgent c4-c5 push attacked b6/d6 and
+                # sealed the herd's own rank-six gate). The one exception
+                # is a push that clears a race square the pawn itself
+                # blocks — that debt has no other payer.
+                continue
             if future.our_king_steps > current.our_king_steps:
                 continue
             if future.cage_occupancy < minimum_cage:
@@ -231,13 +272,26 @@ class LoseBot:
                 continue
             if (
                 future.king_holder
+                and future.pawn_walk == 0
                 and future.our_king_steps == 0
                 and current.our_king_steps > 0
                 and future.cage_occupancy < future.required_cage
             ):
                 # The king takes the arrival square LAST. Post-park play is
                 # all reversible, so parking before the cage exists burns
-                # fifty-move clock the herd and the race will need.
+                # fifty-move clock the herd and the race will need. During
+                # a walk the ordering inverts: the executioner still owes
+                # clock-resetting pushes, so an early park is free — and it
+                # is the one freeze that makes the premature push (the
+                # accepted 1/2 race of the drill) structurally impossible.
+                continue
+            if (
+                future.king_holder
+                and future.pawn_walk > 0
+                and future.walk_blockers > current.walk_blockers
+            ):
+                # Never park a piece back onto the walk path: every blocker
+                # is a Zach push the adoption cannot collect.
                 continue
             if (
                 current.holding_blocker_defended
@@ -250,6 +304,52 @@ class LoseBot:
         if stable:
             self.plan_regressions_filtered += len(moves) - len(stable)
             return stable
+        return moves
+
+    def _filter_wait_funnels(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        current: PawnMateTemplate | None,
+    ) -> list[chess.Move]:
+        """Never hand Zach a move that adjudicates the game drawn.
+
+        King-holder plans spend long stretches on the fallback search with
+        no solved policy underneath: the walk's wait (the sub-MDP cannot
+        exist before the geometry poses) and every post-arrival stall
+        where the side certified dead or unconvertible and _vi_choice
+        returns None. The repetition filter prunes our own second visits,
+        but the arena draws the THIRD occurrence and Zach's reply can
+        complete it on an our-turn position no tally of our own choices
+        sees (the session-6 funnel lesson replayed outside the sub-MDP —
+        the drill's walk-phase ply-70 repetition, then seeds 5/6/8 drawing
+        the same way AFTER arrival). One ply of lookahead over his support
+        pool against the arena's own adjudication oracle closes that door
+        for the whole king-holder regime. The live herd is untouched:
+        _vi_choice reads the pre-guard candidate list and prices threefold
+        exactly by burning.
+        """
+        if not self.profile.vi_herding or current is None:
+            return moves
+        if not current.king_holder:
+            return moves
+        fresh: list[chess.Move] = []
+        for move in moves:
+            board.push(move)
+            trapped = arena_draw(board) is not None
+            if not trapped:
+                for reply in support_zach(board):
+                    board.push(reply)
+                    trapped = arena_draw(board) is not None
+                    board.pop()
+                    if trapped:
+                        break
+            board.pop()
+            if not trapped:
+                fresh.append(move)
+        if fresh and len(fresh) < len(moves):
+            self.vi_wait_funnel_guards += len(moves) - len(fresh)
+            return fresh
         return moves
 
     def _filter_forced_captures(
@@ -285,6 +385,46 @@ class LoseBot:
             return guarded
         return moves
 
+    def _filter_walk_clear(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        current: PawnMateTemplate | None,
+    ) -> list[chess.Move]:
+        """Release the freeze: clear our men off the adopted pawn's walk.
+
+        The walk is the slow, Zach-paced half of the adoption, so it starts
+        first — every ply a blocker stands on the path is a push the
+        uniform kernel cannot offer. The same dawdling that stalled the
+        march and the cage stalls this: no depth-2 gradient trades a check
+        for a quiet sidestep, so the clearing is a commitment. Fires only
+        while a king-holder plan is walking and blocked; the regression
+        filter upstream already forbids re-blocking.
+        """
+        if not self.profile.vi_herding or current is None:
+            return moves
+        if (
+            not current.king_holder
+            or current.pawn_walk == 0
+            or current.walk_blockers == 0
+        ):
+            return moves
+        us = board.turn
+        clearing: list[chess.Move] = []
+        for move in moves:
+            board.push(move)
+            future = self.planned_target(board, us)
+            board.pop()
+            if (
+                future is not None
+                and future.walk_blockers < current.walk_blockers
+            ):
+                clearing.append(move)
+        if clearing:
+            self.vi_walk_clears += 1
+            return clearing
+        return moves
+
     def _filter_king_march(
         self,
         board: chess.Board,
@@ -308,7 +448,16 @@ class LoseBot:
         if current.our_king_steps <= 0:
             return moves
         if current.king_holder:
-            if current.cage_occupancy < current.required_cage:
+            # During a walk the cage gate lifts and the ordering inverts:
+            # pending pawn pushes make pre-arrival construction clock-free,
+            # and the parked king is the freeze that stops the executioner
+            # dead on its pre-corner square — so the king marches FIRST.
+            # The cage bishop can never need the king's square (arrival and
+            # corner cage sit on opposite shades), so nothing is walled in.
+            if (
+                current.pawn_walk == 0
+                and current.cage_occupancy < current.required_cage
+            ):
                 return moves
         elif (
             not current.holding_blocker
@@ -404,6 +553,65 @@ class LoseBot:
             return building
         return moves
 
+    def _filter_closer_park(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        current: PawnMateTemplate | None,
+    ) -> list[chess.Move]:
+        """Walk the knight closer to its park square while the pawn walks.
+
+        The release probe needs the closer ONE hop from the seal-cover
+        square at race time, but every seal-range park attacks the pocket
+        or the gate their king must cross (the b4-knight failure certified
+        the herd dead against our own statics). The template's park square
+        is the unique out-of-the-way one-hop station, and the walk is the
+        one phase where knight tempo is free — pending pawn pushes reset
+        the clock, and the herd has not started. Fires after the freeze
+        release, the march, and the cage: the park is the last chore.
+        """
+        if not self.profile.vi_herding or current is None:
+            return moves
+        if (
+            not current.king_holder
+            or current.pawn_walk == 0
+            or current.walk_blockers > 0
+            or current.our_king_steps > 0
+            or current.cage_occupancy < current.required_cage
+        ):
+            return moves
+        us = board.turn
+        park = current.kh_closer_park_square
+        knights = board.pieces(chess.KNIGHT, us)
+        if not knights:
+            return moves
+        baseline = min(
+            chess.square_knight_distance(sq, park) for sq in knights
+        )
+        if baseline == 0:
+            return moves
+        parking: list[chess.Move] = []
+        for move in moves:
+            if board.piece_type_at(move.from_square) != chess.KNIGHT:
+                continue
+            board.push(move)
+            future = self.planned_target(board, us)
+            improved = False
+            if future is not None:
+                squares = board.pieces(chess.KNIGHT, us)
+                if squares:
+                    improved = min(
+                        chess.square_knight_distance(sq, park)
+                        for sq in squares
+                    ) < baseline
+            board.pop()
+            if improved:
+                parking.append(move)
+        if parking:
+            self.vi_closer_parks += 1
+            return parking
+        return moves
+
     def _filter_forced_herding(
         self,
         board: chess.Board,
@@ -474,6 +682,11 @@ class LoseBot:
         if target is None:
             return None
         if target.king_holder:
+            # A walking adoption has no posed geometry yet: the sub-MDP's
+            # frozen-pawn contract cannot hold while the walk is the point,
+            # so certification, flips, and releases all wait for arrival.
+            if target.pawn_walk > 0:
+                return None
             # King mode engages once the king holds the arrival square, the
             # corner bishop is caged, and the corner itself is free for the
             # vacate. Occupied race squares are left to the build and the
@@ -532,17 +745,28 @@ class LoseBot:
             if verdict == "hopeless":
                 # Every maximal herder subset of this frozen configuration
                 # is certified dead: the side is hopeless as built, so the
-                # only remaining question is the mirrored checked square —
-                # live there is enough, since here there is nothing to keep.
-                self._consider_side_flip(board, limit)
+                # only remaining questions are the mirrored checked square
+                # (live there is enough — here there is nothing to keep)
+                # and, failing that, a corner adoption: a walkable king-
+                # holder template beats staying on a certified-dead side.
+                if not self._consider_side_flip(board, limit):
+                    self._consider_kh_adoption(board)
                 return None
             if verdict == "unconvertible":
                 # The side herds but provably cannot finish at audit depth:
-                # abandon it only for a mirror that positively converts.
+                # abandon it only for a mirror that positively converts —
+                # or replace the plan outright with a corner king-holder
+                # adoption, the one construction family the release theorem
+                # does not price at zero. The mirror flip keeps priority
+                # because its prospect is a certified fact about a posed
+                # position; the adoption is theorem-backed geometry whose
+                # audit only reruns once the walk delivers the pawn.
                 self.vi_unconvertible_sides += 1
                 if self._consider_side_flip(
                     board, limit, require_conversion=True
                 ):
+                    return None
+                if self._consider_kh_adoption(board):
                     return None
         if policy is None or not policy.report.ok:
             return None
@@ -551,16 +775,20 @@ class LoseBot:
         if (
             self._vi_side_unconvertible
             and len(board.move_stack) >= self._vi_next_flip_ply
-            and self._consider_side_flip(
-                board, limit, require_conversion=True
-            )
         ):
             # The prospect's convertibility is position-dependent (their
             # king drifts, forced-mate pockets open), so an unconvertible
             # side re-probes the mirror whenever the cooldown expires —
             # certification only reruns on rebuilds, which a stable herd
-            # never triggers.
-            return None
+            # never triggers. A declined flip retries the corner adoption
+            # on the same cadence: its feasibility is position-dependent
+            # too (a path piece of theirs moves off, a bishop survives).
+            if self._consider_side_flip(
+                board, limit, require_conversion=True
+            ):
+                return None
+            if self._consider_kh_adoption(board):
+                return None
         # Price the arena's threefold rule into the values before reading
         # them: every state whose position this era has already seen twice
         # is a draw on re-entry, and Zach's replies can funnel play into
@@ -841,6 +1069,65 @@ class LoseBot:
         self._vi_next_flip_ply = ply + 8
         return False
 
+    def _resolve_kh_adoption(
+        self, board: chess.Board
+    ) -> ConstructionPlan | None:
+        """Re-pose the remembered corner adoption if it still resolves."""
+        if self._kh_adoption is None:
+            return None
+        pawn_file, checked_side = self._kh_adoption
+        plan = ConstructionPlan(
+            pawn_file=pawn_file,
+            checked_side=checked_side,
+            created_ply=len(board.move_stack),
+            holder_mode="king",
+        )
+        if plan.resolve(board, board.turn) is None:
+            return None
+        return plan
+
+    def _consider_kh_adoption(self, board: chess.Board) -> bool:
+        """Replace a certified-negative piece plan with a corner adoption.
+
+        The release theorem prices every completed piece-holder construction
+        at zero, and its mirror is the same theorem reflected — so when a
+        side certifies unconvertible (or hopeless) and the gated flip has
+        declined, the remaining move is a plan REPLACEMENT: commit to the
+        corner king-holder template of some walkable b/g-file pawn and start
+        the freeze-release choreography. Feasibility here is the template
+        emission itself (corner geometry, knight closer, cage-shade bishop,
+        walkable path); the conversion audit re-arbitrates once the pawn
+        arrives and the construction poses. Walking templates rank by the
+        same setup metric, so a pawn already at its pre-corner square is
+        preferred over any walk.
+        """
+        if self.plan is None or self.plan.holder_mode == "king":
+            return False
+        us = board.turn
+        candidates = [
+            target
+            for target in pawn_mate_templates(board, us)
+            if target.king_holder
+        ]
+        if not candidates:
+            return False
+        best = min(
+            candidates,
+            key=lambda target: (
+                target.setup_distance,
+                target.pawn_square,
+                target.checked_square,
+            ),
+        )
+        self.plan = ConstructionPlan.from_template(
+            best, len(board.move_stack)
+        )
+        self._kh_adoption = (self.plan.pawn_file, self.plan.checked_side)
+        self.plans_created += 1
+        self.vi_kh_adoptions += 1
+        self._reset_vi_state()
+        return True
+
     def choose_move(self, board: chess.Board) -> chess.Move:
         ply = len(board.move_stack)
         if self._last_seen_ply is not None and ply < self._last_seen_ply:
@@ -853,6 +1140,46 @@ class LoseBot:
         # the positions Zach's replies created — the ones a tally of our
         # own choices structurally missed — and resets with the era.
         return self._choose(board)
+
+    def _plan_filtered_moves(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        planned_now: PawnMateTemplate | None,
+    ) -> tuple[list[chess.Move], list[chess.Move]]:
+        """The plan-commitment filter chain, in waterfall order.
+
+        Returns ``(safe, safe_for_vi)``. VI keeps the pre-repetition list:
+        a herding policy's waiting moves are legitimate second visits, and
+        only threefold actually draws — _vi_choice prices threefold exactly
+        by burning twice-seen states into the solved values instead of
+        vetoing moves up front.
+        """
+        safe = moves
+        if (
+            planned_now is not None
+            and planned_now.hold_established
+            and not planned_now.ready_to_release
+        ):
+            # Piece mode holds the blocker; king mode holds the king itself.
+            # For a king holder the vacate never comes from lifting this
+            # filter — _vi_choice's release scoring bypasses it by design.
+            held = planned_now.arrival_square
+            keep_holding = [m for m in safe if m.from_square != held]
+            if keep_holding:
+                self.hold_moves_filtered += len(safe) - len(keep_holding)
+                safe = keep_holding
+        safe = self._filter_plan_regressions(board, safe, planned_now)
+        safe_for_vi = safe
+        safe = self._filter_plan_repetitions(board, safe)
+        safe = self._filter_wait_funnels(board, safe, planned_now)
+        safe = self._filter_forced_captures(board, safe, planned_now)
+        safe = self._filter_walk_clear(board, safe, planned_now)
+        safe = self._filter_king_march(board, safe, planned_now)
+        safe = self._filter_cage_build(board, safe, planned_now)
+        safe = self._filter_closer_park(board, safe, planned_now)
+        safe = self._filter_forced_herding(board, safe, planned_now)
+        return safe, safe_for_vi
 
     def _choose(self, board: chess.Board) -> chess.Move:
         legal = list(board.legal_moves)
@@ -873,30 +1200,10 @@ class LoseBot:
         )
         self._update_construction_plan(board, their_pieces)
         planned_now = self.planned_target(board, board.turn)
-        if (
-            planned_now is not None
-            and planned_now.hold_established
-            and not planned_now.ready_to_release
-        ):
-            # Piece mode holds the blocker; king mode holds the king itself.
-            # For a king holder the vacate never comes from lifting this
-            # filter — _vi_choice's release scoring bypasses it by design.
-            held = planned_now.arrival_square
-            keep_holding = [m for m in safe if m.from_square != held]
-            if keep_holding:
-                self.hold_moves_filtered += len(safe) - len(keep_holding)
-                safe = keep_holding
-        safe = self._filter_plan_regressions(board, safe, planned_now)
-        # VI keeps the pre-repetition list: a herding policy's waiting moves
-        # are legitimate second visits, and only threefold actually draws.
-        # _vi_choice prices threefold exactly by burning twice-seen states
-        # into the solved values instead of vetoing moves up front.
-        safe_for_vi = safe
-        safe = self._filter_plan_repetitions(board, safe)
-        safe = self._filter_forced_captures(board, safe, planned_now)
-        safe = self._filter_king_march(board, safe, planned_now)
-        safe = self._filter_cage_build(board, safe, planned_now)
-        safe = self._filter_forced_herding(board, safe, planned_now)
+        base_safe = safe
+        safe, safe_for_vi = self._plan_filtered_moves(
+            board, base_safe, planned_now
+        )
         if board.is_check():
             their_mobility = 99
         else:
@@ -977,10 +1284,22 @@ class LoseBot:
                 self.herd_search_exhaustions += 1
 
         if self.plan is not None and self.profile.vi_herding:
+            plan_before = self.plan
             vi_move = self._vi_choice(board, planned_now, safe_for_vi)
             if vi_move is not None:
                 self.vi_moves_played += 1
                 return vi_move
+            if self.plan is not plan_before:
+                # A side flip or a corner adoption replaced the plan
+                # mid-choice. Refilter the fallback candidates under the
+                # NEW plan: the transition ply must already obey the new
+                # mode's commitments, or it can leak a move the mode
+                # forbids — the ply-zero c4-c5 push that walled off the
+                # adopted pocket's own rank-six gate.
+                planned_now = self.planned_target(board, board.turn)
+                safe, _ = self._plan_filtered_moves(
+                    board, base_safe, planned_now
+                )
 
         if (
             self.plan is not None

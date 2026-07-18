@@ -146,16 +146,35 @@ def evaluate(board: chess.Board, root_color: chess.Color,
                     v -= profile.kh_bishop_pull * min(
                         8, kh_bishop_distance(board, us, target)
                     )
-                closer_distance = min(
-                    (
-                        chess.square_distance(sq, target.kh_seal_square)
-                        for sq in board.pieces(chess.KNIGHT, us)
-                    ),
-                    default=8,
-                )
-                # The closer must be one knight move from sealing when the
-                # race fires; inside radius two it can usually rearrange.
-                v -= profile.kh_knight_pull * max(0, closer_distance - 2)
+                if target.pawn_walk > 0:
+                    # During the walk the closer heads for its PARK square:
+                    # seal-range parks attack the pocket or the rank-six
+                    # gate and certify the herd dead against our own
+                    # statics (the b4-knight failure). Hop distance, not
+                    # Chebyshev — a chebyshev-adjacent square can be three
+                    # knight moves away and the gradient would strand it.
+                    closer_distance = min(
+                        (
+                            chess.square_knight_distance(
+                                sq, target.kh_closer_park_square
+                            )
+                            for sq in board.pieces(chess.KNIGHT, us)
+                        ),
+                        default=8,
+                    )
+                    v -= profile.kh_knight_pull * closer_distance
+                else:
+                    closer_distance = min(
+                        (
+                            chess.square_distance(sq, target.kh_seal_square)
+                            for sq in board.pieces(chess.KNIGHT, us)
+                        ),
+                        default=8,
+                    )
+                    # The closer must be one knight move from sealing when
+                    # the race fires; inside radius two it can usually
+                    # rearrange.
+                    v -= profile.kh_knight_pull * max(0, closer_distance - 2)
             elif target.ready_to_release:
                 if target.arrival_blocked:
                     v -= profile.plan_release_block_penalty

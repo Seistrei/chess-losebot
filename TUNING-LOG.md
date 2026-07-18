@@ -1036,3 +1036,176 @@ Next, in expected-value order:
 2. Fifty-move/clock feasibility from the solved MDP (unchanged; drill
    seed 2 is still the standing repro).
 3. Multi-pawn race stacking (unchanged).
+
+## King-holder adoption pressure: walking templates and the freeze release (2026-07-17)
+
+Log item 1 built — the corner motif now has a road into positions that
+never posed it. A king-holder template only exists once the executioner
+stands on its pre-corner square, and every plan built before that point
+froze the pawn ranks away; the sides that certify unconvertible had
+nothing to steer toward, because their mirrors are the same release
+theorem reflected. Adoption closes the loop:
+
+- **Walking templates.** `pawn_mate_templates` emits a PROSPECTIVE
+  king-holder template for each b/g-file pawn of theirs still above its
+  pre-corner square: corner, cage, entry, seal, far-capture and the new
+  closer-park square all fixed by the FINAL arrival; `pawn_walk` counts
+  the outstanding Zach pushes (double-push discounted); `walk_blockers`
+  counts OUR movable men on the path — the freeze-release debt
+  (2·walk + blockers joins setup_distance). Emission is walk
+  feasibility: a man of theirs on the path is uncleanable by us (the
+  LOWER pawn emits instead, with the shorter walk), a PAWN of ours on
+  the path or the arrival square can never leave the file (case 2's b2
+  pawn — which is why that battery reference cannot shift), and the
+  knight-closer / cage-shade-bishop gates are checked against the final
+  geometry. `best_pawn_mate_template` EXCLUDES walking templates: they
+  resolve only for a plan already committed to the adoption. Fresh
+  plans never start speculative — steering is keyed on the verdict.
+- **The trigger.** `_consider_kh_adoption` fires from the same certify
+  verdicts that arm the flip, after the flip declines: unconvertible
+  keeps the mirror's priority (a converting prospect is a certified
+  fact about a posed position; adoption is theorem-backed geometry
+  whose audit only reruns at arrival), hopeless takes any feasible
+  corner, and the cooldown-expiry reconsideration retries both on one
+  cadence. Adoption is one-way (king-mode plans never re-adopt) and
+  remembered: `_kh_adoption` survives plan eras, so a promotion
+  mid-walk re-commits at the next replan instead of paying a second
+  certify sweep. Fired by the drill at MOVE ONE: the piece side's only
+  herder subset (the d3 bishop — everything else is holder or cage)
+  certifies dead, and the mirror cannot even pose (c4 is our own pawn).
+- **Walk choreography.** During the walk the construction order
+  INVERTS: the executioner still owes clock-resetting pushes, so every
+  pre-arrival move is free — and the parked king is the freeze that
+  makes the premature push (the drill's accepted 1/2 race) structurally
+  impossible. The march therefore goes FIRST (the cage gate lifts; the
+  cage bishop can never need the king's square — arrival and corner
+  cage sit on opposite shades), then the cage, then the knight walks to
+  its park square. Commitment filters in chain order: walk-clear (only
+  freeze-releasing moves while the path is ours), march, cage,
+  closer-park (knight-hop distance, not Chebyshev — a chebyshev-adjacent
+  square can be three hops away). New regression clauses: never re-block
+  the path, never push OUR pawns in king mode (below), early-park veto
+  lifted while walking. At `pawn_walk == 0` every gate restores the
+  case-6 drill's cage-first order exactly.
+
+Three failures the first drill runs found, all fixed the same session:
+
+1. **Seal-range knight parks strangle the pocket.** The old
+   `kh_knight_pull` was SATISFIED at range-2 parks like b4, whose
+   coverage of a6/c6 — with a pushed c5 pawn covering b6/d6 — sealed
+   the entire rank-six gate their king must cross to reach the {a4,a5}
+   pocket: the herd certified dead against our own statics, honestly.
+   The template now derives `kh_closer_park_square` — two files inward
+   from the corner on the FAR back rank (c8 for a1, f8 for h1; the
+   case-6 drill's hand-placed f8 knight IS this square, which is how
+   the geometry was discovered) — the walk-phase pull targets it by
+   knight-hop distance, and a commitment filter parks it during the
+   wait. At arrival the pull reverts to the drill's seal-range form.
+2. **Our own pawn pushes strip audited coverage.** The clock-urgent
+   irreversible nudge pushed c4-c5 on the transition ply; c5 attacks
+   b6/d6 and (with the knight at b4) walled off the herd's own gate. In
+   king-holder mode every one of our pawns is a pocket wall or inert,
+   so the regression filter now vetoes our pawn moves outright — except
+   one that clears a race square the pawn itself blocks, a debt with no
+   other payer.
+3. **The transition ply ran under the stale plan.** A flip or adoption
+   fired inside `_vi_choice` left the rest of that ply's waterfall
+   filtered by the plan being abandoned (that is how c4-c5 slipped out:
+   the pawn veto was not active yet). The filter chain is now
+   `_plan_filtered_moves`, and _choose re-runs it under the new plan
+   whenever the plan identity changes mid-choice — side flips included.
+
+And one failure class fixed at the regime level: **funnels outside the
+sub-MDP.** King-holder plans spend long stretches on the fallback
+search with no policy underneath — the walk's wait (the sub-MDP cannot
+exist before the geometry poses; `_vi_choice` is gated on
+`pawn_walk == 0`) and every post-arrival stall where the side certified
+dead or unconvertible. The session-6 lesson replayed there move for
+move: our repetition filter prunes our own second visits, Zach's reply
+completes the third occurrence on a state no tally of our choices sees
+(walk-phase draw at ply 70; then seeds 5/6/8 drawing AFTER arrival with
+the first, walk-only guard). `_filter_wait_funnels` now runs for the
+whole king-holder regime: one ply of lookahead over the support pool
+against `arena_draw` — the arena's own oracle, so fifty-move landings
+are guarded by the same check — dropping any move whose landing or
+reply adjudicates. The live herd is untouched (VI reads the pre-guard
+candidate list and prices threefold by burning). The guard is
+horizon-one by construction: seeds 5/6 still draw through TWO-ply
+funnels (guarded-safe move, safe reply, forced continuation, draw), the
+known residual.
+
+Results — endgames case 7, the new ADOPTION DRILL
+(`8/8/1p1k4/RR6/K1P5/1NPB4/8/8 w`: a COMPLETE piece-holder
+construction — Rb5 holder defended, king parked a4, cage Ra5/Nb3/Rb5 —
+with the corner kit present and the b-file walkable), 10 seeds,
+`--profile vi --vi-herders 1`:
+
+- **2 CONVERTED (64/66 plies) — the first full-pipeline adoption
+  conversions ever**: piece side certified dead at move 1, adopted the
+  a1 corner, released the freeze (walk-clears=2 every seed), marched
+  Kb2 first, caged Bb1, parked the knight (closer-parks 4-8), waited
+  out the walk behind the funnel guard, certified the posed corner
+  live-and-converting (audits 6/7 at the good roots), herded, and won
+  the vacate race. Seed 8 is the guard's direct save: with the
+  walk-only guard it drew by repetition at ply 56; guarded, it
+  converted at 66.
+- 3 releases offered across the battery, 2 won, 1 lost (seed 0: the
+  premature-push branch promoted and the game died chasing the rook) —
+  consistent with the audited 1/2.
+- 5 fifty-move: the herd's binding constraint again (clock feasibility,
+  log item 2) — including two seeds with LIVE converting roots
+  (0.40/0.50) that ran out of plies mid-herd, and three where the kh
+  side itself certified live-but-unconvertible at the root their king's
+  walk-phase wanderings produced (audits 0/1-0/8: the pocket approach
+  matters, and nothing herds him during the walk yet).
+- 2 repetition: the two-ply funnels above.
+- Choreography reliability: every seed fired exactly one adoption and
+  completed the full construction (2 marches, 2 clears, 1 cage build).
+
+Suite 48 -> 54: walking-template emission and vetoes (the case-2 b2
+stability fact is now a test), the move-one hopeless-adopt trigger and
+its one-way guard, sticky re-adoption, the walk-order inversions (march
+pre-cage and early-park during the walk, both restored at arrival),
+walk-clear commitment, the funnel guard against a fifty-move landing,
+and the sub-MDP walk gate (no builds before the geometry poses).
+
+Full battery:
+
+- Case-6 drill, 10 seeds: **byte-identical to the session-6/7
+  reference** — 7 converted (48/52/34/64/42/38/34 plies), seed 2
+  fifty-move, seeds 7/9 stalemate. The widened funnel guard and the
+  king-mode pawn veto are live in every one of those games and changed
+  nothing: the drill never wanted a pawn push and never chose a
+  guarded funnel.
+- Case-2 seed-5: **same game to the move** — fifty-move in 125 plies,
+  47 VI moves, burn-updates=13 (0 at end), builds=10,
+  unconvertible-sides=2, side-flips=1 (0 gated), 48 goals audited
+  0-converting, 489,394 audit probe nodes, wall ~46s — with
+  kh-adoptions=0 by construction: our b2 pawn vetoes the b6
+  executioner's walk at emission (regression 22b states that fact as a
+  test), so every adoption attempt correctly declines. The
+  transition-ply refilter did not disturb the reference flip.
+- Motifs: verdicts and odds byte-identical (kh-corner-h/a and
+  kh-herd-h4 POSITIVE at 0.500; fm-organic-h/a and fm-deep-h POSITIVE
+  at 1.000; ph-contained-root NEGATIVE, all refusals DISPROVEN).
+
+Next, in expected-value order:
+
+1. Fifty-move/clock feasibility from the solved MDP — promoted again:
+   it owns five of the seven case-7 losses (two with LIVE converting
+   roots of 0.40/0.50 that simply ran out of herd plies), plus the
+   standing case-6 seed-2 repro.
+2. Walk-phase defender pressure: the kh side's convertibility at
+   arrival depends on where their king wandered during the walk
+   (audits 0/1-0/8 at bad roots vs 6/7 at good ones), and nothing
+   herds him while the sub-MDP cannot exist. Candidate: a lightweight
+   defender gradient toward the pocket approach during the wait.
+3. Deeper funnel pricing for the fallback regime: case-7 seeds 5/6
+   still draw through two-ply funnels the horizon-one guard cannot
+   see. The principled fix is a solved wait-phase MDP (or burning
+   generalized off-policy).
+4. Adoption from the standard fixtures: cases 1-5 all veto on our own
+   intact b2/g2 pawns. Real full games shed pawns constantly, so the
+   practical route is executioner selection during the strip phase —
+   prefer preserving THEIR b/g pawns on files where OUR pawn has
+   already died. Multi-pawn race stacking (unchanged).
