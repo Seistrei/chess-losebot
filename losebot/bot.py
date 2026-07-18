@@ -35,6 +35,40 @@ from .templates import (
 )
 
 
+def _closer_park_hop(board: chess.Board, us: chess.Color,
+                     park: chess.Square) -> int | None:
+    """Knight-hop distance of our nearest knight to the park square."""
+    knights = board.pieces(chess.KNIGHT, us)
+    if not knights:
+        return None
+    return min(
+        chess.square_knight_distance(square, park) for square in knights
+    )
+
+
+def _kh_race_debt(board: chess.Board, us: chess.Color,
+                  target: PawnMateTemplate) -> int:
+    """Occupied race squares still owed — race_clear, counted.
+
+    Mirrors the template's race_clear conditions exactly: any occupant on
+    the corner or the escape, OUR men on the entry and far-capture
+    squares. Counting instead of the boolean lets a pawn push that clears
+    ONE debt through the king-mode pawn veto even while another debt
+    remains (review P1: with pawns on both f2 and h2, neither clearing
+    push flipped the boolean, so both stayed vetoed forever).
+    """
+    debt = 0
+    if board.piece_at(target.checked_square) is not None:
+        debt += 1
+    if board.piece_at(target.kh_escape_square) is not None:
+        debt += 1
+    for square in (target.kh_entry_square, target.kh_far_capture_square):
+        piece = board.piece_at(square)
+        if piece is not None and piece.color == us:
+            debt += 1
+    return debt
+
+
 class LoseBot:
     def __init__(self, depth: int = 2, opponent_model: str | None = None,
                  name: str = "losebot", profile: str = "current",
@@ -234,24 +268,55 @@ class LoseBot:
         # Three occupants are the construction reserve. Surplus cage pieces
         # remain free to give forcing checks and herd the reluctant king.
         minimum_cage = min(current.cage_occupancy, 3)
+        race_debt = (
+            _kh_race_debt(board, us, current) if current.king_holder else 0
+        )
+        park_distance = (
+            _closer_park_hop(board, us, current.kh_closer_park_square)
+            if current.king_holder and current.pawn_walk > 0
+            else None
+        )
         stable: list[chess.Move] = []
         for move in moves:
             board.push(move)
             future = self.planned_target(board, us)
+            future_debt = (
+                _kh_race_debt(board, us, current)
+                if current.king_holder
+                and board.piece_type_at(move.to_square) == chess.PAWN
+                else race_debt
+            )
+            moved_park = (
+                _closer_park_hop(board, us, current.kh_closer_park_square)
+                if park_distance is not None
+                else None
+            )
             board.pop()
             if future is None:
                 continue
             if (
                 current.king_holder
                 and board.piece_type_at(move.from_square) == chess.PAWN
-                and not (future.race_clear and not current.race_clear)
+                and future_debt >= race_debt
             ):
                 # In king-holder mode every one of our pawns is either a
                 # pocket wall or inert: a push can only strip audited
                 # coverage (the clock-urgent c4-c5 push attacked b6/d6 and
                 # sealed the herd's own rank-six gate). The one exception
-                # is a push that clears a race square the pawn itself
-                # blocks — that debt has no other payer.
+                # is a push that strictly reduces the occupied race-square
+                # debt the pawn itself owes — counted, not the race_clear
+                # boolean, so clearing one debt is not vetoed for the
+                # crime of not clearing them all (review P1).
+                continue
+            if (
+                park_distance is not None
+                and moved_park is not None
+                and moved_park > park_distance
+            ):
+                # The parked closer stays parked for the rest of the walk:
+                # a wander the commitment filter would have to walk back
+                # can be interrupted by the pawn's arrival, freezing the
+                # seal unservable (review P1).
                 continue
             if future.our_king_steps > current.our_king_steps:
                 continue
@@ -340,7 +405,14 @@ class LoseBot:
             if not trapped:
                 for reply in support_zach(board):
                     board.push(reply)
-                    trapped = arena_draw(board) is not None
+                    # arena_draw leaves stalemate to the arena's separate
+                    # check, so a reply that stalemates US must be caught
+                    # here explicitly (review P2). A reply that MATES us
+                    # is the win and never trips is_stalemate.
+                    trapped = (
+                        board.is_stalemate()
+                        or arena_draw(board) is not None
+                    )
                     board.pop()
                     if trapped:
                         break
@@ -582,13 +654,8 @@ class LoseBot:
             return moves
         us = board.turn
         park = current.kh_closer_park_square
-        knights = board.pieces(chess.KNIGHT, us)
-        if not knights:
-            return moves
-        baseline = min(
-            chess.square_knight_distance(sq, park) for sq in knights
-        )
-        if baseline == 0:
+        baseline = _closer_park_hop(board, us, park)
+        if baseline is None or baseline == 0:
             return moves
         parking: list[chess.Move] = []
         for move in moves:
@@ -596,16 +663,9 @@ class LoseBot:
                 continue
             board.push(move)
             future = self.planned_target(board, us)
-            improved = False
-            if future is not None:
-                squares = board.pieces(chess.KNIGHT, us)
-                if squares:
-                    improved = min(
-                        chess.square_knight_distance(sq, park)
-                        for sq in squares
-                    ) < baseline
+            moved = _closer_park_hop(board, us, park)
             board.pop()
-            if improved:
+            if future is not None and moved is not None and moved < baseline:
                 parking.append(move)
         if parking:
             self.vi_closer_parks += 1
@@ -1133,6 +1193,13 @@ class LoseBot:
         if self._last_seen_ply is not None and ply < self._last_seen_ply:
             self.plan = None
             self.best_plan_distance = None
+            # A rewind is a game boundary, and the arena reuses bot
+            # instances across games. Adoption memory is scoped to the
+            # game whose audited verdicts earned it: without this, game
+            # N+1 would re-commit game N's corner without ever certifying
+            # a side (review P1). In-game plan resets keep it — that is
+            # its purpose (promotions mid-walk).
+            self._kh_adoption = None
             self._reset_vi_state()
         self._last_seen_ply = ply
         # No repetition tally lives here anymore: _vi_choice recounts the

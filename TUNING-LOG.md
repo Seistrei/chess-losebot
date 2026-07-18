@@ -1209,3 +1209,51 @@ Next, in expected-value order:
    practical route is executioner selection during the strip phase —
    prefer preserving THEIR b/g pawns on files where OUR pawn has
    already died. Multi-pawn race stacking (unchanged).
+
+### Review follow-up (2026-07-18, all four taken)
+
+External review of the adoption work: three P1s and one P2, every one
+verified against a concrete repro, and the fixes DOUBLED the drill.
+
+1. **Adoption memory leaked across games (P1).** The arena reuses bot
+   instances, and the rewind branch — the game boundary — reset the
+   plan but not `_kh_adoption`, so game N+1 could re-commit game N's
+   corner without ever certifying a side. The boundary now clears it;
+   in-game plan resets still keep it (that is its purpose: promotions
+   mid-walk re-commit without a second sweep).
+2. **A parked closer could wander off during the walk (P1).** The park
+   commitment stood down at hop distance zero, so the knight was free
+   to drift while the pawn still walked — and Zach's final push could
+   land with the closer displaced, the walking filters switching off,
+   and the walk-0 pull pointing back at the seal-range squares that
+   strangle the pocket. The regression filter now rejects any increase
+   in the parked hop distance while `pawn_walk > 0`.
+3. **The pawn-veto exception read the race_clear boolean (P1).** With
+   race debt on TWO squares (pawns on f2 and h2 of the h-corner),
+   clearing either leaves the boolean false, so both required pushes
+   stayed vetoed while any stable move existed. The exception now
+   counts occupied race squares and admits any strict decrease — which
+   also correctly rejects h2-h3, a push the boolean framing miscounts:
+   it merely trades escape-square debt for entry-square debt.
+4. **Reply stalemates were invisible to the funnel guard (P2).**
+   `arena_draw` leaves stalemate to the arena's separate check, so a
+   support reply that stalemates US read as safe. The guard now checks
+   `is_stalemate()` after each reply; mate of our king stays welcome.
+
+Suite 54 -> 55 (one folded check: the game-boundary clear via the
+planner-profile sticky path, the pinned closer on the reviewer's
+walking fixture, and the counted-debt f2-f3/h2-h3 pair). Full battery:
+
+- **Case-7 drill, 10 seeds: 4 CONVERTED (68/76/86/106 plies) / 2
+  stalemate / 2 fifty-move / 2 max-plies — conversion rate doubled by
+  the pinned closer.** 7 races offered, 4 won, right at the audited
+  1/2; every converting seed shows closer-parks=3 exactly (the minimal
+  hop route, then pinned) where the wandering build showed 4-8. This
+  entry's numbers are the new case-7 reference.
+- Case-6 drill: byte-identical to the reference again — all ten
+  outcomes at the exact plies (the new clauses are walk-gated or
+  debt-neutral there).
+- Case-2 seed-5: same game to the move (fifty-move in 125, 47 VI
+  moves, builds=10, 48 goals audited 0-converting, 489,394 audit
+  probe nodes, kh-adoptions=0 by construction).
+- Motifs: untouched by these diffs (no bot code on that path).

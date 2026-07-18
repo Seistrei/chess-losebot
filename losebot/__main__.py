@@ -1709,6 +1709,70 @@ def selftest() -> int:
         f"vi builds during walk={gate_vi_bot.vi_builds}",
     )
 
+    # 22g. Review follow-ups, all three P1s. (1) Adoption memory is scoped
+    # to the game whose verdicts earned it: the arena reuses bot instances,
+    # so the rewind branch — the game boundary — must clear it, or game
+    # N+1 recommits game N's corner without ever certifying a side (the
+    # planner profile isolates the sticky replan path from re-adoption).
+    # (2) A parked closer stays parked for the rest of the walk: a wander
+    # can be interrupted by the pawn's arrival with the seal unservable.
+    # (3) The king-mode pawn veto counts race debt instead of reading the
+    # race_clear boolean: with pawns on both f2 and h2, f2-f3 clears one
+    # debt and must pass, while h2-h3 merely trades the escape square for
+    # the entry square and stays vetoed.
+    rewind_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="planner",
+        probe_cap=0, max_probe_n=1,
+    )
+    rewind_bot._kh_adoption = (1, -1)
+    rewind_bot._last_seen_ply = 99
+    rewind_bot.choose_move(adopt_board)
+    closer_board = chess.Board("2N5/8/3k4/8/1pP5/2P5/1K6/1B5R w - - 0 1")
+    closer_target = walk_bot.planned_target(closer_board, chess.WHITE)
+    closer_kept = walk_bot._filter_plan_regressions(
+        closer_board,
+        [chess.Move.from_uci("c8e7"), chess.Move.from_uci("h1h2")],
+        closer_target,
+    )
+    debt_board = chess.Board("5N2/8/8/8/7k/6p1/5PKP/6B1 w - - 0 1")
+    debt_plan = ConstructionPlan(
+        pawn_file=6, checked_side=1, created_ply=0, holder_mode="king"
+    )
+    debt_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    debt_bot.plan = debt_plan
+    debt_target = debt_bot.planned_target(debt_board, chess.WHITE)
+    debt_kept = debt_bot._filter_plan_regressions(
+        debt_board,
+        [
+            chess.Move.from_uci("f2f3"),
+            chess.Move.from_uci("h2h3"),
+            chess.Move.from_uci("f8h7"),
+        ],
+        debt_target,
+    )
+    check(
+        "review: game-scoped adoption, pinned closer, counted race debt",
+        rewind_bot._kh_adoption is None
+        and rewind_bot.plan is not None
+        and rewind_bot.plan.holder_mode == "piece"
+        and closer_target is not None
+        and closer_target.pawn_walk == 1
+        and chess.Move.from_uci("c8e7") not in closer_kept
+        and chess.Move.from_uci("h1h2") in closer_kept
+        and debt_target is not None
+        and not debt_target.race_clear
+        and chess.Move.from_uci("f2f3") in debt_kept
+        and chess.Move.from_uci("h2h3") not in debt_kept
+        and chess.Move.from_uci("f8h7") in debt_kept,
+        f"rewind plan="
+        f"{'none' if rewind_bot.plan is None else rewind_bot.plan.label}"
+        f" memory={rewind_bot._kh_adoption}; "
+        f"closer={[m.uci() for m in closer_kept]}; "
+        f"debt={[m.uci() for m in debt_kept]}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
