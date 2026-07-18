@@ -144,6 +144,12 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.vi_wait_funnel_guards} funnel guards; "
                 f"{focal.vi_burn_updates} burn updates "
                 f"({focal.vi_burned_states} burned at end); "
-                f"{focal.vi_pool_mismatches} pool mismatches"
+                f"{focal.vi_pool_mismatches} pool mismatches; "
+                f"clock: {focal.vi_clock_hard_plies} hard / "
+                f"{focal.vi_clock_soft_plies} soft plies; "
+                f"{focal.vi_clock_pruned} pruned; "
+                f"{focal.vi_clock_relaxed_releases} relaxed releases; "
+                f"{focal.vi_clock_resets} resets "
+                f"({focal.vi_clock_reset_builds} reset builds)"
             )
     return tallies

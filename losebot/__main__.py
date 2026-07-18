@@ -1418,7 +1418,7 @@ def selftest() -> int:
     def _flip_case(require_conversion, **report_fields):
         report = dict(
             ok=True, root_live=True, root_converts=False,
-            conversion_complete=True, root_value=0.5,
+            conversion_complete=True, root_value=0.5, min_hit_root=0,
         )
         report.update(report_fields)
         gate_bot = LoseBot(depth=1, opponent_model="zach", profile="vi")
@@ -1773,6 +1773,160 @@ def selftest() -> int:
         f"debt={[m.uci() for m in debt_kept]}",
     )
 
+    # 23a. Clock feasibility: hitting-time statistics on the solved graph.
+    # min_hit is the best-case distance to a positively seeded terminal
+    # (unit-edge backward BFS — min over children at our nodes and their
+    # nodes alike), exp_hit the expected plies under the greedy policy
+    # conditioned on hitting. fm-organic-h absorbs into its forced-mate
+    # fan in exactly one ply; kh-herd-h4's root is 4 plies from its
+    # audited vacate goal on a deterministic optimal track (exp == min),
+    # with the best child at 3, a detour child at 7, and a dead child at
+    # HIT_INF.
+    from .herding_vi import HIT_INF
+
+    hit_fm = HerdingPolicy.build(
+        chess.Board(motif["fm-organic-h"].fen),
+        _motif_target(motif["fm-organic-h"]),
+        max_herders=1, state_cap=200_000, time_budget_ms=30_000,
+        gamma=0.99, model="zach",
+    )
+    hit_kh = HerdingPolicy.build(
+        chess.Board(motif["kh-herd-h4"].fen),
+        _motif_target(motif["kh-herd-h4"]),
+        max_herders=1, state_cap=200_000, time_budget_ms=30_000,
+        gamma=0.96, model="zach", herders=((chess.A1, chess.ROOK),),
+    )
+    kh_hit_ranked = (
+        hit_kh.ranked_moves(chess.Board(motif["kh-herd-h4"].fen)) or []
+    )
+    kh_child_hits = {
+        hit_kh.child_min_hit(child) for _, _, child in kh_hit_ranked
+    }
+    kh_root_hits = hit_kh.hit_estimates(
+        chess.Board(motif["kh-herd-h4"].fen)
+    )
+    check(
+        "hitting-time stats are exact on the solved graphs",
+        hit_fm.report.ok
+        and hit_fm.report.root_converts
+        and hit_fm.report.min_hit_root == 1
+        and abs(hit_fm.report.exp_hit_root - 1.0) < 1e-9
+        and hit_fm.report.hit_converged
+        and hit_kh.report.ok
+        and hit_kh.report.root_converts
+        and hit_kh.report.min_hit_root == 4
+        and abs(hit_kh.report.exp_hit_root - 4.0) < 1e-6
+        and hit_kh.report.hit_converged
+        and kh_root_hits is not None
+        and kh_root_hits[0] == 4
+        and kh_child_hits == {3, 7, HIT_INF},
+        f"fm=({hit_fm.report.min_hit_root}, "
+        f"{hit_fm.report.exp_hit_root:.2f}); "
+        f"kh=({hit_kh.report.min_hit_root}, "
+        f"{hit_kh.report.exp_hit_root:.2f}); "
+        f"kh-children={sorted(kh_child_hits)}",
+    )
+
+    # 23b. The near-cliff release relaxation consults the solved MDP: with
+    # the policy warm and the audited 1/2 vacate goal four plies away,
+    # remaining 16 affirms the herd still fits (min_hit and soft-factored
+    # exp_hit both inside the budget), so the strict standard holds and
+    # the bot herds Ra2 toward the better race; remaining 6 has no
+    # soft-feasible herd left, and the bot takes the best positive
+    # lottery available now — Kh1 at race 1/3 — under relaxed standards.
+    def _warm_kh_bot():
+        warm = LoseBot(
+            depth=1, opponent_model="zach", profile="vi", vi_herders=1
+        )
+        warm.choose_move(chess.Board(motif["kh-herd-h4"].fen))
+        return warm
+
+    hold_bot = _warm_kh_bot()
+    hold_board = chess.Board(motif["kh-herd-h4"].fen)
+    hold_board.halfmove_clock = 84
+    hold_move = hold_bot.choose_move(hold_board)
+    relax_bot = _warm_kh_bot()
+    relax_board = chess.Board(motif["kh-herd-h4"].fen)
+    relax_board.halfmove_clock = 94
+    relax_move = relax_bot.choose_move(relax_board)
+    check(
+        "the cliff relaxation defers to a herd the MDP still affirms",
+        hold_move == chess.Move.from_uci("a1a2")
+        and hold_bot.vi_releases == 0
+        and hold_bot.vi_clock_relaxed_releases == 0
+        and relax_move == chess.Move.from_uci("g2h1")
+        and relax_bot.vi_releases == 1
+        and relax_bot.vi_clock_relaxed_releases == 1,
+        f"remaining16={hold_board.san(hold_move)} "
+        f"(relaxed={hold_bot.vi_clock_relaxed_releases}); "
+        f"remaining6={relax_board.san(relax_move)} "
+        f"(relaxed={relax_bot.vi_clock_relaxed_releases})",
+    )
+
+    # 23c. The clock-hard cascade on a converting side. min_hit + overhead
+    # over the remaining budget certifies this era cannot finish, so a
+    # certified pawn push manufactures a fresh one: with the spare a2
+    # pawn the hypothetical rebuild (same herder subset as the active
+    # policy) certifies live-and-converting and the bot plays the reset.
+    # Without it the only push (f4-f5) breaks the pocket, the
+    # hypothetical refuses honestly, every ranked candidate prunes as
+    # unfinishable, and the move falls through to the fallbacks — a
+    # blind push is never played.
+    reset_board = chess.Board("5NN1/6k1/8/8/5P2/5Pp1/P5K1/R5B1 w - - 0 1")
+    reset_board.halfmove_clock = 96
+    reset_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    reset_move = reset_bot.choose_move(reset_board)
+    nospare_board = chess.Board("5NN1/6k1/8/8/5P2/5Pp1/6K1/R5B1 w - - 0 1")
+    nospare_board.halfmove_clock = 96
+    nospare_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    nospare_move = nospare_bot.choose_move(nospare_board)
+    check(
+        "clock-hard resets certify or refuse; unfinishable lines prune",
+        reset_move == chess.Move.from_uci("a2a3")
+        and reset_bot.vi_clock_resets == 1
+        and reset_bot.vi_clock_reset_builds == 2
+        and reset_bot.vi_clock_hard_plies == 1
+        and reset_bot.vi_clock_pruned == 0
+        and nospare_bot.vi_clock_resets == 0
+        and nospare_bot.vi_clock_reset_builds == 1
+        and nospare_bot.vi_clock_hard_plies == 1
+        and nospare_bot.vi_clock_pruned == 4
+        and nospare_bot.vi_zero_fallbacks == 1
+        and nospare_move != chess.Move.from_uci("f4f5"),
+        f"spare={reset_board.san(reset_move)} "
+        f"(resets={reset_bot.vi_clock_resets}"
+        f"/{reset_bot.vi_clock_reset_builds} builds); "
+        f"no-spare={nospare_board.san(nospare_move)} "
+        f"(pruned={nospare_bot.vi_clock_pruned}, "
+        f"builds={nospare_bot.vi_clock_reset_builds})",
+    )
+
+    # 23d. The flip gate requires era feasibility of the prospect: the
+    # mirror herds inside the SAME fifty-move era, so a live prospect
+    # whose best-case hitting time cannot fit the remaining budget is
+    # refused with the long back-off whatever its audit says — while
+    # min_hit_root == 0 (stats absent) never condemns. flip_board sits
+    # at clock 0: 97 + overhead fits 100, 99 + overhead does not.
+    infeasible_fired, infeasible_bot = _flip_case(
+        True, root_converts=True, min_hit_root=99
+    )
+    boundary_fired, boundary_bot = _flip_case(False, min_hit_root=97)
+    check(
+        "side flips require the mirror to fit the remaining era",
+        not infeasible_fired
+        and infeasible_bot._vi_next_flip_ply == 16
+        and infeasible_bot.vi_side_flips == 0
+        and boundary_fired
+        and boundary_bot.vi_side_flips == 1,
+        f"infeasible fired={infeasible_fired} "
+        f"(cooldown={infeasible_bot._vi_next_flip_ply}); "
+        f"boundary97 fired={boundary_fired}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -1962,7 +2116,19 @@ def endgames(args) -> int:
                 f" (of {bot.vi_goal_states} goal states,"
                 f" {bot.vi_forced_mates} forced mates,"
                 f" {bot.vi_conversion_incomplete} audits cut short,"
-                f" {bot.vi_conversion_nodes} probe nodes)",
+                f" {bot.vi_conversion_nodes} probe nodes);"
+                f" clock: min-hit="
+                + ("n/a" if bot.vi_min_hit_root is None
+                   else str(bot.vi_min_hit_root))
+                + " exp-hit="
+                + ("n/a" if bot.vi_exp_hit_root is None
+                   else f"{bot.vi_exp_hit_root:.1f}")
+                + f" hard={bot.vi_clock_hard_plies}"
+                f" soft={bot.vi_clock_soft_plies}"
+                f" pruned={bot.vi_clock_pruned}"
+                f" relaxed-releases={bot.vi_clock_relaxed_releases}"
+                f" resets={bot.vi_clock_resets}"
+                f"/{bot.vi_clock_reset_builds} builds",
                 flush=True,
             )
         if args.show_fen:

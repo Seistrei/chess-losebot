@@ -1257,3 +1257,150 @@ walking fixture, and the counted-debt f2-f3/h2-h3 pair). Full battery:
   moves, builds=10, 48 goals audited 0-converting, 489,394 audit
   probe nodes, kh-adoptions=0 by construction).
 - Motifs: untouched by these diffs (no bot code on that path).
+
+## Clock feasibility from the solved MDP (2026-07-18)
+
+Log item 1 built — the item sessions 4, 6 and 8 kept promoting: the herd
+regime is all quiet moves, so the fifty-move rule caps every reversible
+era at 100 plies, and the discounted policy could not see the cliff
+(gamma prices time softly; the seed-2 repro spent all 100 plies herding
+with a legal clock-resetting pawn push standing vetoed the whole game).
+The solved graph now carries two hitting-time statistics per state, and
+play prices `remaining = 100 - halfmove_clock` against them everywhere
+the clock can kill a converting side.
+
+The statistics (`_compute_hit_stats`, once per build, after the solve):
+
+- **min_hit** — plies to the nearest positively seeded terminal when
+  EVERY reply cooperates (min over children at our nodes and their
+  nodes alike; one unit-edge backward BFS over the parent lists).
+  Exact, solver-independent, and still a sound LOWER bound after any
+  repetition burn, because burning only removes paths — which is what
+  makes `min_hit + overhead > remaining` a certificate that the era
+  cannot finish (overhead 2 = the release ply at clock <= 98 plus the
+  mating reply; deeper race tails are priced exactly by the release
+  scorer's own draw-law probes). The bound also holds per child, so it
+  is a sound candidate veto.
+- **exp_hit** — expected plies to absorption under the greedy
+  stationary policy, conditioned on hitting: p (absorption probability)
+  and m (mass E[plies x 1{hit}]) iterated by the same parent-driven
+  worklist as the values, both monotone from a zero start, honesty flag
+  `hit_converged`. Advisory by design (pristine graph, one fixed
+  policy). Computed ONLY when the root converts: every consumer sits
+  behind that condition, and churning p/m over case-2's 614k-state
+  non-converting graphs bought +50% wall (69s) for numbers nothing
+  reads.
+
+What play does with them (all of it gated on `root_converts` — a side
+with nothing to convert to does not race the clock; the audit-negative
+machinery already owns that case):
+
+1. **Gates.** Hard: `min_hit + overhead > remaining` — a certificate,
+   and one that only hardens as the era runs (min_hit falls at most one
+   ply per ply). Soft: `exp_hit * 1.5 + overhead > remaining` —
+   headroom for hitting-time variance, advisory. Profile knobs
+   `vi_clock_overhead=2`, `vi_clock_soft_factor=1.5`.
+2. **Candidate veto.** Ranked herder moves whose child cannot reach a
+   converting terminal inside the era (child `min_hit + 1 + overhead >
+   remaining`) are pruned before the near-optimal window forms: their
+   true value under the clock is 0 whatever the pristine graph says.
+   All candidates pruned -> zero-fallback, honestly.
+3. **Certified clock resets.** On the flip-cooldown cadence, a
+   hard/soft-flagged side first tries to MANUFACTURE time: a quiet,
+   non-checking, non-capturing pawn push that (a) still resolves the
+   committed plan with no construction metric regressed (race debt
+   counted, walk untouched, holder/cage/runway kept), (b) leaves
+   Zach's pool free of forced captures and reply-stalemate traps (the
+   capture and funnel guards replayed where the push bypasses them),
+   and (c) whose hypothetical rebuild — rooted at the pushed position,
+   same optimism as a flip prospect, and CRITICALLY with the active
+   policy's herder subset, not the greedy one (the greedy hypothetical
+   priced the wrong continuation and refused 3/3 on the calibration
+   fixture; the sweep's chosen subset carries over verbatim since a
+   push moves no herder) — certifies live AND converting. One push
+   buys a fresh 100-ply era for a side that has proven it can finish,
+   given time. The session-8 c4-c5 lesson is the refusal case: a push
+   that seals the herd's own geometry builds live-but-unconvertible
+   and is refused by exactly the audit that discovered the original
+   disaster.
+4. **Reconsideration cascade.** After a refused reset: the mirror flip
+   (any live prospect under hard — like hopeless, there is nothing to
+   stay for; positively-converting only under soft), then the corner
+   adoption (hard only — the one-way replacement stays reserved for
+   the certificate). All prospects now face an era-feasibility gate of
+   their own: `min_hit_root + overhead <= remaining` (0 = stats made
+   no claim, never condemns) — the mirror herds inside the SAME era,
+   so an unfinishable prospect is refused with the long back-off
+   whatever its audit says.
+5. **MDP-aware release relaxation.** At remaining <=
+   `vi_clock_relax_at` (20), a refused strict race re-scores with
+   unlimited losing replies — any race with a winning reply beats the
+   adjudication's certain zero — UNLESS the active policy maps the
+   position and affirms the herd still fits (min_hit AND soft-factored
+   exp_hit inside the budget), in which case the strict standard holds
+   and the herd goes and gets the better goal. The calibration fixture
+   drew the boundary exactly: at remaining 16 with the audited 1/2
+   vacate goal four plies away the naive threshold took a 1/3 lottery;
+   the MDP-aware rule herds Ra2 to the 1/2, and first takes the 1/3
+   (Kh1) at remaining <= 7 where nothing better fits.
+
+Suite 55 -> 59: hitting-time exactness pinned on two solved graphs
+(fm-organic-h absorbs in exactly 1 ply; kh-herd-h4's root is exactly
+(4, 4.0) with children {3, 7, HIT_INF}); the relaxation boundary above;
+the reset pair — spare-a2 fixture at remaining 4 plays the certified
+a2-a3 (2 hypothetical builds), the no-spare variant refuses f4-f5
+honestly (it breaks the pocket), prunes all 4 ranked candidates as
+unfinishable and falls through — a blind push is never played; and the
+flip decision table extended with the feasibility gate (min_hit 99
+refused at cooldown 16, boundary 97 accepted).
+
+Full battery, byte-identical where the clock never binds:
+
+- **Case-6 drill, 10 seeds: 7 converted at the EXACT reference plies
+  (48/52/34/64/42/38/34), seeds 7/9 stalemate — and the standing
+  seed-2 fifty-move repro is now fully diagnosed instead of blind:
+  soft fired 15 plies, hard 3, 23 candidates pruned, 5 reset builds
+  attempted and every one honestly refused** (the drill's only pushes
+  are the f-pawns, and pushing them breaks the pocket per the same
+  audit that scores every conversion; the converting builds' expected
+  herds ran 36-67 plies against a budget the wandering had already
+  spent — the herd genuinely did not fit, and this fixed geometry has
+  no time to manufacture). The loss stands, correctly diagnosed as
+  unsalvageable-in-era rather than unseen.
+- **Case-7 drill, 10 seeds: the exact reference distribution — 4
+  converted at the exact reference plies (68/76/86/106), 2 stalemate
+  (101/111), 2 fifty-move (170/110), 2 max-plies.** Both fifty-moves
+  are the unconvertible-at-arrival family (kh audits 0/1 and 0/8 —
+  log item "walk-phase defender pressure", not clock), and the gates
+  stay correctly OFF there. Seed 9's converting side shows the layer
+  probing on cadence (soft=4, one reset build, refused). The
+  post-review reference no longer contains a live-converting clock
+  death for the layer to convert — the pinned-closer fix already ate
+  those — so its value here is prophylaxis plus diagnostics.
+- **Case-2 seed-5: same game to the move** (fifty-move in 125, 47 VI
+  moves, builds=10, 48 goals audited 0-converting, 489,394 audit probe
+  nodes) with every clock gauge inert (min-hit=n/a, hard/soft/pruned/
+  relaxed/resets all 0) — the layer prices converting sides only, so
+  the unconvertible reference cannot shift by construction.
+- **Motifs: byte-identical** (kh-corner-h/a and kh-herd-h4 POSITIVE at
+  0.500; fm-organic-h/a and fm-deep-h POSITIVE at 1.000;
+  ph-contained-root NEGATIVE).
+
+Next, in expected-value order:
+
+1. Walk-phase defender pressure — unchanged, and now clearly the
+   largest loss family: case-7's fifty-moves are arrivals whose pocket
+   approach audits 0/N because nothing herds their king during the
+   walk. Candidate: a lightweight defender gradient toward the pocket
+   approach during the wait.
+2. Deeper funnel pricing for the fallback regime (two-ply funnels
+   behind the horizon-one guard; case-7 seeds 5/6 in the pre-review
+   battery).
+3. Executioner selection at strip time (standard fixtures 1-5 all veto
+   their walks on our own intact b2/g2 pawns; real games shed pawns —
+   prefer THEIR b/g pawns on files where OURS died). Multi-pawn race
+   stacking.
+4. Horizon-aware steering (the true clock-in-state product policy) —
+   only if live-converting clock deaths reappear in a battery; today
+   none remain, and the gates/reset/relaxation cover the observed
+   cases at a fraction of the state-space cost.

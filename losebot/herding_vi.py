@@ -36,6 +36,20 @@ king move and is deliberately absent from this proxy; the conversion audit
 scores the actual vacate with ``score_release_moves``, where the push shows
 up as the losing side of the race.
 
+The herd phase is all quiet moves, so the arena's fifty-move rule caps an
+era at 100 plies — a budget the discounted values cannot see (gamma prices
+time softly; the cliff is hard). Two hitting-time statistics per state close
+the gap. ``min_hit`` is the plies to the nearest positively seeded terminal
+when EVERY reply cooperates (min over children at our nodes and their nodes
+alike — a unit-edge backward BFS): exact, solver-independent, and still a
+sound lower bound after any repetition burn (burning only removes paths),
+which makes ``min_hit + overhead > remaining`` a certificate that this era
+cannot finish and the per-child form a sound candidate veto. ``exp_hit`` is
+the expected plies to absorption under the greedy stationary policy,
+conditioned on hitting — advisory by design (it prices the pristine graph
+under one fixed policy, not the burned one play follows), computed once at
+build time.
+
 Those goals are proxies — they stop one move short of the release and the
 actual selfmate. The conversion audit closes the gap: every reachable goal
 terminal is reconstructed on a real board and scored with the same release
@@ -116,6 +130,9 @@ POSITION_DEPENDENT_FAILURES = frozenset({"root-already-terminal"})
 
 _WIN_KINDS = (GOAL_CONTAINED, GOAL_RACE, FORCED_MATE, GOAL_VACATE)
 
+# Sentinel for "no positively seeded terminal reachable" in min_hit arrays.
+HIT_INF = 1 << 30
+
 # Herder preference: rooks cut files (the classic boxing tool), bishops hold
 # diagonals cheaply, knights tempo, queens last (they widen branching without
 # herding better than a rook here).
@@ -167,6 +184,18 @@ class BuildReport:
     conversion_unknowns: int = 0
     conversion_complete: bool = False
     root_converts: bool = False
+    # Clock feasibility: hitting-time statistics over the completed graph.
+    # min_hit_root is the minimal plies from the root to any positively
+    # seeded terminal when every reply cooperates (best-case Zach) — a
+    # sound lower bound on the quiet plies this era still needs. 0 means
+    # no positively seeded terminal is reachable at all (or the stats were
+    # never computed): callers must read 0 as unknown, never as "instant".
+    # exp_hit_root is the expected plies to absorption under the greedy
+    # stationary policy conditioned on hitting (0.0 = not available), and
+    # hit_converged reports whether that iteration drained before its cap.
+    min_hit_root: int = 0
+    exp_hit_root: float = 0.0
+    hit_converged: bool = False
 
 
 def _piece_attacks(piece_type: int, square: int, occupied: int) -> int:
@@ -337,6 +366,10 @@ class HerdingPolicy:
         self._worklist: deque | None = None
         self._queued: bytearray | None = None
 
+        # Hitting-time statistics (computed once at build, after the solve).
+        self._min_hit: list[int] | None = None
+        self._exp_hit: list[float] | None = None
+
         # Play-time repetition burn: states whose position the current
         # reversible era has already seen twice. Entering one again is the
         # arena's threefold draw, so their values are pinned at 0 until the
@@ -403,6 +436,7 @@ class HerdingPolicy:
                 audit_deadline, model, race_max_losing, conversion_probe_cap
             )
             policy._solve(deadline, max_updates)
+            policy._compute_hit_stats(deadline)
         else:
             policy.report.reason = reason
         policy.report.states = len(policy._states)
@@ -1075,6 +1109,175 @@ class HerdingPolicy:
         return self.report.converged
 
     # ------------------------------------------------------------------
+    # Clock feasibility: hitting-time statistics
+    # ------------------------------------------------------------------
+
+    def _compute_hit_stats(self, deadline: float) -> None:
+        """Hitting-time statistics for the fifty-move feasibility gates.
+
+        min_hit: plies to the nearest positively seeded terminal when
+        EVERY reply cooperates — min over children at our nodes and their
+        nodes alike, i.e. a unit-edge backward BFS from the seeds over the
+        parent lists. Exact, independent of the solver, and still a sound
+        lower bound after any repetition burn (burning only removes
+        paths), which is what makes ``min_hit + overhead > remaining`` a
+        certificate that the era cannot finish and the per-child form a
+        sound candidate veto. Computed unconditionally: it is one O(V+E)
+        pass.
+
+        exp_hit: expected plies to absorption under the greedy stationary
+        policy (argmax child value; min_hit, then index as tie-breaks),
+        conditioned on hitting. p is the absorption probability and m the
+        mass E[plies * 1{hit}], iterated by the same parent-driven
+        worklist discipline as the values — both are monotone from a zero
+        start, so the iteration converges from below and cutting it short
+        (update cap or the build deadline) only understates the estimate,
+        reported honestly in ``hit_converged``. Advisory by design: it
+        prices the pristine graph under one fixed policy, not the burned
+        graph that play actually follows. Computed only when the root
+        converts: every consumer (the play-time gates, the release
+        relaxation) is behind that same condition, and churning p/m over
+        a large non-converting graph bought pure wall clock — the case-2
+        reference paid ~50% for numbers nothing reads.
+        ``hit_converged`` is trivially True when the pass is skipped.
+        """
+        states = len(self._states)
+        seeds = [
+            index for index, kind in enumerate(self._kind)
+            if kind in _WIN_KINDS and self._terminal_seed_value(index) > 0.0
+        ]
+        min_hit = [HIT_INF] * states
+        queue: deque = deque()
+        for index in seeds:
+            min_hit[index] = 0
+            queue.append(index)
+        while queue:
+            index = queue.popleft()
+            step = min_hit[index] + 1
+            for parent in self._parents[index]:
+                if min_hit[parent] > step:
+                    min_hit[parent] = step
+                    queue.append(parent)
+        self._min_hit = min_hit
+        root = self._index.get((True, self._root_zk, self._root_herders))
+        if root is not None and min_hit[root] < HIT_INF:
+            self.report.min_hit_root = min_hit[root]
+        self.report.hit_converged = True
+        if not self.report.root_converts:
+            return
+
+        # The fixed policy exp_hit prices: best child by solved value,
+        # shortest min_hit among value ties (of the near-optimal moves
+        # play may take, the fast one bounds the estimate from below —
+        # an underestimate only makes the soft gate fire later), lowest
+        # index for determinism.
+        values = self._values
+        kinds = self._kind
+        children = self._children
+        parents = self._parents
+        choice = [-1] * states
+        for index in range(states):
+            if kinds[index] != NORMAL_OUR:
+                continue
+            best = -1
+            for kid in children[index]:
+                if best < 0 or (
+                    values[kid], -min_hit[kid], -kid,
+                ) > (values[best], -min_hit[best], -best):
+                    best = kid
+            choice[index] = best
+
+        prob = [0.0] * states
+        mass = [0.0] * states
+        worklist: deque = deque()
+        queued = bytearray(states)
+        for index in seeds:
+            prob[index] = 1.0
+            for parent in parents[index]:
+                if not queued[parent]:
+                    queued[parent] = 1
+                    worklist.append(parent)
+        updates = 0
+        limit = 60 * max(1, states)
+        while worklist and updates < limit:
+            updates += 1
+            if updates % 4096 == 0 and time.monotonic() > deadline:
+                break
+            index = worklist.popleft()
+            queued[index] = 0
+            kind = kinds[index]
+            if kind == NORMAL_OUR:
+                kid = choice[index]
+                if kid < 0:
+                    continue
+                new_p = prob[kid]
+                new_m = prob[kid] + mass[kid]
+            elif kind == NORMAL_THEIR:
+                kids = children[index]
+                if not kids:
+                    continue
+                total_p = 0.0
+                total_m = 0.0
+                for kid in kids:
+                    total_p += prob[kid]
+                    total_m += prob[kid] + mass[kid]
+                new_p = total_p / len(kids)
+                new_m = total_m / len(kids)
+            else:
+                continue
+            if (
+                abs(new_p - prob[index]) <= 1e-7
+                and abs(new_m - mass[index]) <= 1e-4
+            ):
+                continue
+            prob[index] = new_p
+            mass[index] = new_m
+            for parent in parents[index]:
+                if not queued[parent]:
+                    queued[parent] = 1
+                    worklist.append(parent)
+        self._exp_hit = [
+            mass[index] / prob[index] if prob[index] > 1e-9 else float("inf")
+            for index in range(states)
+        ]
+        self.report.hit_converged = not worklist
+        if root is not None and prob[root] > 1e-9:
+            self.report.exp_hit_root = self._exp_hit[root]
+
+    def hit_estimates(self, board: chess.Board) -> tuple[int, float] | None:
+        """(min_hit, exp_hit) plies for the current our-turn state.
+
+        None when the position does not map into the graph or the stats
+        are unavailable. min_hit is HIT_INF when no positively seeded
+        terminal is reachable; exp_hit is inf when the greedy policy
+        never absorbs from here.
+        """
+        if self._stripped or self._min_hit is None:
+            return None
+        state = self._dynamic_state(board)
+        if state is None:
+            return None
+        index = self._index.get(state)
+        if index is None:
+            return None
+        exp = (
+            self._exp_hit[index]
+            if self._exp_hit is not None
+            else float("inf")
+        )
+        return self._min_hit[index], exp
+
+    def child_min_hit(self, index: int) -> int:
+        """min_hit of a state index as returned by ``ranked_moves``.
+
+        0 (no claim) when the stats are unavailable: an unknown must
+        never condemn a candidate.
+        """
+        if self._min_hit is None or index >= len(self._min_hit):
+            return 0
+        return self._min_hit[index]
+
+    # ------------------------------------------------------------------
     # Play-time repetition burn
     # ------------------------------------------------------------------
 
@@ -1283,6 +1486,8 @@ class HerdingPolicy:
         self._conversion = {}
         self._burned = None
         self._burned_set = set()
+        self._min_hit = None
+        self._exp_hit = None
 
 
 def prospective_flip_policy(board: chess.Board, target: PawnMateTemplate,

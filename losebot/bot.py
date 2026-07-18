@@ -170,6 +170,19 @@ class LoseBot:
         # and the active policy's current burned-state gauge.
         self.vi_burn_updates = 0
         self.vi_burned_states = 0
+        # Clock feasibility: plies flagged by the hard/soft gates, ranked
+        # candidates vetoed as unfinishable, releases accepted only under
+        # the relaxed near-cliff standards, certified clock-reset pushes
+        # played (and the hypothetical builds spent vetting them), plus
+        # the last build's hitting-time estimates for the battery lines.
+        self.vi_clock_hard_plies = 0
+        self.vi_clock_soft_plies = 0
+        self.vi_clock_pruned = 0
+        self.vi_clock_relaxed_releases = 0
+        self.vi_clock_resets = 0
+        self.vi_clock_reset_builds = 0
+        self.vi_min_hit_root: int | None = None
+        self.vi_exp_hit_root: float | None = None
 
     def _reset_vi_state(self) -> None:
         """Drop herding certificates along with the plan they were built for.
@@ -766,6 +779,11 @@ class LoseBot:
         ):
             return None
 
+        # Quiet plies left before the arena's fifty-move adjudication: the
+        # whole clock-feasibility layer prices this one number against the
+        # solved graph's hitting times.
+        remaining = 100 - board.halfmove_clock
+
         # The exact probe already refused a guaranteed net this move. With
         # the defender adjacent (or one step out), offer the best scored race
         # instead of tempoing forever. This deliberately bypasses the hold
@@ -775,6 +793,42 @@ class LoseBot:
                 board, target, self.opponent_model,
                 self.profile.vi_race_max_losing,
             )
+            if choice is None and remaining <= self.profile.vi_clock_relax_at:
+                # Near the cliff a refused strict race is re-scored with
+                # unlimited losing replies: any race with a winning reply
+                # beats the certain zero of the adjudication. But a worse
+                # lottery must not preempt a better one the herd can still
+                # reach — when the active policy maps this position and
+                # affirms that a converting goal fits the remaining budget
+                # (min_hit as the certificate bound, exp_hit with the soft
+                # headroom), the strict standard holds and the herd goes
+                # and gets it. Only without that affirmation — no policy,
+                # off-graph, or a herd that no longer fits — is the best
+                # positive lottery available taken now.
+                fits = False
+                policy = self._vi_policy
+                if (
+                    policy is not None
+                    and policy.arrival == target.arrival_square
+                    and policy.report.ok
+                    and policy.report.root_live
+                    and policy.report.root_converts
+                ):
+                    hits = policy.hit_estimates(board)
+                    if hits is not None:
+                        min_hit, exp_hit = hits
+                        overhead = self.profile.vi_clock_overhead
+                        fits = (
+                            min_hit + overhead <= remaining
+                            and exp_hit * self.profile.vi_clock_soft_factor
+                            + overhead <= remaining
+                        )
+                if not fits:
+                    choice = score_release_moves(
+                        board, target, self.opponent_model, 64,
+                    )
+                    if choice is not None:
+                        self.vi_clock_relaxed_releases += 1
             if choice is not None:
                 self.vi_releases += 1
                 self.vi_release_nodes += choice.nodes
@@ -832,23 +886,69 @@ class LoseBot:
             return None
         if not policy.report.root_live:
             return None
-        if (
-            self._vi_side_unconvertible
-            and len(board.move_stack) >= self._vi_next_flip_ply
-        ):
-            # The prospect's convertibility is position-dependent (their
-            # king drifts, forced-mate pockets open), so an unconvertible
-            # side re-probes the mirror whenever the cooldown expires —
-            # certification only reruns on rebuilds, which a stable herd
-            # never triggers. A declined flip retries the corner adoption
-            # on the same cadence: its feasibility is position-dependent
-            # too (a path piece of theirs moves off, a bishop survives).
-            if self._consider_side_flip(
-                board, limit, require_conversion=True
-            ):
-                return None
-            if self._consider_kh_adoption(board):
-                return None
+        # Clock feasibility, read off the solved graph. Only a converting
+        # side races the clock at all: with nothing to convert to, hitting
+        # a proxy goal sooner changes nothing, and the audit-negative
+        # machinery (flips, adoption) already owns that case. The hard
+        # gate is a certificate — min_hit is best-case Zach, so failing it
+        # means this era CANNOT finish and only hardens as the clock runs.
+        # The soft gate is the expected herd not fitting, with headroom
+        # for hitting-time variance; it arms the same reconsideration
+        # cadence, never a verdict.
+        clock_hard = clock_soft = False
+        clock_veto = policy.report.root_converts
+        overhead = self.profile.vi_clock_overhead
+        if clock_veto:
+            hits = policy.hit_estimates(board)
+            if hits is not None:
+                min_hit, exp_hit = hits
+                if min_hit + overhead > remaining:
+                    clock_hard = True
+                    self.vi_clock_hard_plies += 1
+                elif (
+                    exp_hit * self.profile.vi_clock_soft_factor + overhead
+                    > remaining
+                ):
+                    clock_soft = True
+                    self.vi_clock_soft_plies += 1
+        if len(board.move_stack) >= self._vi_next_flip_ply:
+            if self._vi_side_unconvertible:
+                # The prospect's convertibility is position-dependent (their
+                # king drifts, forced-mate pockets open), so an unconvertible
+                # side re-probes the mirror whenever the cooldown expires —
+                # certification only reruns on rebuilds, which a stable herd
+                # never triggers. A declined flip retries the corner adoption
+                # on the same cadence: its feasibility is position-dependent
+                # too (a path piece of theirs moves off, a bishop survives).
+                if self._consider_side_flip(
+                    board, limit, require_conversion=True
+                ):
+                    return None
+                if self._consider_kh_adoption(board):
+                    return None
+            elif clock_hard or clock_soft:
+                # The side converts but the era's budget cannot (hard) or
+                # probably will not (soft) fit the remaining herd. In
+                # preference order: manufacture time — a certified pawn
+                # push resets the clock and KEEPS the proven side — then
+                # the mirror, then the corner adoption. A hard-dead side
+                # is worth zero this era, so like the hopeless case there
+                # is nothing to stay for and any feasible live mirror
+                # will do; under the advisory soft gate leaving still
+                # demands a positively converting prospect, and the
+                # one-way adoption stays reserved for the certificate.
+                reset = self._consider_clock_reset(
+                    board, target, limit, policy
+                )
+                if reset is not None:
+                    self.vi_clock_resets += 1
+                    return reset
+                if self._consider_side_flip(
+                    board, limit, require_conversion=not clock_hard
+                ):
+                    return None
+                if clock_hard and self._consider_kh_adoption(board):
+                    return None
         # Price the arena's threefold rule into the values before reading
         # them: every state whose position this era has already seen twice
         # is a draw on re-entry, and Zach's replies can funnel play into
@@ -898,6 +998,17 @@ class LoseBot:
                 break
             if move not in safe_set:
                 continue
+            if (
+                clock_veto
+                and policy.child_min_hit(child) + 1 + overhead > remaining
+            ):
+                # Even with perfect Zach luck this continuation cannot
+                # reach a converting terminal inside the era: its true
+                # value under the clock is 0 whatever the pristine graph
+                # says. min_hit stays a lower bound under burning, so the
+                # veto never cuts a finishable line.
+                self.vi_clock_pruned += 1
+                continue
             if top_value is None:
                 top_value = value
                 floor = value * self.profile.vi_gamma
@@ -930,6 +1041,9 @@ class LoseBot:
         self.vi_conversion_nodes += report.conversion_nodes
         if report.ok and not report.conversion_complete:
             self.vi_conversion_incomplete += 1
+        if report.ok:
+            self.vi_min_hit_root = report.min_hit_root or None
+            self.vi_exp_hit_root = report.exp_hit_root or None
         if not report.ok:
             self.vi_build_failures += 1
             self.vi_last_failure = report.reason
@@ -1109,7 +1223,16 @@ class LoseBot:
         if prospect is not None and prospect.report.ok:
             report = prospect.report
             self.vi_flip_value = report.root_value
-            if report.root_live and (
+            # The mirror herds inside the SAME era, so a prospect whose
+            # best-case hitting time cannot fit the remaining fifty-move
+            # budget is worthless whatever its audit says. min_hit_root 0
+            # means the stats made no claim and must never condemn.
+            feasible = (
+                report.min_hit_root == 0
+                or report.min_hit_root + self.profile.vi_clock_overhead
+                <= 100 - board.halfmove_clock
+            )
+            if report.root_live and feasible and (
                 not require_conversion or report.root_converts
             ):
                 self.plan = mirrored
@@ -1118,6 +1241,11 @@ class LoseBot:
                     self.vi_conversion_flips += 1
                 self._reset_vi_state()
                 return True
+            if not feasible and report.root_live:
+                # Live but unfinishable in this era — a refusal that only
+                # hardens as the clock runs. Long back-off.
+                self._vi_next_flip_ply = ply + 16
+                return False
             if report.root_live and not report.conversion_complete:
                 # Live but conversion unknown: a starved audit, not a
                 # refusal — retry sooner than a genuine negative.
@@ -1128,6 +1256,121 @@ class LoseBot:
         self.vi_flip_value = None
         self._vi_next_flip_ply = ply + 8
         return False
+
+    def _consider_clock_reset(
+        self,
+        board: chess.Board,
+        target: PawnMateTemplate,
+        limit: int,
+        policy: HerdingPolicy | None = None,
+    ) -> chess.Move | None:
+        """Manufacture era time: a certified pawn push resets the clock.
+
+        The herd regime is all quiet moves, so the era's 100-ply budget
+        is hard — and when the solved sub-MDP says the remaining budget
+        cannot (min_hit) or probably will not (exp_hit) fit the herd, the
+        one device that creates time WITHOUT abandoning a proven side is
+        an irreversible move that preserves the construction. Blind
+        pushes are exactly what the king-mode pawn veto exists for (the
+        c4-c5 push sealed the herd's own rank-six gate), so a reset must
+        certify, in three layers: the pushed position still resolves the
+        committed plan without regressing any construction metric; Zach's
+        reply pool stays free of forced captures and adjudication traps
+        (the funnel and capture guards replayed here, where the push
+        bypasses them); and a hypothetical rebuild rooted at the pushed
+        position — the same optimism as a flip prospect — certifies live
+        AND converting. One certified push buys a fresh 100 plies for a
+        side that has already proven it can finish, given time.
+        """
+        us = board.turn
+        plan = self.plan
+        if plan is None:
+            return None
+        pre_debt = (
+            _kh_race_debt(board, us, target) if target.king_holder else 0
+        )
+        # The hypothetical must price the continuation play would actually
+        # keep: the certify sweep may have chosen a non-greedy herder
+        # subset (the greedy one can audit non-converting while a later
+        # subset converts), and a push moves no herder, so the active
+        # subset carries over verbatim. Greedy is only the fallback when
+        # the active policy cannot name its herders here.
+        forced = None
+        if policy is not None:
+            squares = policy.dynamic_squares(board)
+            if squares is not None:
+                forced = tuple(sorted(
+                    (square, board.piece_type_at(square))
+                    for square in squares
+                ))
+        for move in board.legal_moves:
+            if board.piece_type_at(move.from_square) != chess.PAWN:
+                continue
+            if board.is_capture(move) or move.promotion is not None:
+                continue
+            if board.gives_check(move):
+                # A reset must be quiet-plus-irreversible: a checking push
+                # forces replies the same-root hypothetical below does not
+                # model, and forcing the king was never its job.
+                continue
+            if gives_mate(board, move) or gives_stalemate(board, move):
+                continue
+            board.push(move)
+            future = plan.resolve(board, us)
+            stable = (
+                future is not None
+                and future.our_king_steps <= target.our_king_steps
+                and future.cage_occupancy >= target.cage_occupancy
+                and future.pawn_walk == target.pawn_walk
+                and future.walk_blockers <= target.walk_blockers
+                and (not target.holding_blocker or future.holding_blocker)
+                and (
+                    not target.holding_blocker_defended
+                    or future.holding_blocker_defended
+                )
+                and (target.runway_blocked or not future.runway_blocked)
+            )
+            if stable and target.king_holder:
+                stable = _kh_race_debt(board, us, future) <= pre_debt
+            if stable:
+                pool = support_zach(board)
+                if pool and all(board.is_capture(reply) for reply in pool):
+                    stable = False
+                for reply in pool if stable else ():
+                    board.push(reply)
+                    trapped = board.is_stalemate()
+                    board.pop()
+                    if trapped:
+                        stable = False
+                        break
+            board.pop()
+            if not stable:
+                continue
+            hypothetical = board.copy(stack=False)
+            hypothetical.push(move)
+            hypothetical.turn = us
+            resolved = plan.resolve(hypothetical, us)
+            if resolved is None:
+                continue
+            self.vi_clock_reset_builds += 1
+            probe = HerdingPolicy.build(
+                hypothetical, resolved, limit,
+                self.profile.vi_state_cap, self.profile.vi_build_ms,
+                self.profile.vi_gamma, herders=forced,
+                model=self.opponent_model,
+                race_max_losing=self.profile.vi_race_max_losing,
+                conversion_ms=self.profile.vi_conversion_ms,
+            )
+            report = probe.report
+            if (
+                report.ok
+                and report.root_live
+                and report.root_converts
+                and report.min_hit_root + self.profile.vi_clock_overhead
+                <= 100
+            ):
+                return move
+        return None
 
     def _resolve_kh_adoption(
         self, board: chess.Board
