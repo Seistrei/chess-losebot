@@ -15,7 +15,7 @@ from .herding_vi import (
     prospective_flip_policy,
     score_release_moves,
 )
-from .planning import herding_move, modeled_herding_move
+from .planning import herding_move, modeled_herding_move, walk_pressure_move
 from .profiles import EngineProfile, get_profile, probe_limits
 from .search import (
     ProofStatus,
@@ -163,6 +163,7 @@ class LoseBot:
         self.vi_walk_clears = 0
         self.vi_closer_parks = 0
         self.vi_wait_funnel_guards = 0
+        self.vi_walk_pressure_moves = 0
         self.vi_flip_value: float | None = None
         self.vi_king_marches = 0
         self.vi_capture_guards = 0
@@ -1822,6 +1823,54 @@ class LoseBot:
                     board, base_safe, planned_now
                 )
             safe = self._filter_refused_resets(safe)
+
+        pressure_now = False
+        if (
+            self.profile.walk_pressure
+            and planned_now is not None
+            and planned_now.king_holder
+        ):
+            if planned_now.pawn_walk > 0:
+                # The walk's wait belongs to the funnel gradient, not the
+                # plain negamax: its menu-shrinking eval seals their king
+                # into remote two-square prisons (a certified-dead
+                # arrival), checks him for the check bonus (freezing the
+                # walk), and wanders the rooks onto the descent corridor.
+                # The chooser ranks the already commitment-filtered menu,
+                # so chore plies just gain a fence-aware tie-break while
+                # pure waits get the actual pressure.
+                pressure_now = True
+            elif (
+                planned_now.hold_established
+                and planned_now.cage_occupancy >= planned_now.required_cage
+                and planned_now.defender_steps > 0
+                and (
+                    self._vi_side_unconvertible
+                    or self._vi_policy is None
+                    or not self._vi_policy.report.ok
+                    or not self._vi_policy.report.root_live
+                )
+            ):
+                # The stall arm: the construction is posed but the side
+                # certified dead or unconvertible, so _vi_choice has no
+                # policy to play and the fallback would stall — the third
+                # battery's clean-corridor arrivals died as stalemates
+                # under the same prison-building eval the walk arm
+                # replaces. The reconsideration cadence re-probes as their
+                # king drifts; this arm makes the drift deliberate. Goal
+                # stalls (defender delivered, races refused) keep their
+                # deliberate wait, and a LIVE side never reaches here with
+                # a move to make — the policy plays it upstream. Case-6
+                # never certifies a side negative, so its references
+                # cannot shift.
+                pressure_now = True
+        if pressure_now:
+            pressure = walk_pressure_move(
+                board, planned_now, board.turn, safe, self.opponent_model
+            )
+            if pressure is not None:
+                self.vi_walk_pressure_moves += 1
+                return pressure
 
         if (
             self.plan is not None

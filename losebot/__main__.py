@@ -8,12 +8,18 @@ import chess
 from .arena import run_match
 from .bot import LoseBot
 from .opponents import RandomBot, WorstfishBot, ZachBot
-from .planning import modeled_herding_move
+from .planning import (
+    _pressure_walk,
+    modeled_herding_move,
+    walk_pressure_cost,
+    walk_pressure_move,
+)
 from .profiles import PROFILES
 from .search import (
     ProofStatus,
     _probe_draw,
     gives_mate,
+    gives_stalemate,
     selfmate_in,
     selfmate_status,
 )
@@ -2405,6 +2411,153 @@ def selftest() -> int:
         f"(residue={sorted(m.uci() for m in stale_bot._vi_reset_refused)})",
     )
 
+    # 24a. The walk-phase funnel potential, term by term. The mid-wait pose
+    # has every chore done (king parked b2, cage Bb1, knight parked c8,
+    # walk clear) with the executioner one push out: exactly the long wait
+    # the case-7 battery showed nothing herds. Distance to the pocket
+    # mouth dominates (b7 beats f6); a rook sealing the descent corridor
+    # is a blocked door (Ra5 costs against Rh5 for the same king); a rook
+    # raking the lane above the mouth from ACROSS the board (Re5 against
+    # an off-lane Re2 — rank five reaches a5 through every empty square)
+    # carries exactly the freeze-scaled corridor charge (times three at
+    # walk one) while the king still needs to descend and exactly nothing
+    # once he stands at the mouth (the second battery: every
+    # 0/5-unconvertible arrival was a sealed lane);
+    # a rook squatting on the entry square carries exactly the race-debt
+    # increment against a neutral post; and the walk is a SCHEDULE — the
+    # same landing that is rewarded with their king at the mouth is
+    # premature with him three squares out (the first battery's flat
+    # finish bonus rushed the pawn home in seven plies and arrived dead).
+    wait_base = chess.Board("2N5/1k6/8/RR6/1pP5/2P5/1K6/1B6 w - - 0 1")
+    wait_target = adopt_plan.resolve(wait_base, chess.WHITE)
+    wait_far = chess.Board("2N5/8/5k2/RR6/1pP5/2P5/1K6/1B6 w - - 0 1")
+    wait_open = chess.Board("2N5/1k6/8/1R5R/1pP5/2P5/1K6/1B6 w - - 0 1")
+    wait_landed = chess.Board("2N5/1k6/8/RR6/2P5/1pP5/1K6/1B6 w - - 0 1")
+    wait_debt = chess.Board("2N5/1k6/8/R7/1pP5/R1P5/1K6/1B6 w - - 0 1")
+    wait_neutral = chess.Board("2N5/1k6/8/R7/1pP5/2P4R/1K6/1B6 w - - 0 1")
+    mouth_walking = chess.Board("2N5/8/8/1R5R/kpP5/2P5/1K6/1B6 w - - 0 1")
+    mouth_landed = chess.Board("2N5/8/8/1R5R/k1P5/1pP5/1K6/1B6 w - - 0 1")
+    lane_sealed = chess.Board("2N4R/1k6/8/4R3/1pP5/2P5/1K6/1B6 w - - 0 1")
+    lane_clean = chess.Board("2N4R/1k6/8/8/1pP5/2P5/1K2R3/1B6 w - - 0 1")
+    mouth_sealed = chess.Board("2N4R/8/8/4R3/kpP5/2P5/1K6/1B6 w - - 0 1")
+    mouth_clean = chess.Board("2N4R/8/8/8/kpP5/2P5/1K2R3/1B6 w - - 0 1")
+    cost_near = walk_pressure_cost(wait_base, wait_target, chess.WHITE)
+    cost_far = walk_pressure_cost(wait_far, wait_target, chess.WHITE)
+    cost_open = walk_pressure_cost(wait_open, wait_target, chess.WHITE)
+    cost_landed = walk_pressure_cost(wait_landed, wait_target, chess.WHITE)
+    cost_debt = walk_pressure_cost(wait_debt, wait_target, chess.WHITE)
+    cost_neutral = walk_pressure_cost(
+        wait_neutral, wait_target, chess.WHITE
+    )
+    cost_mouth_walking = walk_pressure_cost(
+        mouth_walking, wait_target, chess.WHITE
+    )
+    cost_mouth_landed = walk_pressure_cost(
+        mouth_landed, wait_target, chess.WHITE
+    )
+    cost_lane_sealed = walk_pressure_cost(
+        lane_sealed, wait_target, chess.WHITE
+    )
+    cost_lane_clean = walk_pressure_cost(
+        lane_clean, wait_target, chess.WHITE
+    )
+    cost_mouth_sealed = walk_pressure_cost(
+        mouth_sealed, wait_target, chess.WHITE
+    )
+    cost_mouth_clean = walk_pressure_cost(
+        mouth_clean, wait_target, chess.WHITE
+    )
+    check(
+        "the funnel potential prices approach, doors, schedule, and debt",
+        wait_target is not None
+        and wait_target.pawn_walk == 1
+        and cost_near < cost_far
+        and cost_open < cost_near
+        and cost_landed > cost_near
+        and cost_mouth_landed < cost_mouth_walking
+        and abs((cost_lane_sealed - cost_lane_clean) - 24.0) < 1e-9
+        and abs(cost_mouth_sealed - cost_mouth_clean) < 1e-9
+        and abs((cost_debt - cost_neutral) - 25.0) < 1e-9
+        and _pressure_walk(wait_base, chess.BLACK, wait_target) == 1
+        and _pressure_walk(wait_landed, chess.BLACK, wait_target) == 0,
+        f"near={cost_near:.1f} far={cost_far:.1f} open={cost_open:.1f} "
+        f"landed-far={cost_landed:.1f} mouth walk/land="
+        f"{cost_mouth_walking:.1f}/{cost_mouth_landed:.1f} "
+        f"lane sealed/clean={cost_lane_sealed:.1f}/{cost_lane_clean:.1f} "
+        f"mouth lane delta={cost_mouth_sealed - cost_mouth_clean:.1f} "
+        f"debt={cost_debt:.1f} neutral={cost_neutral:.1f}",
+    )
+
+    # 24b. The chooser's argmin honors the potential: offered the corridor
+    # rook a race-square park (Ra3 lands on the entry square, debt at
+    # every leaf) against clearing off the file entirely, it clears — the
+    # exact move the converting seeds needed luck to find. The double-push
+    # walk arithmetic and the contracts (member of the menu, None on an
+    # empty menu) ride along.
+    pressure_pick = walk_pressure_move(
+        wait_base, wait_target, chess.WHITE,
+        [chess.Move.from_uci("a5a3"), chess.Move.from_uci("a5h5")],
+        "zach",
+    )
+    home_walk_board = chess.Board(
+        "2N5/1p6/2k5/RR6/2P5/2P5/1K6/1B6 w - - 0 1"
+    )
+    home_walk_target = adopt_plan.resolve(home_walk_board, chess.WHITE)
+    check(
+        "walk pressure clears the corridor and keeps its contracts",
+        pressure_pick == chess.Move.from_uci("a5h5")
+        and walk_pressure_move(
+            wait_base, wait_target, chess.WHITE, [], "zach"
+        ) is None
+        and home_walk_target is not None
+        and home_walk_target.pawn_walk == 3
+        and _pressure_walk(home_walk_board, chess.BLACK, home_walk_target)
+        == 3,
+        f"pick={'none' if pressure_pick is None else pressure_pick.uci()}; "
+        f"home walk="
+        f"{_pressure_walk(home_walk_board, chess.BLACK, home_walk_target)}",
+    )
+
+    # 24c. The gate: on the mid-wait pose a vi bot's wait ply is chosen by
+    # walk pressure (the counter ticks and the move matches the direct
+    # call on the same filtered menu), while the planner profile — no
+    # walk_pressure flag — never consults it. The sub-MDP stays gated off
+    # during the walk (22f), so this is the ply the negamax used to own.
+    gate_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+        probe_cap=0, max_probe_n=1,
+    )
+    gate_bot.plan = adopt_plan
+    gate_move = gate_bot.choose_move(wait_base.copy())
+    gate_safe = [
+        m for m in wait_base.legal_moves
+        if not gives_mate(wait_base, m)
+        and not gives_stalemate(wait_base, m)
+    ]
+    gate_safe, _ = gate_bot._plan_filtered_moves(
+        wait_base, gate_safe, gate_bot.planned_target(
+            wait_base, chess.WHITE
+        )
+    )
+    gate_direct = walk_pressure_move(
+        wait_base, wait_target, chess.WHITE, gate_safe, "zach"
+    )
+    control_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="planner",
+        probe_cap=0, max_probe_n=1,
+    )
+    control_bot.plan = adopt_plan
+    control_bot.choose_move(wait_base.copy())
+    check(
+        "the walk's wait ply belongs to the pressure chooser under vi",
+        gate_bot.vi_walk_pressure_moves == 1
+        and gate_move == gate_direct
+        and control_bot.vi_walk_pressure_moves == 0,
+        f"gate={gate_move.uci()} direct="
+        f"{'none' if gate_direct is None else gate_direct.uci()}; "
+        f"planner-fires={control_bot.vi_walk_pressure_moves}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -2584,6 +2737,7 @@ def endgames(args) -> int:
                 f" king-marches={bot.vi_king_marches};"
                 f" walk-clears={bot.vi_walk_clears};"
                 f" closer-parks={bot.vi_closer_parks};"
+                f" walk-pressure={bot.vi_walk_pressure_moves};"
                 f" cage-builds={bot.vi_cage_builds};"
                 f" capture-guards={bot.vi_capture_guards};"
                 f" funnel-guards={bot.vi_wait_funnel_guards};"

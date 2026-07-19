@@ -1581,3 +1581,174 @@ their king during the walk — so next-steps order stands: (1)
 walk-phase defender pressure, (2) deeper funnel pricing (two-ply
 funnels), (3) executioner selection at strip time, (4) multi-pawn
 stacking.
+
+## Walk-phase defender pressure: the funnel potential and the delivery schedule (2026-07-19)
+
+The ledger's top loss family: during a king-holder adoption's pawn walk
+the sub-MDP cannot exist, the piece-mode herding fallbacks never engage
+a king-holder template (their engagement preconditions are piece-holder
+facts — `holding_blocker`, a three-piece cage), and the wait plies fall
+to the plain negamax, whose menu-shrinking eval has no location sense.
+Where their king stands when the pawn lands decides the side's
+certification, and nothing steered it.
+
+PGN forensics on the pinned baseline battery (all ten case-7 games
+replayed move by move) turned "audits 0/N vs 6/7" into named geometry:
+
+- Seeds 0 and 6 were a one-square A/B experiment: both arrived with
+  the king on e5; seed 6's Rf6+Rf8 left the d7 lane open (live root,
+  converted), seed 0's Rf6+Rf7 sealed it, completing a two-square
+  {e5,e6} prison far from the pocket — a 0-goal component and the
+  fifty-move. The wait's own eval BUILT that prison: a tiny menu
+  scores well anywhere on the board.
+- Seeds 1/3/4 were caught north of accidental rook walls (b8/a8/b7
+  behind Ra7/Rc7, or Ra5 sitting on the descent corridor itself) — the
+  dead and 0/N-audit arrivals. Seed 1's stalemate was not a lost race
+  (releases=0); it was the north box.
+- Every converting seed's king descended b7 > a6 > a5 > a4 — through
+  a5, the drill's own rook start square: the corridor opened only when
+  the negamax happened to wander the rook off it.
+- Seed 9's walk took 173 plies (no fence at all), then ran out of
+  game with a live converting root.
+
+Mechanism: `walk_pressure_move` (planning.py) — one ply of our choice
+against Zach's complete modeled pool, argmin of expected funnel
+potential, ties to the lexically smallest UCI so replays are exact.
+`walk_pressure_cost` prices, for THEIR king: chebyshev distance to the
+seal square (the pocket mouth); blocked squares on its pocketward side
+(doors — a fence must never form in front); the descent corridor's
+integrity while he still needs it; the walk as a delivery schedule; and
+our men on the fixed race squares (the audit's race_clear predicate,
+priced per square). Checks are never special-cased: the expectation
+prices them — a check empties the push from his pool and usually
+scatters him, so only a check that genuinely funnels survives the
+argmin. Gate (bot.py): profile flag `walk_pressure` (VI only),
+king-holder plan, `pawn_walk > 0` — plus a stall arm for the posed
+construction whose side certified dead or unconvertible with no live
+policy move (hold established, cage complete, defender not delivered).
+It slots after `_vi_choice` returns None and replaces only the negamax
+pick; the certify/flip/adoption cascade, the reset-veto filter, the
+release scorer, and the exact probe all run upstream, unchanged. The
+chooser ranks the already commitment-filtered menu, so chore plies gain
+a fence-aware tie-break while pure waits get the actual pressure.
+
+Four drill batteries iterated the potential; each falsification is a
+keeper lesson:
+
+1. **A flat finish bonus rushed the pawn home dead.** 30/rank taught
+   the chooser to shrink his pool anywhere (pool-shrink raises the
+   push odds) and the arrivals collapsed to plies 7-23 with his king
+   still north of the walls — the dead-arrival family it was built to
+   prevent, 2/10. The walk is the HERDING WINDOW: every push resets
+   the fifty-move clock, so the pawn must land LAST, not fast.
+2. **The schedule reframe alone changed nothing.** Premature term
+   25 x max(0, min(3, D-1) - walk), finish shrunk to 4: byte-identical
+   games on the failing seeds. The fence value itself was the
+   accelerator — the expectation mechanically rewards cutting his far
+   replies (the average improves with every wall) — and rank-five rook
+   posts raked the corridor into a5 from across the board. Every
+   0/5-unconvertible arrival had a waiter on or raking a5/a6; the two
+   converts kept the lane pristine (Re1 posts) and the sub-MDP did the
+   descent itself from c6-north arrivals, live 6/7.
+3. **A flat corridor charge lost every argmin it was meant to win.**
+   8 per lane square (a5/a6 for the a1 corner — case-6's h5 pocket-top
+   and h6 door, mirrored), gated on D>1 because a sealed lane is spent
+   geometry once he stands at the mouth (the baseline's Re5 with the
+   king already on a4 audited 6/7). Arrivals cleaned up into
+   Rb7/Rd7+Re1 poses with live roots — and the losses moved downstream
+   to live-side stalemates, while the fast-walk seeds stayed
+   byte-identical: their walks end inside the chore choreography,
+   every pressure ply is a chore tie-break, and Ra5 — the corridor
+   squatter — is never in any chore menu, so the charge was constant
+   across every candidate. The walls-behind reward was removed
+   entirely here (its fence value was exactly the poison); the sub-MDP
+   is the ratchet, the wait's job is to deliver a clean board.
+4. **Freeze scaling made the charge win where it can.** Charge x
+   (4 - min(3, walk)): nearly free at walk three, prohibitive at walk
+   one and during the posed stall. Seeds with real wait plies steered
+   clean and converted — seed 0 (fifty-move@170 at baseline, its e5
+   prison) CONVERTED in 56; seed 3 (stalemate@111 at baseline, 21 dead
+   certs) CONVERTED in 106.
+
+One more device was built, measured, and DROPPED: a "roomy" tier in
+the wait-funnel guard preferring moves that leave Zach two options
+(stalemates arrive forced — each wait ply shrinks his pool and the
+one-ply gives_stalemate filter only sees the final move of the
+squeeze). The mechanism is real — seed 1's death in the pinned battery
+is exactly a wait-squeeze stalemate at a live 6/7 root — but the
+battery refuted the guard: stalemates went UP (3 to 5) because the
+squeezes that matter are policy-built (the live herd shrinking his
+pool IS herding) and sit outside the guard's reach, while the tier
+reshuffled every volatile post-arrival outcome. It retires until the
+post-arrival item can price the squeeze properly.
+
+Results — case-7 adoption drill, 10 seeds, `--profile vi
+--vi-herders 1`, the NEW REFERENCE: **3 converted (56/106/72 plies,
+seeds 0/3/5 — each a full pipeline: pressure-steered walk, live 6/7
+certification, policy herd, one audited release, probe-proven mate;
+releases=1 and probes-hit=1 in all three)**. Losses: seeds 1/8
+stalemate (57/71) at LIVE 6/7 arrival roots (0.171/0.157) and seed 7
+stalemate (31, live 6/10) — the post-arrival stall family; seed 9
+fifty-move (152) at a live-but-0/7 root (0.211, corridor-clean — the
+honest counterexample that the geometric potential is a proxy); seeds
+2/4 fifty-move (118/108) and seed 6 repetition (36) — the fast-roll
+family, 0/5 arrivals whose walks ended inside the chores (seed 4
+arrives at ply 7; nothing had a wait ply to steer).
+
+Arrival taxonomy, the number this feature owns: baseline 5
+live-converting / 2 unconvertible / 3 DEAD arrivals; now **6
+live-converting / 4 unconvertible / 0 dead** — the prison and
+north-box families are extinct, and arrivals happen at plies 7-51
+(baseline: up to 173). Headline honesty: the baseline converted 4/10
+(seeds 2/5/6/7). Post-arrival live-side outcomes are VOLATILE under
+any wait perturbation — across the four iterations the convert set
+reshuffled ({2,5,6,7} to {1} to {3,9} to {0,3,5} to {5,9}) while
+arrival quality improved monotonically — and the three baseline
+converts that regressed (2/6/7) are fast-roll or post-arrival deaths
+whose walks offered nothing to steer. Their fix is the next item; a
+wait-phase heuristic cannot reach them.
+
+Full battery: case-6, 10 seeds — **byte-identical to the reference**
+(7 converted at 48/52/34/64/42/38/34, seed 2 fifty-move@100, seeds 7/9
+stalemate; structurally guaranteed: case-6 never walks, and no case-6
+game ever certifies a side negative — checked across all ten logs, so
+the stall arm cannot fire). Case-2 seed-5 (default herders, solo run)
+— **same game to the move** (fifty-move in 225, 98 VI moves,
+builds=12 with 5 failed pawn-not-frozen, burn-updates=30 with 20 at
+end, root 0.000, side-flips=1 at prospect 0.0), `walk-pressure=0` and
+`kh-adoptions=0` by construction (the b2 pawn vetoes the walking
+template at emission). Motifs: verdicts and odds byte-identical
+(kh-corner-h/a and kh-herd-h4 POSITIVE 0.500; fm-organic-h/a and
+fm-deep-h POSITIVE 1.000; ph-contained-root NEGATIVE).
+
+Suite 67 -> 70 by runtime PASS count (24a-24c; the previous entry's
+"68" miscounted its own additions — seven checks 23f-23l on top of 60
+is 67, which is what the pre-change suite prints). 24a white-boxes
+every potential term with exact deltas: approach dominance, the door
+charge, the freeze-scaled lane pair (exactly 24.0 at walk one against
+an off-lane post), the mouth pair (exactly 0.0 — spent geometry), the
+race debt (exactly 25.0), and the schedule inversion both ways
+(landing while far costs, landing at the mouth pays). 24b pins the
+argmin (clearing the corridor rook beats parking it on the entry
+square) and the double-push walk arithmetic; 24c pins the gate end to
+end (a vi bot's wait ply matches the direct call on the same filtered
+menu; the planner profile never consults the chooser).
+
+Next, in expected-value order:
+
+1. Post-arrival recovery for unconvertible and stalled sides — the
+   static-relocation device: move the corridor-raking rook (or
+   whatever static the audit blames), re-certify hypothetically (the
+   clock-reset pattern applied to statics), adopt the relocated pose
+   on a positive verdict. Owns the fast-roll family (chore-end poses
+   with Ra5/Re5 rakes), the live-side stalemates (seeds 1/8: the
+   goal-stall wait squeeze), seed 9's corridor-clean 0/7, and the
+   volatility itself — post-arrival no-policy play is the last regime
+   with nothing certified under it. Audit-in-the-loop (hypothetical
+   arrival certification during the walk) is the same device pointed
+   at wait plies, if any preventable bad arrivals survive it.
+2. Deeper funnel pricing for the fallback regime (two-ply funnels;
+   seed 6's repetition@36 on a live-fallback herd).
+3. Executioner selection at strip time (standard fixtures 1-5 all
+   veto their walks on our own intact b2/g2 pawns). Multi-pawn race
+   stacking.

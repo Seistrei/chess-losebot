@@ -140,6 +140,7 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.vi_king_marches} king marches; "
                 f"{focal.vi_walk_clears} walk clears; "
                 f"{focal.vi_closer_parks} closer parks; "
+                f"{focal.vi_walk_pressure_moves} walk-pressure moves; "
                 f"{focal.vi_cage_builds} cage builds; "
                 f"{focal.vi_capture_guards} capture guards; "
                 f"{focal.vi_wait_funnel_guards} funnel guards; "

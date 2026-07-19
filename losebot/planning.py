@@ -227,6 +227,191 @@ def _modeled_cost(board: chess.Board, target: PawnMateTemplate,
     )
 
 
+# Walk-phase funnel weights — structural relations, not tunables (the same
+# stance as _modeled_cost): one square of pocket approach outranks all
+# fence bookkeeping and an open forward lane outranks everything but the
+# approach itself. Two terms this potential deliberately does NOT have:
+# a menu-shrink reward (the negamax eval's instinct — it built two-square
+# prisons wherever their king happened to stand, a certified-dead
+# arrival) and a walls-behind reward (its fence value is exactly what
+# kept electing rank-five rook posts whose corridor rake poisoned the
+# arrival statics — the third battery's 0/5 audits). The sub-MDP is the
+# ratchet; the wait's job is to deliver a clean board. The walk itself is
+# priced as a SCHEDULE, not a chore: every push resets the fifty-move
+# clock, so the walk is the herding window and the pawn must land LAST. A
+# flat finish bonus taught the first battery's chooser to rush the pawn
+# home in seven plies with his king still north of the walls. The
+# premature term charges each push the pawn is AHEAD of his king's
+# delivery (needed = min(3, distance - 1)), which by expectation makes
+# the chooser dilute the push while he is far (keep his pool roomy, even
+# by checking) and force it once he stands at the mouth.
+_PRESSURE_DISTANCE = 10.0
+_PRESSURE_DOOR = 6.0
+_PRESSURE_FINISH = 4.0
+_PRESSURE_PREMATURE = 25.0
+_PRESSURE_CORRIDOR = 8.0
+_PRESSURE_RACE = 25.0
+_PRESSURE_JACKPOT = -10_000.0
+
+
+def _pressure_walk(board: chess.Board, them: chess.Color,
+                   target: PawnMateTemplate) -> int:
+    """Zach pushes still owed by the walking pawn, read from the board.
+
+    The root template's ``pawn_walk`` is stale one push later, so the leaf
+    recounts it with the same arithmetic the walking-template emission uses
+    (one push covers two ranks from the home square). A stray pawn of
+    theirs below the pre-corner square is not the walker and never counts.
+    """
+    file = chess.square_file(target.arrival_square)
+    step = 8 if them == chess.WHITE else -8
+    pre_rank = chess.square_rank(target.arrival_square - step)
+    home_rank = 1 if them == chess.WHITE else 6
+    for pawn in board.pieces(chess.PAWN, them):
+        if chess.square_file(pawn) != file:
+            continue
+        rank = chess.square_rank(pawn)
+        walking = rank < pre_rank if them == chess.WHITE else rank > pre_rank
+        if walking:
+            return abs(pre_rank - rank) - (1 if rank == home_rank else 0)
+    return 0
+
+
+def walk_pressure_cost(board: chess.Board, target: PawnMateTemplate,
+                       us: chess.Color) -> float:
+    """Funnel potential of one walk position, lower is better.
+
+    The case-7 arrivals told the whole story: every converting seed had
+    their king delivered down the corridor into the pocket mouth (the seal
+    square), while the losses were kings sealed into remote two-square
+    prisons (Rf6/Rf7 around e5), caught north of accidental rook walls, or
+    left free-roaming for a 173-ply walk. The potential therefore prices,
+    for THEIR king: distance to the seal square; blocked squares on its
+    pocketward side (doors — a fence must never form in front, and a rook
+    parked on the descent corridor is exactly such a fence); the descent
+    lane's integrity while he still needs it; the walk as a delivery
+    schedule (pushes the pawn is ahead of his king's approach are
+    premature — the pawn lands last); and any of our men squatting on the
+    fixed race squares the audit will bill at arrival.
+    """
+    them = not us
+    king = board.king(them)
+    if king is None:
+        return 0.0
+    anchor = target.kh_seal_square
+    distance = chess.square_distance(king, anchor)
+    doors_blocked = 0
+    for square in chess.SquareSet(chess.BB_KING_ATTACKS[king]):
+        if chess.square_distance(square, anchor) >= distance:
+            continue
+        occupant = board.piece_at(square)
+        if occupant is not None and occupant.color == them:
+            # His own man: transient (the walker moves on), not a door we
+            # owe him.
+            continue
+        if occupant is not None or board.is_attacked_by(us, square):
+            doors_blocked += 1
+    walk = _pressure_walk(board, them, target)
+    needed = min(3, max(0, distance - 1))
+    cost = (
+        _PRESSURE_DISTANCE * distance
+        + _PRESSURE_DOOR * doors_blocked
+        + _PRESSURE_FINISH * walk
+        + _PRESSURE_PREMATURE * max(0, needed - walk)
+    )
+    if distance > 1:
+        # Corridor integrity: the descent lane above the pocket mouth (the
+        # corner-file squares over the seal — case-6's h5 pocket-top and
+        # h6 door, mirrored) must stay unattacked and unoccupied by us
+        # until their king is delivered. The door term only sees his
+        # CURRENT neighbors, but a rook fences this lane from across the
+        # board (the second battery: every 0/5-unconvertible arrival had a
+        # waiter on or raking a5/a6 while both converts kept the lane
+        # pristine) — and with one mobile herder the frozen rook makes
+        # that seal permanent in-graph. Once he stands at the mouth the
+        # lane has served: the same posts are then live (the baseline's
+        # Re5 with the king already on a4 audited 6/7). The charge scales
+        # with how frozen the pose is: expectation mechanically rewards
+        # east walls (cutting his far replies improves the average) and a
+        # flat charge lost that argmin every time, but only the statics
+        # the arrival actually inherits are graded by the audit — so a
+        # rake is nearly free at walk three and prohibitive at walk one
+        # and during the posed stall.
+        step = 8 if them == chess.WHITE else -8
+        freeze = 4 - min(3, walk)
+        for lane in (anchor - step, anchor - 2 * step):
+            if not 0 <= lane < 64:
+                break
+            squatter = board.piece_at(lane)
+            if (squatter is not None and squatter.color == us) or (
+                board.is_attacked_by(us, lane)
+            ):
+                cost += _PRESSURE_CORRIDOR * freeze
+    if board.piece_at(target.checked_square) is not None:
+        cost += _PRESSURE_RACE
+    if board.piece_at(target.kh_escape_square) is not None:
+        cost += _PRESSURE_RACE
+    entry = board.piece_at(target.kh_entry_square)
+    if entry is not None and entry.color == us:
+        cost += _PRESSURE_RACE
+    far = board.piece_at(target.kh_far_capture_square)
+    if far is not None and far.color == us:
+        cost += _PRESSURE_RACE
+    return cost
+
+
+def walk_pressure_move(board: chess.Board, target: PawnMateTemplate,
+                       us: chess.Color, moves: list[chess.Move],
+                       model: str | None) -> chess.Move | None:
+    """Choose the wait move with the lowest expected funnel potential.
+
+    One ply of our choice against his complete modeled pool is the whole
+    search: the wait is long (three pushes at uniform odds), the fence is
+    built one rook move at a time, and every ply re-runs the gradient — a
+    ratchet needs a potential, not a horizon. Checks are never special-cased
+    because the expectation prices them exactly: a check empties the push
+    from his pool (the walk term stalls) and usually scatters him (the
+    distance term pays), so only a check that genuinely funnels survives
+    the argmin. Candidates whose landing is terminal are skipped — the
+    caller's guards already vetoed what matters, and never zeroing the menu
+    is their contract, not ours. Ties break toward the lexically smallest
+    UCI so replays are exact.
+    """
+    best_move: chess.Move | None = None
+    best_cost = 0.0
+    for move in moves:
+        board.push(move)
+        if board.is_checkmate() or board.is_stalemate() or _draw(board):
+            board.pop()
+            continue
+        pool = (
+            support_zach(board)
+            if model == "zach"
+            else list(board.legal_moves)
+        )
+        if not pool:
+            # Every legal reply mates us: the walk just ended in our favor.
+            cost = _PRESSURE_JACKPOT
+        else:
+            total = 0.0
+            for reply in pool:
+                board.push(reply)
+                if board.is_checkmate():
+                    total += _PRESSURE_JACKPOT
+                else:
+                    total += walk_pressure_cost(board, target, us)
+                board.pop()
+            cost = total / len(pool)
+        board.pop()
+        if (
+            best_move is None
+            or cost < best_cost
+            or (cost == best_cost and move.uci() < best_move.uci())
+        ):
+            best_move, best_cost = move, cost
+    return best_move
+
+
 @dataclass
 class _ModeledContext:
     """Shared limits and caches for selective modeled herding.

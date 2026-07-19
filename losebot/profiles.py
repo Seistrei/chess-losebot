@@ -101,6 +101,15 @@ class EngineProfile:
     # reproducible.
     kh_bishop_pull: float = 0.0
     kh_knight_pull: float = 0.0
+    # Walk-phase defender pressure: while a king-holder adoption waits out
+    # the Zach-paced pawn walk, nothing else herds their king (the sub-MDP
+    # cannot exist before the geometry poses, and the piece-mode herding
+    # fallbacks never engage a king-holder template), so wait moves are
+    # chosen by expected funnel potential over his modeled pool instead of
+    # the plain negamax — whose menu-shrinking eval happily seals him into
+    # a two-square prison anywhere on the board, a certified-dead arrival.
+    # Off by default: profiles predating the walk stay reproducible.
+    walk_pressure: bool = False
 
 
 CURRENT = EngineProfile(
@@ -272,6 +281,7 @@ VI = replace(
     # its optimal policy. V(root) == 0 is a certificate that the current
     # static configuration can never walk their king into the goal zone.
     vi_herding=True,
+    walk_pressure=True,
 )
 
 
