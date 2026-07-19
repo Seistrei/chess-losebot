@@ -2603,6 +2603,93 @@ def selftest() -> int:
         f"pick={'none' if cliff_pick is None else cliff_pick.uci()}",
     )
 
+    # 25a. The static-relocation device, end to end on the battery's own
+    # failure: the case-7 seed-2 arrival pose (Rb5+Re5 raking the descent
+    # corridor, black king c7, pawn landed b3) certifies live-but-
+    # unconvertible, the mirror cannot pose (c1 is no corner), the
+    # adoption is already committed — and the relocation scan certifies
+    # moving the b5 rook to b8, off the rank-five rake and onto the
+    # north-cap post of the converting arrivals, on its second
+    # hypothetical build (the funnel prior orders the corridor-clean
+    # destinations first).
+    reloc_board = chess.Board("2N5/2k5/8/1R2R3/2P5/1pP5/1K6/1B6 w - - 0 20")
+    reloc_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+        probe_cap=0, max_probe_n=1,
+    )
+    reloc_bot.plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king"
+    )
+    reloc_move = reloc_bot.choose_move(reloc_board.copy())
+    check(
+        "an unconvertible pose relocates its corridor rake, certified",
+        reloc_move == chess.Move.from_uci("b5b8")
+        and reloc_bot.vi_relocations == 1
+        and reloc_bot.vi_relocation_builds == 2
+        and reloc_bot.vi_unconvertible_sides == 1
+        and reloc_bot.vi_side_flips == 0
+        and (chess.B5, chess.B8) in reloc_bot._vi_relocated,
+        f"move={reloc_move.uci()}; "
+        f"relocations={reloc_bot.vi_relocations}"
+        f"/{reloc_bot.vi_relocation_builds} builds; "
+        f"unconvertible={reloc_bot.vi_unconvertible_sides}",
+    )
+
+    # 25b. The relocation candidate domain: active herders are untouchable
+    # (the carried-subset hypothetical would be a lie), the cage bishop
+    # never survives the stability recheck, and a played relocation's
+    # exact inverse is barred for the game — while the rest of the moved
+    # rook's menu stays open.
+    reloc_target = reloc_bot.plan.resolve(reloc_board, chess.WHITE)
+    domain_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    domain_bot.plan = reloc_bot.plan
+    domain = domain_bot._relocation_candidates(
+        reloc_board, reloc_target, frozenset({chess.E5})
+    )
+    domain_ucis = [uci for _, uci, _ in domain]
+    after_board = chess.Board(
+        "1RN5/3k4/8/4R3/2P5/1pP5/1K6/1B6 w - - 2 21"
+    )
+    after_target = domain_bot.plan.resolve(after_board, chess.WHITE)
+    domain_bot._vi_relocated.add((chess.B5, chess.B8))
+    after = domain_bot._relocation_candidates(
+        after_board, after_target, frozenset({chess.E5})
+    )
+    after_ucis = [uci for _, uci, _ in after]
+    check(
+        "relocation candidates spare herders, the cage, and inverses",
+        bool(domain_ucis)
+        and all(not uci.startswith("e5") for uci in domain_ucis)
+        and all(not uci.startswith("b1") for uci in domain_ucis)
+        and "b5b8" in domain_ucis
+        and domain_ucis.index("b5b8") <= 2
+        and "b8b5" not in after_ucis
+        and any(uci.startswith("b8") for uci in after_ucis),
+        f"domain={domain_ucis[:6]}...; after={after_ucis[:6]}...",
+    )
+
+    # 25c. Piece-holder plans never scan: their unconvertibility is the
+    # release theorem, and no relocation refutes a theorem (this is also
+    # the case-2 reference's shield — its cadence hits the same call).
+    theorem_target = PawnMateTemplate(
+        pawn_square=chess.B6, arrival_square=chess.B5,
+        checked_square=chess.A5, our_king_steps=0, defender_steps=0,
+        cage_occupancy=3, arrival_blocked=False, runway_blocked=False,
+        holding_blocker=True, holding_blocker_defended=True,
+    )
+    theorem_move = domain_bot._consider_static_relocation(
+        reloc_board, theorem_target, 1, None
+    )
+    check(
+        "piece-holder plans never relocate",
+        theorem_move is None
+        and domain_bot.vi_relocation_builds == 0,
+        f"move={'none' if theorem_move is None else theorem_move.uci()}; "
+        f"builds={domain_bot.vi_relocation_builds}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -2807,7 +2894,9 @@ def endgames(args) -> int:
                 f" relaxed-releases={bot.vi_clock_relaxed_releases}"
                 f" resets={bot.vi_clock_resets}"
                 f"/{bot.vi_clock_reset_builds} builds"
-                f" ({bot.vi_clock_reset_vetoes} fallback vetoes)",
+                f" ({bot.vi_clock_reset_vetoes} fallback vetoes);"
+                f" relocations={bot.vi_relocations}"
+                f"/{bot.vi_relocation_builds} builds",
                 flush=True,
             )
         if args.show_fen:

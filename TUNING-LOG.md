@@ -1799,3 +1799,94 @@ funnel guard's trapped tier caught them all before the chooser, and
 the walking file is never doubled), case-6 at the exact reference
 plies, case-2 seed-5 the same game to the move (solo run,
 builds=12 with 5 failed pawn-not-frozen), motifs byte-identical.
+
+## Post-arrival static relocation: move the blamed rook, certified (2026-07-19)
+
+The walk-pressure session's ledger said it plainly: a king-holder side
+that certifies live-but-unconvertible is poisoned by PLACEMENT, not
+subset choice — the sweep already tried every herder subset, so what
+remains fixable is where the frozen men stand. The fast-roll seeds all
+arrived with a rook on or raking the descent corridor (their walks end
+inside the chore choreography, and no chore menu ever contains the
+squatter), and one mobile herder can never lift a frozen seal. Play
+then herded a doomed fallback until the clock or a funnel took the
+game.
+
+The device: `_consider_static_relocation`, ranking BELOW the mirror
+flip and the corner adoption in the unconvertible cascade (a certified
+fact about a posed mirror, then the theorem-backed replacement, THEN
+one quiet repair move). It scans quiet non-checking moves of our
+non-king, non-pawn pieces standing outside the active herder subset,
+under the clock-reset discipline: the plan must still resolve with no
+construction metric regressed and no new race debt; Zach's reply pool
+must hold neither a forced capture nor an adjudication trap; and a
+hypothetical rebuild rooted AFTER the move with Zach to move —
+carrying the active subset verbatim, since a relocation moves no
+herder — must certify live AND converting, meeting the
+conversion-gated flip's era-feasibility and affirmative-fit standards
+plus at least one fitting reply. Nothing less than a converting
+verdict is accepted: the side being left is worth zero, but a
+merely-live relocated pose trades zero for zero and a tempo.
+Candidates are ordered by the walk-pressure funnel potential of the
+landed position — the geometric prior spends the build budget on
+corridor-clean poses first — and capped at eight per scan (the
+audition, not the shortlist: a pose the top eight geometric picks
+cannot certify is not rescued by number twenty-three, and the uncapped
+scan re-verified two dozen refusals on every cadence expiry — seed 4
+spent 189 builds saying no; the cap halves it and the games are
+byte-identical). One `vi_build_ms` deadline bounds each scan; refusals
+set nothing — the flip's own cooldown paces re-scans, and the
+position-dependence doctrine (their king drifts, pockets open) is why
+re-scans exist at all. A played relocation records its (from, to) pair
+for the game and bars the exact inverse: the rebuild that follows may
+sweep to a different verdict than the carried-subset hypothetical, and
+the memory keeps that disagreement from ping-ponging the piece.
+Piece-holder plans never scan — their unconvertibility is the release
+theorem, and no relocation refutes a theorem (this is also the case-2
+reference's shield: its cadence hits the same call).
+
+Fired end to end, the poster child is the battery's own seed 2: the
+Rb5+Re5 arrival certifies 0/5-unconvertible at ply 17, the mirror
+cannot pose (c1 is no corner), the adoption is already committed —
+and on the SECOND hypothetical build the scan certifies 10. Rb8, off
+the rank-five rake and onto the north-cap post of every converting
+arrival. The policy then herds with knight checks (Nd6-b7-c5), his
+king descends c6 > b6 > a5 > a4 > a3, 19. Ka1 vacates, 20. Nb6 seals,
+and 20...b2# lands the textbook corner mate at ply 40 — the fastest
+case-7 conversion ever recorded, converting a seed that was a
+fifty-move loss in every prior battery.
+
+Results — case-7, 10 seeds, `--profile vi --vi-herders 1`, the NEW
+REFERENCE: **4 converted (56/40/106/72 plies, seeds 0/2/3/5)**; six
+games with zero relocations are byte-identical to the walk-pressure
+reference (0/1/3/5/7/8 — the device is perfectly inert where no side
+certifies unconvertible); seed 6 relocates once and trades its
+repetition@36 for a stalemate@111 (the relocated pose went live and
+herded 75 more plies before the live-side stall family took it); seed
+9 relocates once mid-game and still meets its fifty-move at the same
+ply by clock coincidence; seed 4 refuses every audition (96 capped
+builds) — its chore-end pose needs more than one repair move (knight
+AND rook both stand wrong), the honest one-move-horizon residual.
+
+Full battery: case-6 byte-identical (no case-6 game certifies a side
+negative, so the cascade never reaches the device); case-2 seed-5 solo
+— same game to the move with `relocations=0/0` (the theorem gate);
+motifs byte-identical. Suite 71 -> 74: 25a pins the seed-2 pose end to
+end (certify-unconvertible, flip and adoption decline, Rb5-b8 on build
+two), 25b the candidate domain (active herders untouchable, the cage
+never survives the stability recheck, a played relocation's exact
+inverse is barred while the rest of the rook's menu stays open), 25c
+the piece-holder theorem gate at zero builds.
+
+Next, in expected-value order:
+
+1. Live-side post-arrival stalls — now clearly the largest loss family
+   (seeds 1/7/8 stalemate at live 6/7-6/10 roots; the goal-stall wait
+   squeeze and the forced-stalemate landing). The relocation device
+   deliberately does not touch live sides; their fix likely wants the
+   release-refusal reasons surfaced (why do audited-converting goals
+   refuse every race at play time?) before any new machinery.
+2. Multi-move repairs (seed 4: rook AND knight both misplaced; the
+   one-move relocation horizon cannot compose them).
+3. Deeper funnel pricing (two-ply funnels; unchanged), executioner
+   selection at strip time, multi-pawn stacking (unchanged).

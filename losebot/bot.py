@@ -15,7 +15,12 @@ from .herding_vi import (
     prospective_flip_policy,
     score_release_moves,
 )
-from .planning import herding_move, modeled_herding_move, walk_pressure_move
+from .planning import (
+    herding_move,
+    modeled_herding_move,
+    walk_pressure_cost,
+    walk_pressure_move,
+)
 from .profiles import EngineProfile, get_profile, probe_limits
 from .search import (
     ProofStatus,
@@ -142,6 +147,14 @@ class LoseBot:
         # (review P1). Only the exact selfmate probe outranks the veto —
         # a PROVEN mating line that spends a push is a win, not a leak.
         self._vi_reset_refused: set[chess.Move] = set()
+        # Relocations played this game, as (from, to) square pairs: the
+        # anti-shuttle memory. A certified relocation triggers a rebuild
+        # whose sweep may disagree with the carried-subset hypothetical,
+        # and without this the next cadence could certify the exact
+        # inverse move and ping-pong the static. Survives _reset_vi_state
+        # deliberately (the rebuild follows every relocation); cleared at
+        # the rewind/game boundary alongside the adoption memory.
+        self._vi_relocated: set[tuple[int, int]] = set()
         self.vi_builds = 0
         self.vi_build_failures = 0
         self.vi_build_ms = 0.0
@@ -197,6 +210,8 @@ class LoseBot:
         self.vi_clock_resets = 0
         self.vi_clock_reset_builds = 0
         self.vi_clock_reset_vetoes = 0
+        self.vi_relocations = 0
+        self.vi_relocation_builds = 0
         self.vi_hit_refreshes = 0
         self.vi_min_hit_root: int | None = None
         self.vi_exp_hit_root: float | None = None
@@ -956,6 +971,11 @@ class LoseBot:
                     return None
                 if self._consider_kh_adoption(board):
                     return None
+                relocation = self._consider_static_relocation(
+                    board, target, limit, policy
+                )
+                if relocation is not None:
+                    return relocation
         if policy is None or not policy.report.ok:
             return None
         if not policy.report.root_live:
@@ -1059,6 +1079,11 @@ class LoseBot:
                     return None
                 if self._consider_kh_adoption(board):
                     return None
+                relocation = self._consider_static_relocation(
+                    board, target, limit, policy
+                )
+                if relocation is not None:
+                    return relocation
             elif clock_hard or clock_soft:
                 # The side converts but the era's budget cannot (hard) or
                 # probably will not (soft) fit the remaining herd. In
@@ -1550,6 +1575,188 @@ class LoseBot:
                 return move
         return None
 
+    def _consider_static_relocation(
+        self,
+        board: chess.Board,
+        target: PawnMateTemplate,
+        limit: int,
+        policy: HerdingPolicy | None,
+    ) -> chess.Move | None:
+        """Move the static the audit implicitly blames; play it only
+        certified.
+
+        A king-holder side that certifies live-but-unconvertible is
+        poisoned by PLACEMENT, not subset choice: the sweep already tried
+        every herder subset, so what remains fixable is where the frozen
+        men stand — the battery's fast-roll seeds all arrived with a rook
+        on or raking the descent corridor, a seal the one mobile herder
+        can never lift. The mirror flip and the corner adoption outrank
+        this device (a certified fact about a posed mirror, then the
+        theorem-backed replacement); when both decline, one quiet
+        relocation of a non-herder piece is scanned under the clock-reset
+        discipline: construction metrics must not regress, Zach's reply
+        pool must stay free of forced captures and adjudication traps,
+        and a hypothetical rebuild rooted AFTER the move with Zach to
+        move — carrying the active herder subset verbatim, since a
+        relocation moves no herder — must certify live AND converting,
+        with the era-feasibility and affirmative-fit standards of the
+        conversion-gated flip and at least one fitting reply. The side
+        being left is worth zero, so any certified lottery beats staying;
+        but nothing less than a converting verdict is accepted, because a
+        merely-live relocated pose trades zero for zero and a tempo.
+
+        Candidates are ordered by the walk-pressure funnel potential of
+        the landed position (corridor-clean, off-lane, race-debt-free
+        poses first), so the shared build budget is spent where the
+        geometry says conversion is most plausible. The scan is bounded
+        by one ``vi_build_ms`` deadline; refusals set nothing — the
+        cadence's own cooldown paces re-scans. Piece-holder plans never
+        scan: their unconvertibility is the release theorem, and no
+        relocation refutes a theorem. A played relocation is recorded and
+        its exact inverse barred for the game (the rebuild's sweep may
+        disagree with the carried-subset hypothetical, and the memory
+        keeps that disagreement from ping-ponging the piece).
+        """
+        if not target.king_holder:
+            return None
+        us = board.turn
+        plan = self.plan
+        if plan is None:
+            return None
+        forced = None
+        herder_squares: frozenset = frozenset()
+        if policy is not None:
+            squares = policy.dynamic_squares(board)
+            if squares is not None:
+                herder_squares = squares
+                forced = tuple(sorted(
+                    (square, board.piece_type_at(square))
+                    for square in squares
+                ))
+        candidates = self._relocation_candidates(
+            board, target, herder_squares
+        )
+        remaining = 100 - board.halfmove_clock
+        deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
+        # Eight is the audition, not the shortlist: the funnel prior has
+        # already ordered every stable candidate, and a pose the top eight
+        # geometric picks cannot certify is not going to be rescued by
+        # number twenty-three — while an uncapped scan re-verified two
+        # dozen refusals on every cadence expiry (seed 4 spent 189 builds
+        # saying no). The cadence re-scans as their king drifts, so a
+        # candidate missed today is auditioned again tomorrow.
+        for _, _, move in candidates[:8]:
+            remaining_ms = (deadline - time.monotonic()) * 1000.0
+            if remaining_ms < 250.0:
+                break  # scan budget exhausted: the rest stay uncertified
+            hypothetical = board.copy(stack=False)
+            hypothetical.push(move)
+            resolved = plan.resolve(hypothetical, us)
+            if resolved is None:
+                continue
+            self.vi_relocation_builds += 1
+            probe = HerdingPolicy.build(
+                hypothetical, resolved, limit,
+                self.profile.vi_state_cap, int(remaining_ms),
+                self.profile.vi_gamma, herders=forced,
+                model=self.opponent_model,
+                race_max_losing=self.profile.vi_race_max_losing,
+                conversion_ms=self.profile.vi_conversion_ms,
+                root_theirs=True,
+            )
+            report = probe.report
+            fraction = probe.reply_fit_fraction()
+            if (
+                report.ok
+                and report.root_live
+                and report.root_converts
+                and (
+                    report.min_hit_root == 0
+                    or report.min_hit_root <= remaining
+                )
+                and 0 < report.fit_hit_root <= remaining
+                and fraction is not None
+                and fraction > 0.0
+            ):
+                self._vi_relocated.add(
+                    (move.from_square, move.to_square)
+                )
+                self.vi_relocations += 1
+                return move
+        return None
+
+    def _relocation_candidates(
+        self,
+        board: chess.Board,
+        target: PawnMateTemplate,
+        herder_squares: frozenset,
+    ) -> list[tuple[float, str, chess.Move]]:
+        """Stable relocation moves, cheapest funnel potential first.
+
+        The domain is quiet non-checking moves of our non-king,
+        non-pawn pieces standing OUTSIDE the active herder subset, minus
+        exact inverses of relocations already played. Stability replays
+        the clock-reset discipline: the plan must still resolve with no
+        construction metric regressed and no new race debt, and Zach's
+        reply pool must hold neither a forced capture nor an adjudication
+        trap. The funnel potential of the landed position orders the
+        survivors so the build budget is spent on corridor-clean poses
+        first; the UCI in the sort key keeps replays exact.
+        """
+        us = board.turn
+        plan = self.plan
+        pre_debt = _kh_race_debt(board, us, target)
+        candidates: list[tuple[float, str, chess.Move]] = []
+        for move in board.legal_moves:
+            mover = board.piece_type_at(move.from_square)
+            if mover in (chess.KING, chess.PAWN):
+                continue
+            if move.from_square in herder_squares:
+                continue
+            if (
+                board.is_capture(move)
+                or move.promotion is not None
+                or board.gives_check(move)
+                or gives_mate(board, move)
+                or gives_stalemate(board, move)
+            ):
+                continue
+            if (move.to_square, move.from_square) in self._vi_relocated:
+                continue
+            board.push(move)
+            future = plan.resolve(board, us)
+            stable = (
+                future is not None
+                and future.our_king_steps <= target.our_king_steps
+                and future.cage_occupancy >= target.cage_occupancy
+                and future.pawn_walk == target.pawn_walk
+                and future.walk_blockers <= target.walk_blockers
+                and (target.runway_blocked or not future.runway_blocked)
+                and _kh_race_debt(board, us, future) <= pre_debt
+            )
+            if stable:
+                pool = support_zach(board)
+                if pool and all(
+                    board.is_capture(reply) for reply in pool
+                ):
+                    stable = False
+                for reply in pool if stable else ():
+                    board.push(reply)
+                    trapped = (
+                        board.is_stalemate()
+                        or arena_draw(board) is not None
+                    )
+                    board.pop()
+                    if trapped:
+                        stable = False
+                        break
+            if stable:
+                prior = walk_pressure_cost(board, future, us)
+                candidates.append((prior, move.uci(), move))
+            board.pop()
+        candidates.sort()
+        return candidates
+
     def _reset_push_candidates(
         self, board: chess.Board
     ) -> list[chess.Move]:
@@ -1644,6 +1851,7 @@ class LoseBot:
             # a side (review P1). In-game plan resets keep it — that is
             # its purpose (promotions mid-walk).
             self._kh_adoption = None
+            self._vi_relocated.clear()
             self._reset_vi_state()
         self._last_seen_ply = ply
         # No repetition tally lives here anymore: _vi_choice recounts the
