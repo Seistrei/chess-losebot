@@ -1507,6 +1507,26 @@ class HerdingPolicy:
             return 0
         return self._min_hit[index]
 
+    def child_can_convert(self, index: int) -> bool:
+        """Whether a ``ranked_moves`` child still reaches a proven finish.
+
+        The burn-aware complement of ``child_min_hit`` (review P2):
+        fit_hit treats burned states as barriers, so HIT_INF here is an
+        exact certificate that no unburned route to a positively seeded
+        terminal survives — the child's true value is 0, and any
+        positive residue in the ranking is Bellman crumb (up to
+        tolerance/(1-gamma)) left by a truncated decreasing re-solve,
+        which no fixed epsilon can tell from a genuinely tiny conversion
+        chance. Fresh wherever the ranking is: any burn movement stales
+        the stats and the re-solve or the dedicated refresh recomputes
+        them before a converged consumer reads. True (no claim) when
+        the stats are unavailable: an unknown must never condemn a
+        candidate.
+        """
+        if self._fit_hit is None or index >= len(self._fit_hit):
+            return True
+        return self._fit_hit[index] < HIT_INF
+
     def reply_fit_fraction(self) -> float | None:
         """Per-reply finish evidence at a their-turn root.
 

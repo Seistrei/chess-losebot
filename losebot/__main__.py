@@ -2011,6 +2011,37 @@ def selftest() -> int:
         f"{'INF' if tour_est and tour_est[1] >= HIT_INF else tour_est})",
     )
 
+    # 23k. The release affirmation gates on the policy mapping the
+    # position BEFORE the recount (review P3): a cached policy that no
+    # longer maps can never answer hit_estimates, so the old order paid
+    # a history recount — and, mid-solve, a vi_build_ms re-solve — per
+    # near-cliff decision on a graph whose affirmation was never
+    # coming. A warm kh policy marked mid-solve meets the near-cliff
+    # board with a foreign a2 pawn: off the static split, contains()
+    # False, so the bot must take the relaxed lottery without spending
+    # a resolve on the stale graph — and without the main path
+    # rebuilding either, since the release returns first. The
+    # conservative outcome (no affirmation -> relax) is unchanged.
+    stale_bot = _warm_kh_bot()
+    stale_policy = stale_bot._vi_policy
+    stale_policy.report.converged = False
+    stale_board = chess.Board(motif["kh-herd-h4"].fen)
+    stale_board.set_piece_at(chess.A2, chess.Piece(chess.PAWN, chess.WHITE))
+    stale_board.halfmove_clock = 94
+    stale_move = stale_bot.choose_move(stale_board)
+    check(
+        "a stale policy is not recounted or re-solved for the affirmation",
+        not stale_policy.contains(stale_board)
+        and stale_move == chess.Move.from_uci("g2h1")
+        and stale_bot.vi_clock_relaxed_releases == 1
+        and stale_bot.vi_resolves == 0
+        and stale_bot.vi_builds == 1,
+        f"pick={stale_board.san(stale_move)} "
+        f"(resolves={stale_bot.vi_resolves}, "
+        f"relaxed={stale_bot.vi_clock_relaxed_releases}, "
+        f"builds={stale_bot.vi_builds})",
+    )
+
     # 23g. Affirmative statistics respect repetition burns (review P1:
     # the fit/p-m passes traversed burned states, so a threefold-dead
     # route still proved affirmative finishes). Burning every converting
@@ -2068,6 +2099,49 @@ def selftest() -> int:
         f"restored={restored_est[:2]}; "
         f"quiet burn stale={quiet_stale} "
         f"refreshed={quiet_refreshed} est={quiet_est[:2]}",
+    )
+
+    # 23j. Ranking prunes on exact reachability, not numerics (review
+    # P2): a total burn's DECREASING re-solve stops inside the Bellman
+    # tolerance, leaving crumbs (5.7e-6 here — above the raw 1e-6
+    # tolerance, let alone the ranking's 1e-9 cutoff) that ranked as
+    # real value, anchored the floor window, and noise-walked a herd
+    # whose true value was 0. With every converting goal burned, every
+    # ranked child reads child_can_convert False — fit INF is an exact
+    # zero-value certificate while min_hit keeps its pristine floor, so
+    # the clock veto never catches these — and the play-time loop
+    # crumb-prunes them all into the honest zero fallback. Restored,
+    # the live children affirm again and only the genuinely dead a5
+    # child stays False: a pristine monotone-from-zero solve gives
+    # value > 0 only to states that reach a seed, so the filter never
+    # bites a burn-free graph.
+    hit_kh._set_burned(burn_goals)
+    hit_kh.solve_more(30_000)
+    crumb_ranked = hit_kh.ranked_moves(kh_root_board) or []
+    crumb_top = crumb_ranked[0][0] if crumb_ranked else 0.0
+    crumb_convertible = [
+        hit_kh.child_can_convert(child) for _, _, child in crumb_ranked
+    ]
+    hit_kh._set_burned(set())
+    hit_kh.solve_more(30_000)
+    live_ranked = hit_kh.ranked_moves(kh_root_board) or []
+    live_convertible = {
+        move.uci(): hit_kh.child_can_convert(child)
+        for _, move, child in live_ranked
+    }
+    check(
+        "burn-dead crumbs prune on exact reachability, live values stay",
+        len(crumb_ranked) == 12
+        and 1e-9 < crumb_top < 1e-4
+        and not any(crumb_convertible)
+        and live_convertible.get("a1a5") is False
+        and all(
+            ok for move, ok in live_convertible.items() if move != "a1a5"
+        ),
+        f"crumb top={crumb_top:.2e}, convertible="
+        f"{sum(crumb_convertible)}/{len(crumb_convertible)}; "
+        f"live dead-children="
+        f"{sorted(m for m, ok in live_convertible.items() if not ok)}",
     )
 
     # 23h. The soft clock trigger requires honest statistics (review P1:
@@ -2435,6 +2509,7 @@ def endgames(args) -> int:
                 f" played={bot.vi_moves_played};"
                 f" misses={bot.vi_state_misses};"
                 f" zero-value={bot.vi_zero_fallbacks};"
+                f" crumb-pruned={bot.vi_crumb_pruned};"
                 f" goal-stalls={bot.vi_goal_stalls};"
                 f" releases={bot.vi_releases}"
                 f" ({bot.vi_release_nodes} probe nodes);"

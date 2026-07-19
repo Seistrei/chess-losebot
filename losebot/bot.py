@@ -177,9 +177,13 @@ class LoseBot:
         self.vi_conversion_nodes = 0
         self.vi_conversion_incomplete = 0
         # Repetition burn: how often the era recount moved the burn set,
-        # and the active policy's current burned-state gauge.
+        # the active policy's current burned-state gauge, and ranked
+        # candidates dropped because burning cut their every route to a
+        # positive terminal — their residual value is solver crumb, not
+        # conversion chance (review P2).
         self.vi_burn_updates = 0
         self.vi_burned_states = 0
+        self.vi_crumb_pruned = 0
         # Clock feasibility: plies flagged by the hard/soft gates, ranked
         # candidates vetoed as unfinishable, releases accepted only under
         # the relaxed near-cliff standards, certified clock-reset pushes
@@ -829,7 +833,14 @@ class LoseBot:
                 # and wrongly suppress the lottery (review P1). Only
                 # without a full affirmation — no policy, off-graph,
                 # unconverged stats, or a herd that no longer fits — is
-                # the best positive lottery taken now.
+                # the best positive lottery taken now. Off-graph is part
+                # of the GATE, not a discovery made after the spend
+                # (review P3): a cached policy that no longer maps this
+                # position can never answer hit_estimates, so recounting
+                # and re-solving it first paid one or more build budgets
+                # per decision for an affirmation that was never coming.
+                # contains() — membership, not just the static-split
+                # match — is the exact precondition, at one piece scan.
                 fits = False
                 policy = self._vi_policy
                 if (
@@ -838,6 +849,7 @@ class LoseBot:
                     and policy.report.ok
                     and policy.report.root_live
                     and policy.report.root_converts
+                    and policy.contains(board)
                 ):
                     # The affirmation must price THIS decision's burn
                     # set: our previous move and Zach's reply can have
@@ -1112,6 +1124,22 @@ class LoseBot:
                 # says. min_hit stays a lower bound under burning, so the
                 # veto never cuts a finishable line.
                 self.vi_clock_pruned += 1
+                continue
+            if not policy.child_can_convert(child):
+                # Exact reachability, not an epsilon (review P2): burns
+                # are barriers in fit_hit, so a child with no unburned
+                # route to a positive terminal has true value 0 — but a
+                # total burn's decreasing re-solve leaves Bellman crumbs
+                # (measured 5.7e-6, above any tolerance-scale cutoff)
+                # that would otherwise rank as real value, anchor the
+                # floor window, and noise-walk a herd the arena has
+                # already drawn dead. min_hit ignores burns by design,
+                # so the clock veto above never catches these. Pruned
+                # BEFORE the window anchors: a crumb outranking a
+                # genuinely tiny live line must not set the floor over
+                # it. When every candidate prunes, the zero fallback
+                # below says honestly that nothing here converts.
+                self.vi_crumb_pruned += 1
                 continue
             if top_value is None:
                 top_value = value

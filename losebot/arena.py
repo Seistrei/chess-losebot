@@ -129,6 +129,7 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.vi_moves_played} moves played; "
                 f"{focal.vi_state_misses} state misses; "
                 f"{focal.vi_zero_fallbacks} zero-value fallbacks; "
+                f"{focal.vi_crumb_pruned} crumb-pruned; "
                 f"{focal.vi_goal_stalls} goal stalls; "
                 f"{focal.vi_releases} releases "
                 f"({focal.vi_release_nodes} probe nodes); "
