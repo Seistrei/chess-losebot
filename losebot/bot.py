@@ -132,6 +132,12 @@ class LoseBot:
         # re-steering at the same corner. Feasibility is re-checked at every
         # use, so a stale target can only cost the one resolve that fails.
         self._kh_adoption: tuple[int, int] | None = None
+        # Pawn pushes the last clock-reset scan certified AGAINST: kept out
+        # of the heuristic fallbacks until the next scan replaces the set
+        # (the clock-urgent nudge would otherwise play the exact push the
+        # audit refused). Proof-based fallbacks are exempt — a PROVEN
+        # forcing net that spends the push is a win, not a leak.
+        self._vi_reset_refused: set[chess.Move] = set()
         self.vi_builds = 0
         self.vi_build_failures = 0
         self.vi_build_ms = 0.0
@@ -181,6 +187,7 @@ class LoseBot:
         self.vi_clock_relaxed_releases = 0
         self.vi_clock_resets = 0
         self.vi_clock_reset_builds = 0
+        self.vi_clock_reset_vetoes = 0
         self.vi_min_hit_root: int | None = None
         self.vi_exp_hit_root: float | None = None
 
@@ -197,6 +204,7 @@ class LoseBot:
         self._vi_unbuildable.clear()
         self._vi_next_flip_ply = 0
         self._vi_side_unconvertible = False
+        self._vi_reset_refused.clear()
         # The gauge describes the ACTIVE policy's burn set; dropping the
         # policy must drop it too or a replan followed by game end reports
         # burned states no live policy contains. vi_burn_updates stays
@@ -799,12 +807,16 @@ class LoseBot:
                 # beats the certain zero of the adjudication. But a worse
                 # lottery must not preempt a better one the herd can still
                 # reach — when the active policy maps this position and
-                # affirms that a converting goal fits the remaining budget
-                # (min_hit as the certificate bound, exp_hit with the soft
-                # headroom), the strict standard holds and the herd goes
-                # and gets it. Only without that affirmation — no policy,
-                # off-graph, or a herd that no longer fits — is the best
-                # positive lottery available taken now.
+                # affirms that a converting goal FINISHES inside the
+                # budget (finish-inclusive min_hit as the certificate
+                # bound, exp_hit with the soft headroom), the strict
+                # standard holds and the herd goes and gets it.
+                # Affirmation demands honest numbers: the solve and the
+                # p/m pass must both have converged, because a truncated
+                # exp_hit can understate and wrongly suppress the lottery
+                # (review P1). Only without a full affirmation — no
+                # policy, off-graph, unconverged stats, or a herd that no
+                # longer fits — is the best positive lottery taken now.
                 fits = False
                 policy = self._vi_policy
                 if (
@@ -813,15 +825,16 @@ class LoseBot:
                     and policy.report.ok
                     and policy.report.root_live
                     and policy.report.root_converts
+                    and policy.report.converged
+                    and policy.report.hit_converged
                 ):
                     hits = policy.hit_estimates(board)
                     if hits is not None:
                         min_hit, exp_hit = hits
-                        overhead = self.profile.vi_clock_overhead
                         fits = (
-                            min_hit + overhead <= remaining
+                            min_hit <= remaining
                             and exp_hit * self.profile.vi_clock_soft_factor
-                            + overhead <= remaining
+                            <= remaining
                         )
                 if not fits:
                     choice = score_release_moves(
@@ -897,18 +910,21 @@ class LoseBot:
         # cadence, never a verdict.
         clock_hard = clock_soft = False
         clock_veto = policy.report.root_converts
-        overhead = self.profile.vi_clock_overhead
         if clock_veto:
             hits = policy.hit_estimates(board)
             if hits is not None:
                 min_hit, exp_hit = hits
-                if min_hit + overhead > remaining:
+                if min_hit > remaining:
                     clock_hard = True
                     self.vi_clock_hard_plies += 1
                 elif (
-                    exp_hit * self.profile.vi_clock_soft_factor + overhead
-                    > remaining
+                    exp_hit * self.profile.vi_clock_soft_factor > remaining
                 ):
+                    # One-sided by construction: a truncated p/m pass can
+                    # misprice exp_hit, but a spurious soft flag only
+                    # costs cadenced reconsideration builds, while gating
+                    # it on the honesty flags would suppress the cascade
+                    # exactly on the big graphs where the solver labors.
                     clock_soft = True
                     self.vi_clock_soft_plies += 1
         if len(board.move_stack) >= self._vi_next_flip_ply:
@@ -938,7 +954,8 @@ class LoseBot:
                 # demands a positively converting prospect, and the
                 # one-way adoption stays reserved for the certificate.
                 reset = self._consider_clock_reset(
-                    board, target, limit, policy
+                    board, target, limit, policy,
+                    require_all_replies=clock_soft,
                 )
                 if reset is not None:
                     self.vi_clock_resets += 1
@@ -1000,10 +1017,11 @@ class LoseBot:
                 continue
             if (
                 clock_veto
-                and policy.child_min_hit(child) + 1 + overhead > remaining
+                and policy.child_min_hit(child) + 1 > remaining
             ):
                 # Even with perfect Zach luck this continuation cannot
-                # reach a converting terminal inside the era: its true
+                # FINISH inside the era (the child's min_hit already
+                # counts the terminal tail; +1 is our own move): its true
                 # value under the clock is 0 whatever the pristine graph
                 # says. min_hit stays a lower bound under burning, so the
                 # veto never cuts a finishable line.
@@ -1224,13 +1242,13 @@ class LoseBot:
             report = prospect.report
             self.vi_flip_value = report.root_value
             # The mirror herds inside the SAME era, so a prospect whose
-            # best-case hitting time cannot fit the remaining fifty-move
-            # budget is worthless whatever its audit says. min_hit_root 0
-            # means the stats made no claim and must never condemn.
+            # best-case finish (min_hit_root is finish-inclusive) cannot
+            # fit the remaining fifty-move budget is worthless whatever
+            # its audit says. min_hit_root 0 means the stats made no
+            # claim and must never condemn.
             feasible = (
                 report.min_hit_root == 0
-                or report.min_hit_root + self.profile.vi_clock_overhead
-                <= 100 - board.halfmove_clock
+                or report.min_hit_root <= 100 - board.halfmove_clock
             )
             if report.root_live and feasible and (
                 not require_conversion or report.root_converts
@@ -1263,6 +1281,7 @@ class LoseBot:
         target: PawnMateTemplate,
         limit: int,
         policy: HerdingPolicy | None = None,
+        require_all_replies: bool = False,
     ) -> chess.Move | None:
         """Manufacture era time: a certified pawn push resets the clock.
 
@@ -1275,12 +1294,30 @@ class LoseBot:
         c4-c5 push sealed the herd's own rank-six gate), so a reset must
         certify, in three layers: the pushed position still resolves the
         committed plan without regressing any construction metric; Zach's
-        reply pool stays free of forced captures and adjudication traps
+        reply pool stays free of forced captures and reply-stalemate traps
         (the funnel and capture guards replayed here, where the push
         bypasses them); and a hypothetical rebuild rooted at the pushed
-        position — the same optimism as a flip prospect — certifies live
-        AND converting. One certified push buys a fresh 100 plies for a
-        side that has already proven it can finish, given time.
+        position WITH ZACH TO MOVE — his reply comes before our next
+        turn, so an our-turn root would certify a state the game never
+        reaches (review P1: the skipped-turn root was not even in the
+        reachable graph) — certifies live and converting, with per-reply
+        finish evidence read through ``reply_fit_fraction``: the
+        their-turn root's children are exactly the real post-reply
+        states, any fitting reply beats the certain zero under a hard
+        flag, and under the advisory soft flag every reply must still
+        fit (``require_all_replies``) — the side retains real value, so
+        a push into a coin-flip-dead continuation is refused. One
+        certified push buys a fresh 100 plies for a side that has
+        already proven it can finish, given time.
+
+        Every scanned push that fails certification lands in
+        ``_vi_reset_refused`` (replaced wholesale each scan): on a hard
+        clock the VI candidates all prune away, and the heuristic
+        fallback — whose clock-urgent nudge REWARDS irreversible moves —
+        would otherwise play the exact push the audit just refused
+        (review P1; piece mode has no blanket pawn veto). One shared
+        ``vi_build_ms`` deadline bounds the whole scan (review P2);
+        candidates the budget never reaches stay unjudged, not refused.
         """
         us = board.turn
         plan = self.plan
@@ -1303,6 +1340,9 @@ class LoseBot:
                     (square, board.piece_type_at(square))
                     for square in squares
                 ))
+        deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
+        refused: set[chess.Move] = set()
+        chosen: chess.Move | None = None
         for move in board.legal_moves:
             if board.piece_type_at(move.from_square) != chess.PAWN:
                 continue
@@ -1345,32 +1385,45 @@ class LoseBot:
                         break
             board.pop()
             if not stable:
+                refused.add(move)
                 continue
+            remaining_ms = (deadline - time.monotonic()) * 1000.0
+            if remaining_ms < 250.0:
+                break  # scan budget exhausted: unjudged, never refused
             hypothetical = board.copy(stack=False)
             hypothetical.push(move)
-            hypothetical.turn = us
             resolved = plan.resolve(hypothetical, us)
             if resolved is None:
+                refused.add(move)
                 continue
             self.vi_clock_reset_builds += 1
             probe = HerdingPolicy.build(
                 hypothetical, resolved, limit,
-                self.profile.vi_state_cap, self.profile.vi_build_ms,
+                self.profile.vi_state_cap, int(remaining_ms),
                 self.profile.vi_gamma, herders=forced,
                 model=self.opponent_model,
                 race_max_losing=self.profile.vi_race_max_losing,
                 conversion_ms=self.profile.vi_conversion_ms,
+                root_theirs=True,
             )
             report = probe.report
+            fraction = probe.reply_fit_fraction()
             if (
                 report.ok
                 and report.root_live
                 and report.root_converts
-                and report.min_hit_root + self.profile.vi_clock_overhead
-                <= 100
+                and fraction is not None
+                and (
+                    fraction >= 1.0
+                    if require_all_replies
+                    else fraction > 0.0
+                )
             ):
-                return move
-        return None
+                chosen = move
+                break
+            refused.add(move)
+        self._vi_reset_refused = refused
+        return chosen
 
     def _resolve_kh_adoption(
         self, board: chess.Board
@@ -1450,6 +1503,35 @@ class LoseBot:
         # the positions Zach's replies created — the ones a tally of our
         # own choices structurally missed — and resets with the era.
         return self._choose(board)
+
+    def _filter_refused_resets(
+        self, moves: list[chess.Move]
+    ) -> list[chess.Move]:
+        """Keep audit-refused reset pushes away from the heuristic
+        fallbacks.
+
+        The clock-reset scan is the only sanctioned pusher while a herd
+        is clock-flagged: a refused push would otherwise reach the
+        fallbacks with the veto evidence discarded, and the clock-urgent
+        nudge rewards exactly that push (review P1 — piece mode has no
+        blanket pawn veto). The set is replaced by every scan and
+        cleared with the plan era, so a refusal can age back into
+        consideration. The exact-probe and herd-search fallbacks are
+        exempt upstream: they return PROVEN lines only, and a proven net
+        that spends the push is a win, not a leak. If the refusals would
+        empty the list, the unfiltered moves stand — never zero the
+        move menu.
+        """
+        if not self._vi_reset_refused:
+            return moves
+        kept = [
+            move for move in moves
+            if move not in self._vi_reset_refused
+        ]
+        if kept and len(kept) < len(moves):
+            self.vi_clock_reset_vetoes += len(moves) - len(kept)
+            return kept
+        return moves
 
     def _plan_filtered_moves(
         self,
@@ -1610,6 +1692,7 @@ class LoseBot:
                 safe, _ = self._plan_filtered_moves(
                     board, base_safe, planned_now
                 )
+            safe = self._filter_refused_resets(safe)
 
         if (
             self.plan is not None

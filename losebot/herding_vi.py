@@ -39,16 +39,18 @@ up as the losing side of the race.
 The herd phase is all quiet moves, so the arena's fifty-move rule caps an
 era at 100 plies — a budget the discounted values cannot see (gamma prices
 time softly; the cliff is hard). Two hitting-time statistics per state close
-the gap. ``min_hit`` is the plies to the nearest positively seeded terminal
-when EVERY reply cooperates (min over children at our nodes and their nodes
-alike — a unit-edge backward BFS): exact, solver-independent, and still a
+the gap, both FINISH-INCLUSIVE: distances are seeded at each positively
+seeded terminal's ``_TERMINAL_TAILS`` cost (the plies the win still owes
+past arrival), so they measure plies to COMPLETE the win, not to reach a
+proxy. ``min_hit`` takes the min over children at our nodes and their nodes
+alike (a unit-edge backward BFS): exact, solver-independent, and still a
 sound lower bound after any repetition burn (burning only removes paths),
-which makes ``min_hit + overhead > remaining`` a certificate that this era
-cannot finish and the per-child form a sound candidate veto. ``exp_hit`` is
-the expected plies to absorption under the greedy stationary policy,
-conditioned on hitting — advisory by design (it prices the pristine graph
-under one fixed policy, not the burned one play follows), computed once at
-build time.
+which makes ``min_hit > remaining`` a certificate that this era cannot
+finish and the per-child form a sound candidate veto. ``exp_hit`` is the
+expected plies to finish under the greedy stationary policy, conditioned on
+hitting — advisory by design (it prices the pristine graph under one fixed
+policy, not the burned one play follows), computed at build time and
+recomputed when a resumed solve first converges.
 
 Those goals are proxies — they stop one move short of the release and the
 actual selfmate. The conversion audit closes the gap: every reachable goal
@@ -133,6 +135,26 @@ _WIN_KINDS = (GOAL_CONTAINED, GOAL_RACE, FORCED_MATE, GOAL_VACATE)
 # Sentinel for "no positively seeded terminal reachable" in min_hit arrays.
 HIT_INF = 1 << 30
 
+# Plies still owed AFTER a positively seeded terminal is reached, per
+# terminal kind — the finish tail the hitting-time statistics fold in. A
+# FORCED_MATE terminal is Zach to move with every reply mating us: the
+# arena adjudicates draws before his reply, so the terminal itself must
+# sit at clock <= 99 and the tail is exactly one ply. A goal terminal is
+# our turn: the cheapest finish is the release push (its landing must be
+# at clock <= 99) plus an immediately mating reply — two plies. Races
+# whose winning replies need probe-proven continuations cost more, but
+# the release scorer prices those exactly at fire time; for LOWER-bound
+# gates the minimal tail is the sound choice. A uniform tail was not: it
+# falsely rejected forced-mate finishes one ply from the cliff (review
+# P1 — fm-organic-h at halfmove 98: one quiet move reaches clock 99 and
+# hxg2# still wins).
+_TERMINAL_TAILS = {
+    FORCED_MATE: 1,
+    GOAL_CONTAINED: 2,
+    GOAL_RACE: 2,
+    GOAL_VACATE: 2,
+}
+
 # Herder preference: rooks cut files (the classic boxing tool), bishops hold
 # diagonals cheaply, knights tempo, queens last (they widen branching without
 # herding better than a rook here).
@@ -184,15 +206,18 @@ class BuildReport:
     conversion_unknowns: int = 0
     conversion_complete: bool = False
     root_converts: bool = False
-    # Clock feasibility: hitting-time statistics over the completed graph.
-    # min_hit_root is the minimal plies from the root to any positively
-    # seeded terminal when every reply cooperates (best-case Zach) — a
-    # sound lower bound on the quiet plies this era still needs. 0 means
-    # no positively seeded terminal is reachable at all (or the stats were
-    # never computed): callers must read 0 as unknown, never as "instant".
-    # exp_hit_root is the expected plies to absorption under the greedy
-    # stationary policy conditioned on hitting (0.0 = not available), and
-    # hit_converged reports whether that iteration drained before its cap.
+    # Clock feasibility: hitting-time statistics over the completed graph,
+    # finish-inclusive (each positively seeded terminal is seeded at its
+    # _TERMINAL_TAILS cost, so the numbers are plies to COMPLETE the win).
+    # min_hit_root is that distance from the root when every reply
+    # cooperates (best-case Zach) — a sound lower bound on the quiet plies
+    # this era still needs, so min_hit_root > remaining certifies the era
+    # cannot finish. 0 means no positively seeded terminal is reachable at
+    # all (or the stats were never computed): callers must read 0 as
+    # unknown, never as "instant". exp_hit_root is the expected plies to
+    # finish under the greedy stationary policy conditioned on hitting
+    # (0.0 = not available), and hit_converged reports whether that
+    # iteration drained before its cap.
     min_hit_root: int = 0
     exp_hit_root: float = 0.0
     hit_converged: bool = False
@@ -342,6 +367,8 @@ class HerdingPolicy:
         self.static_map: dict[int, chess.Piece] = {}
         self.herder_types: tuple[int, ...] = ()
         self.halfmove_clock = 0
+        # The root state tuple; first element False for a their-turn root.
+        self._root_state: tuple | None = None
         # (arrival, herder-type multiset, static placement) — herder squares
         # excluded because they wander. Scopes any negative memory a caller
         # keeps to exactly the configuration that was certified. The rooted
@@ -392,7 +419,8 @@ class HerdingPolicy:
               model: str | None = "zach",
               race_max_losing: int = 1,
               conversion_ms: int = 3_000,
-              conversion_probe_cap: int = 6_000) -> "HerdingPolicy":
+              conversion_probe_cap: int = 6_000,
+              root_theirs: bool = False) -> "HerdingPolicy":
         """Explore, certify, solve, and conversion-audit one configuration.
 
         ``herders`` forces an explicit subset (as enumerated by
@@ -407,12 +435,26 @@ class HerdingPolicy:
         the solver, and ``conversion_probe_cap`` is the per-reply node cap
         of its release probes (research audits raise it so refusals rest on
         DISPROVEN, not budget exhaustion).
+
+        ``root_theirs`` roots the graph at the given position with THEIR
+        side to move (the board's side to move is then the opponent, and
+        the herding side is the other color). The clock-reset device needs
+        this: after our pawn push it is Zach's turn, and certifying the
+        skipped-turn position with our side to move would speak about a
+        root the game can never reach (review P1) — the their-turn root's
+        children are exactly the real post-reply states, so root_live,
+        root_converts and the hitting stats quantify the actual
+        continuation, and ``reply_fit_fraction`` reads the per-reply
+        evidence directly.
         """
-        policy = cls(board.turn, target, gamma)
+        policy = cls(not board.turn if root_theirs else board.turn,
+                     target, gamma)
         started = time.monotonic()
         deadline = started + time_budget_ms / 1000.0
 
-        reason = policy._split_board(board, max_herders, forced=herders)
+        reason = policy._split_board(
+            board, max_herders, forced=herders, root_theirs=root_theirs
+        )
         if reason is None and (
             policy.fingerprint in skip_fingerprints
             or policy.rooted_fingerprint in skip_fingerprints
@@ -444,7 +486,8 @@ class HerdingPolicy:
         return policy
 
     def _split_board(self, board: chess.Board, max_herders: int,
-                     forced: tuple | None = None) -> str | None:
+                     forced: tuple | None = None,
+                     root_theirs: bool = False) -> str | None:
         """Choose herders, freeze everything else, precompute attack tables."""
         us, them = self.us, self.them
         geometry = _herding_geometry(board, us, self.arrival)
@@ -489,6 +532,7 @@ class HerdingPolicy:
             (ptype, square) for square, ptype in chosen
         ))
         self._root_zk = their_king
+        self._root_state = (not root_theirs, their_king, self._root_herders)
         self.fingerprint = (
             self.arrival,
             tuple(sorted(self.herder_types)),
@@ -497,8 +541,14 @@ class HerdingPolicy:
                 for square, piece in self.static_map.items()
             )),
         )
+        # A their-turn root reaches a different state set than the our-turn
+        # root of the same placement, so its failure memory must not be
+        # shared; the flag is appended only in that case to keep the
+        # default tuple shape (and every existing pin) unchanged.
         self.rooted_fingerprint = (
             self.fingerprint, their_king, self._root_herders
+        ) if not root_theirs else (
+            self.fingerprint, their_king, self._root_herders, True
         )
 
         # Precomputed static tables.
@@ -776,15 +826,30 @@ class HerdingPolicy:
 
     def _explore(self, board: chess.Board, state_cap: int,
                  deadline: float) -> str | None:
-        root_state = (True, self._root_zk, self._root_herders)
-        root_kind = self._classify_our_state(
-            self._root_zk, self._root_herders
-        )
-        if root_kind != NORMAL_OUR:
+        root_state = self._root_state
+        if root_state[0]:
+            root_kind = self._classify_our_state(
+                self._root_zk, self._root_herders
+            )
+        else:
+            # Their-turn root (the clock-reset hypothetical): a nonempty
+            # quiet pool is a normal opponent node; an empty one means the
+            # root itself is terminal — including FORCED_MATE, which the
+            # exact probe upstream owns (our push forcing every reply to
+            # mate is a selfmate-in-1 the probe plays before any reset
+            # scan runs), so refusing it here loses nothing.
+            quiet = self._their_quiet_moves(
+                self._root_zk, self._root_herders
+            )
+            root_kind = (
+                NORMAL_THEIR if quiet
+                else self._classify_slow(self._root_zk, self._root_herders)
+            )
+        if root_kind not in (NORMAL_OUR, NORMAL_THEIR):
             return "root-already-terminal"
 
         queue: deque = deque()
-        self._state_index(root_state, NORMAL_OUR, queue)
+        self._state_index(root_state, root_kind, queue)
         self._validate_pool(self._root_zk, self._root_herders)
 
         edges = 0
@@ -862,7 +927,7 @@ class HerdingPolicy:
                     live[parent] = 1
                     stack.append(parent)
         self._live = live
-        root = self._index.get((True, self._root_zk, self._root_herders))
+        root = self._index.get(self._root_state)
         return root is not None and bool(live[root])
 
     # ------------------------------------------------------------------
@@ -1079,7 +1144,7 @@ class HerdingPolicy:
         self.report.updates += updates
         # Honest convergence: an empty worklist is the only finished state.
         self.report.converged = not worklist
-        root = self._index.get((True, self._root_zk, self._root_herders))
+        root = self._index.get(self._root_state)
         if root is not None:
             self.report.root_value = values[root]
 
@@ -1106,6 +1171,14 @@ class HerdingPolicy:
             # The per-call update cap is a pacing valve, not a budget: keep
             # draining until the fixpoint or the clock, whichever is first.
             self._solve(deadline, None)
+        if self.report.converged:
+            # The build's hitting stats may have priced half-baked values
+            # (same deadline as the solve) — refresh them now that the
+            # greedy policy is real, so affirmative consumers gated on
+            # converged + hit_converged read numbers that mean something
+            # (review P1). Non-converting graphs skip the expensive pass
+            # inside, so this is cheap exactly where it fires often.
+            self._compute_hit_stats(deadline)
         return self.report.converged
 
     # ------------------------------------------------------------------
@@ -1115,30 +1188,42 @@ class HerdingPolicy:
     def _compute_hit_stats(self, deadline: float) -> None:
         """Hitting-time statistics for the fifty-move feasibility gates.
 
-        min_hit: plies to the nearest positively seeded terminal when
-        EVERY reply cooperates — min over children at our nodes and their
-        nodes alike, i.e. a unit-edge backward BFS from the seeds over the
+        Both statistics are FINISH-INCLUSIVE: every positively seeded
+        terminal is seeded at its ``_TERMINAL_TAILS`` cost — the plies
+        the win still owes past arrival (one mating reply for a forced
+        mate, release plus mating reply for a goal) — so a state's
+        number compares against ``remaining`` directly, with no external
+        overhead to get wrong per terminal kind (review P1: a uniform
+        overhead falsely rejected forced-mate finishes at the cliff).
+
+        min_hit: plies to complete the win when EVERY reply cooperates —
+        min over children at our nodes and their nodes alike, i.e. a
+        unit-edge backward BFS from the tail-seeded terminals over the
         parent lists. Exact, independent of the solver, and still a sound
         lower bound after any repetition burn (burning only removes
-        paths), which is what makes ``min_hit + overhead > remaining`` a
-        certificate that the era cannot finish and the per-child form a
-        sound candidate veto. Computed unconditionally: it is one O(V+E)
-        pass.
+        paths), which is what makes ``min_hit > remaining`` a certificate
+        that the era cannot finish and the per-child form a sound
+        candidate veto. Computed unconditionally: it is one O(V+E) pass.
 
-        exp_hit: expected plies to absorption under the greedy stationary
+        exp_hit: expected plies to finish under the greedy stationary
         policy (argmax child value; min_hit, then index as tie-breaks),
         conditioned on hitting. p is the absorption probability and m the
-        mass E[plies * 1{hit}], iterated by the same parent-driven
-        worklist discipline as the values — both are monotone from a zero
-        start, so the iteration converges from below and cutting it short
-        (update cap or the build deadline) only understates the estimate,
-        reported honestly in ``hit_converged``. Advisory by design: it
-        prices the pristine graph under one fixed policy, not the burned
-        graph that play actually follows. Computed only when the root
-        converts: every consumer (the play-time gates, the release
-        relaxation) is behind that same condition, and churning p/m over
-        a large non-converting graph bought pure wall clock — the case-2
-        reference paid ~50% for numbers nothing reads.
+        mass E[plies * 1{hit}] (tail included via the seed mass),
+        iterated by the same parent-driven worklist discipline as the
+        values — both are monotone from a zero start, so the iteration
+        converges from below and cutting it short (update cap or the
+        build deadline) is reported honestly in ``hit_converged``; note
+        the RATIO m/p of two truncated quantities can err in either
+        direction, which is why affirmative consumers must require the
+        honesty flags while the one-sided soft trigger need not. Advisory
+        by design: it prices the pristine graph under one fixed policy,
+        not the burned graph that play actually follows. Computed only
+        when the root converts: every consumer is behind that same
+        condition, and churning p/m over a large non-converting graph
+        bought pure wall clock — the case-2 reference paid ~50% for
+        numbers nothing reads. Recomputed when a resumed solve first
+        converges (review P1: build-deadline stats could otherwise stay
+        stale for the policy's whole life).
         ``hit_converged`` is trivially True when the pass is skipped.
         """
         states = len(self._states)
@@ -1149,7 +1234,7 @@ class HerdingPolicy:
         min_hit = [HIT_INF] * states
         queue: deque = deque()
         for index in seeds:
-            min_hit[index] = 0
+            min_hit[index] = _TERMINAL_TAILS[self._kind[index]]
             queue.append(index)
         while queue:
             index = queue.popleft()
@@ -1159,7 +1244,7 @@ class HerdingPolicy:
                     min_hit[parent] = step
                     queue.append(parent)
         self._min_hit = min_hit
-        root = self._index.get((True, self._root_zk, self._root_herders))
+        root = self._index.get(self._root_state)
         if root is not None and min_hit[root] < HIT_INF:
             self.report.min_hit_root = min_hit[root]
         self.report.hit_converged = True
@@ -1193,6 +1278,7 @@ class HerdingPolicy:
         queued = bytearray(states)
         for index in seeds:
             prob[index] = 1.0
+            mass[index] = float(_TERMINAL_TAILS[kinds[index]])
             for parent in parents[index]:
                 if not queued[parent]:
                     queued[parent] = 1
@@ -1276,6 +1362,30 @@ class HerdingPolicy:
         if self._min_hit is None or index >= len(self._min_hit):
             return 0
         return self._min_hit[index]
+
+    def reply_fit_fraction(self) -> float | None:
+        """Per-reply finish evidence at a their-turn root.
+
+        A their-turn root's children are exactly the positions we will
+        face after each equally likely opponent reply. Returns the
+        fraction of them from which a positively seeded terminal can
+        still FINISH inside a fresh era (finish-inclusive min_hit <= 99:
+        the reply itself consumed the era's first ply). None when the
+        root is not a their-turn root or the stats are unavailable — an
+        unknown must never affirm.
+        """
+        if self._stripped or self._min_hit is None:
+            return None
+        if self._root_state is None or self._root_state[0]:
+            return None
+        root = self._index.get(self._root_state)
+        if root is None:
+            return None
+        kids = self._children[root]
+        if not kids:
+            return None
+        fit = sum(1 for kid in kids if self._min_hit[kid] <= 99)
+        return fit / len(kids)
 
     # ------------------------------------------------------------------
     # Play-time repetition burn

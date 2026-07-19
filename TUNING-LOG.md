@@ -1404,3 +1404,88 @@ Next, in expected-value order:
    only if live-converting clock deaths reappear in a battery; today
    none remain, and the gates/reset/relaxation cover the observed
    cases at a fraction of the state-space cost.
+
+### Review follow-up (2026-07-18, all five taken)
+
+External review of the clock layer: four P1s and one P2, all verified
+against the code and taken.
+
+1. **A uniform +2 finish overhead was unsound per terminal kind (P1).**
+   A FORCED_MATE terminal is Zach to move with every reply mating us —
+   its tail is exactly ONE ply — while a goal owes the release plus the
+   mating reply. The uniform bound falsely rejected forced-mate
+   finishes one ply from the cliff (fm-organic-h at halfmove 98: one
+   quiet move reaches clock 99 and hxg2# wins, but 1+2 > 2 read
+   hard-infeasible and the child veto pruned the winning line). The
+   statistics are now FINISH-INCLUSIVE: every positively seeded
+   terminal seeds the BFS distance and the p/m mass at its
+   `_TERMINAL_TAILS` cost (forced mate 1, goals 2), every gate compares
+   `min_hit`/`exp_hit` against `remaining` directly, and the
+   `vi_clock_overhead` knob is gone — the tails are structural facts,
+   not tunables. For goal-seeded graphs the hard arithmetic is
+   unchanged (reach+2 = finish); the FM boundary case now fits, pinned
+   in the suite.
+2. **The reset hypothetical certified an unreachable root (P1).** After
+   our push it is Zach's turn; flipping the hypothetical back to us
+   certified (us, zk, herders) with his king unmoved — a state that is
+   not even in the reachable graph (every our-turn successor follows
+   one of OUR herder moves, so zk cannot have changed first). Builds
+   now take ``root_theirs``: the graph roots at the pushed position
+   with Zach to move, its children are exactly the real post-reply
+   states, and ``reply_fit_fraction`` reads the per-reply finish
+   evidence (fraction of replies from which a converting terminal still
+   fits a fresh era). Acceptance: under a HARD flag any fitting reply
+   beats the certain zero; under the advisory SOFT flag every reply
+   must fit — the side retains real value, so a push into a
+   coin-flip-dead continuation is refused. The their-turn root's
+   failure memory carries a turn flag so it can never contaminate the
+   our-turn rooted-fingerprint ledger.
+3. **Incomplete hit estimates could affirm "fits" (P1).** The stats
+   were computed once at build under the same deadline as the solve,
+   never refreshed, and the release-relaxation branch read them without
+   checking ``converged``/``hit_converged`` — and the RATIO m/p of two
+   truncated monotone quantities can err in either direction, so a
+   half-baked exp_hit could suppress the near-cliff lottery.
+   Affirmation now requires both honesty flags, and ``solve_more``
+   recomputes the stats whenever a resumed solve reaches convergence
+   (cheap exactly where it fires often: non-converting graphs skip the
+   p/m pass). The SOFT TRIGGER stays deliberately flag-free — a
+   spurious flag only costs cadenced reconsideration builds, while
+   gating it would silence the cascade precisely on the big graphs
+   where the solver labors.
+4. **Refused reset pushes leaked into the fallback (P1).** On a hard
+   clock every VI candidate prunes away, `_vi_choice` returns None, and
+   the clock-urgent negamax nudge REWARDS irreversible moves — in
+   piece mode, where no blanket pawn veto exists, it picked exactly the
+   push the audit had just refused (white-box control: the 13b fixture
+   plus a spare h2 pawn at clock 70 plays the unaudited h2-h3). Every
+   scanned push that fails certification now lands in
+   ``_vi_reset_refused`` (replaced wholesale each scan, cleared with
+   the plan era), and ``_filter_refused_resets`` keeps the set out of
+   the modeled/negamax fallbacks — vetoes counted, never emptying the
+   menu, with the proof-based probe and herd-search exempt (a PROVEN
+   net that spends the push is a win, not a leak).
+5. **The reset scan had no total budget (P2).** Each stable candidate
+   received a fresh ``vi_build_ms``; several candidates could multiply
+   the advertised limit. One shared deadline now bounds the whole scan,
+   each hypothetical gets only the remaining slice, and candidates the
+   budget never reaches stay unjudged — never refused.
+
+Suite 59 -> 60 (23a re-pinned finish-inclusive with the FM boundary and
+a their-turn-root build asserting ``reply_fit_fraction`` == 1.0; 23c
+asserts the recorded refusals; 23d's infeasible stub moved to 101 —
+with tails, 100 fits a fresh era exactly; new 23e pins the piece-mode
+leak: control picks h2-h3, the refusal set vetoes both pushes and
+negamax picks Rc1, an all-refused set never empties the menu). Full
+battery on the fixed code:
+
+- Case-6: all ten outcomes at the exact reference plies. Seed-2's
+  diagnostics moved honestly with the semantics: soft=23 (the tail now
+  folds into the soft expectation, firing ~2 plies earlier), hard=3,
+  pruned=23, resets 0-of-7 builds — every candidate push still refused
+  by the their-turn-root audit.
+- Case-7: the exact reference distribution and plies (68/76/86/106
+  conversions). Seed-9's converting side: soft=8, resets 0-of-3, game
+  identical to the move.
+- Case-2 seed-5: same game to the move, every clock gauge inert.
+- Motifs: byte-identical verdicts and odds.

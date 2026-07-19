@@ -150,6 +150,7 @@ def run_match(white, black, n_games: int, max_plies: int = 300,
                 f"{focal.vi_clock_pruned} pruned; "
                 f"{focal.vi_clock_relaxed_releases} relaxed releases; "
                 f"{focal.vi_clock_resets} resets "
-                f"({focal.vi_clock_reset_builds} reset builds)"
+                f"({focal.vi_clock_reset_builds} reset builds, "
+                f"{focal.vi_clock_reset_vetoes} fallback vetoes)"
             )
     return tallies
