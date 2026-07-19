@@ -132,11 +132,15 @@ class LoseBot:
         # re-steering at the same corner. Feasibility is re-checked at every
         # use, so a stale target can only cost the one resolve that fails.
         self._kh_adoption: tuple[int, int] | None = None
-        # Pawn pushes the last clock-reset scan certified AGAINST: kept out
-        # of the heuristic fallbacks until the next scan replaces the set
-        # (the clock-urgent nudge would otherwise play the exact push the
-        # audit refused). Proof-based fallbacks are exempt — a PROVEN
-        # forcing net that spends the push is a win, not a leak.
+        # While the herd is clock-flagged, the certified reset scan is the
+        # only sanctioned pawn pusher: this set holds every quiet push the
+        # CURRENT decision did not certify — refused, unjudged, and
+        # unscanned alike — and keeps them out of the heuristic fallbacks,
+        # whose clock-urgent nudge rewards exactly those pushes. Armed
+        # when the clock flags arm, cleared at the next VI decision:
+        # refusals are audited against one root and must not outlive it
+        # (review P1). Only the exact selfmate probe outranks the veto —
+        # a PROVEN mating line that spends a push is a win, not a leak.
         self._vi_reset_refused: set[chess.Move] = set()
         self.vi_builds = 0
         self.vi_build_failures = 0
@@ -188,6 +192,7 @@ class LoseBot:
         self.vi_clock_resets = 0
         self.vi_clock_reset_builds = 0
         self.vi_clock_reset_vetoes = 0
+        self.vi_hit_refreshes = 0
         self.vi_min_hit_root: int | None = None
         self.vi_exp_hit_root: float | None = None
 
@@ -760,6 +765,11 @@ class LoseBot:
     ) -> chess.Move | None:
         """Race-release when the defender is delivered; otherwise follow the
         solved herding sub-MDP. Returns None to fall through the waterfall."""
+        # Reset-push vetoes are evidence about ONE audited root: whatever
+        # the previous decision recorded is stale against this position
+        # (review P1). The clock-flag block below re-arms the set whenever
+        # this decision is flagged.
+        self._vi_reset_refused.clear()
         if target is None:
             return None
         if target.king_holder:
@@ -808,15 +818,18 @@ class LoseBot:
                 # lottery must not preempt a better one the herd can still
                 # reach — when the active policy maps this position and
                 # affirms that a converting goal FINISHES inside the
-                # budget (finish-inclusive min_hit as the certificate
-                # bound, exp_hit with the soft headroom), the strict
-                # standard holds and the herd goes and gets it.
-                # Affirmation demands honest numbers: the solve and the
-                # p/m pass must both have converged, because a truncated
-                # exp_hit can understate and wrongly suppress the lottery
-                # (review P1). Only without a full affirmation — no
-                # policy, off-graph, unconverged stats, or a herd that no
-                # longer fits — is the best positive lottery taken now.
+                # budget (affirmative finish-inclusive fit_hit as the
+                # bound — the min_hit floor may reject but never affirm,
+                # since the audited race can owe more plies than the
+                # cheapest conceivable finish (review P1) — and exp_hit
+                # with the soft headroom), the strict standard holds and
+                # the herd goes and gets it. Affirmation demands honest
+                # numbers: the solve and the p/m pass must both have
+                # converged, because a truncated exp_hit can understate
+                # and wrongly suppress the lottery (review P1). Only
+                # without a full affirmation — no policy, off-graph,
+                # unconverged stats, or a herd that no longer fits — is
+                # the best positive lottery taken now.
                 fits = False
                 policy = self._vi_policy
                 if (
@@ -826,13 +839,26 @@ class LoseBot:
                     and policy.report.root_live
                     and policy.report.root_converts
                     and policy.report.converged
-                    and policy.report.hit_converged
                 ):
-                    hits = policy.hit_estimates(board)
+                    if not policy.report.hit_converged:
+                        # A p/m pass truncated behind a converged solve
+                        # would otherwise leave this affirmation dark for
+                        # the policy's whole life — solve_more never runs
+                        # again (review P1). Retry it exactly where it is
+                        # consumed; single-shot per value basis.
+                        if policy.refresh_hit_stats(
+                            self.profile.vi_build_ms
+                        ):
+                            self.vi_hit_refreshes += 1
+                    hits = (
+                        policy.hit_estimates(board)
+                        if policy.report.hit_converged
+                        else None
+                    )
                     if hits is not None:
-                        min_hit, exp_hit = hits
+                        _, fit_hit, exp_hit = hits
                         fits = (
-                            min_hit <= remaining
+                            fit_hit <= remaining
                             and exp_hit * self.profile.vi_clock_soft_factor
                             <= remaining
                         )
@@ -911,9 +937,19 @@ class LoseBot:
         clock_hard = clock_soft = False
         clock_veto = policy.report.root_converts
         if clock_veto:
+            if policy.report.converged and not policy.report.hit_converged:
+                # The build shares one deadline across solver and p/m
+                # pass, and solve_more never runs on a converged solve —
+                # without this, a truncated exp_hit is permanent: the
+                # release affirmation stays dark and the soft gate reads
+                # stale numbers for the policy's whole life (review P1).
+                # One dedicated retry per value basis, priced like any
+                # resume.
+                if policy.refresh_hit_stats(self.profile.vi_build_ms):
+                    self.vi_hit_refreshes += 1
             hits = policy.hit_estimates(board)
             if hits is not None:
-                min_hit, exp_hit = hits
+                min_hit, _, exp_hit = hits
                 if min_hit > remaining:
                     clock_hard = True
                     self.vi_clock_hard_plies += 1
@@ -927,6 +963,17 @@ class LoseBot:
                     # exactly on the big graphs where the solver labors.
                     clock_soft = True
                     self.vi_clock_soft_plies += 1
+        if clock_hard or clock_soft:
+            # While flagged, the certified reset scan is the only
+            # sanctioned pusher: bar every quiet push this decision has
+            # not certified from the fallbacks — refused, unjudged, and
+            # unscanned alike (review P1: unjudged pushes reached the
+            # fallback, and a cooldown-skipped scan left stale refusals
+            # standing in for fresh ones). The scan lifts the one push it
+            # certifies; the filter never empties a menu.
+            self._vi_reset_refused = set(
+                self._reset_push_candidates(board)
+            )
         if len(board.move_stack) >= self._vi_next_flip_ply:
             if self._vi_side_unconvertible:
                 # The prospect's convertibility is position-dependent (their
@@ -1310,14 +1357,19 @@ class LoseBot:
         certified push buys a fresh 100 plies for a side that has
         already proven it can finish, given time.
 
-        Every scanned push that fails certification lands in
-        ``_vi_reset_refused`` (replaced wholesale each scan): on a hard
+        Certification is the only path a push takes into play while the
+        herd is clock-flagged: the caller has already barred the whole
+        scan domain from this decision's fallbacks (the veto arms with
+        the clock flags), so a refused or unjudged candidate stays vetoed
+        without any bookkeeping here, and the one certified push is
+        lifted out of the veto as it is chosen (review P1: on a hard
         clock the VI candidates all prune away, and the heuristic
         fallback — whose clock-urgent nudge REWARDS irreversible moves —
-        would otherwise play the exact push the audit just refused
-        (review P1; piece mode has no blanket pawn veto). One shared
-        ``vi_build_ms`` deadline bounds the whole scan (review P2);
-        candidates the budget never reaches stay unjudged, not refused.
+        must not play a push the audit refused OR never judged; piece
+        mode has no blanket pawn veto). One shared ``vi_build_ms``
+        deadline bounds the whole scan (review P2); candidates the budget
+        never reaches were never certified, which is the only fact the
+        fallbacks may use.
         """
         us = board.turn
         plan = self.plan
@@ -1341,20 +1393,7 @@ class LoseBot:
                     for square in squares
                 ))
         deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
-        refused: set[chess.Move] = set()
-        chosen: chess.Move | None = None
-        for move in board.legal_moves:
-            if board.piece_type_at(move.from_square) != chess.PAWN:
-                continue
-            if board.is_capture(move) or move.promotion is not None:
-                continue
-            if board.gives_check(move):
-                # A reset must be quiet-plus-irreversible: a checking push
-                # forces replies the same-root hypothetical below does not
-                # model, and forcing the king was never its job.
-                continue
-            if gives_mate(board, move) or gives_stalemate(board, move):
-                continue
+        for move in self._reset_push_candidates(board):
             board.push(move)
             future = plan.resolve(board, us)
             stable = (
@@ -1385,16 +1424,14 @@ class LoseBot:
                         break
             board.pop()
             if not stable:
-                refused.add(move)
                 continue
             remaining_ms = (deadline - time.monotonic()) * 1000.0
             if remaining_ms < 250.0:
-                break  # scan budget exhausted: unjudged, never refused
+                break  # scan budget exhausted: the rest stay uncertified
             hypothetical = board.copy(stack=False)
             hypothetical.push(move)
             resolved = plan.resolve(hypothetical, us)
             if resolved is None:
-                refused.add(move)
                 continue
             self.vi_clock_reset_builds += 1
             probe = HerdingPolicy.build(
@@ -1419,11 +1456,32 @@ class LoseBot:
                     else fraction > 0.0
                 )
             ):
-                chosen = move
-                break
-            refused.add(move)
-        self._vi_reset_refused = refused
-        return chosen
+                self._vi_reset_refused.discard(move)
+                return move
+        return None
+
+    def _reset_push_candidates(
+        self, board: chess.Board
+    ) -> list[chess.Move]:
+        """Quiet pawn pushes in the clock-reset scan's domain.
+
+        Captures and promotions live outside it (they change material and
+        end the pawn phase — other machinery owns them). A checking push
+        forces replies the same-root hypothetical does not model, and
+        forcing the king was never a reset's job; mating and stalemating
+        pushes are never played at all. Legal-move order, so the scan's
+        budget spends deterministically.
+        """
+        return [
+            move
+            for move in board.legal_moves
+            if board.piece_type_at(move.from_square) == chess.PAWN
+            and not board.is_capture(move)
+            and move.promotion is None
+            and not board.gives_check(move)
+            and not gives_mate(board, move)
+            and not gives_stalemate(board, move)
+        ]
 
     def _resolve_kh_adoption(
         self, board: chess.Board
@@ -1507,20 +1565,23 @@ class LoseBot:
     def _filter_refused_resets(
         self, moves: list[chess.Move]
     ) -> list[chess.Move]:
-        """Keep audit-refused reset pushes away from the heuristic
+        """Keep uncertified reset pushes away from the heuristic
         fallbacks.
 
         The clock-reset scan is the only sanctioned pusher while a herd
-        is clock-flagged: a refused push would otherwise reach the
+        is clock-flagged: an uncertified push would otherwise reach the
         fallbacks with the veto evidence discarded, and the clock-urgent
         nudge rewards exactly that push (review P1 — piece mode has no
-        blanket pawn veto). The set is replaced by every scan and
-        cleared with the plan era, so a refusal can age back into
-        consideration. The exact-probe and herd-search fallbacks are
-        exempt upstream: they return PROVEN lines only, and a proven net
-        that spends the push is a win, not a leak. If the refusals would
-        empty the list, the unfiltered moves stand — never zero the
-        move menu.
+        blanket pawn veto). The set is armed with the clock flags,
+        holds every quiet push the current decision did not certify —
+        refused, unjudged, and unscanned alike — and is cleared at the
+        next VI decision, so a veto never outlives the root it was
+        audited against. Only the exact selfmate probe is exempt
+        upstream: it returns PROVEN mating lines, and a proven mate that
+        spends the push is a win, not a leak (the herd search proves
+        mere forced progress, so it draws from the filtered menu). If
+        the vetoes would empty the list, the unfiltered moves stand —
+        never zero the move menu.
         """
         if not self._vi_reset_refused:
             return moves
@@ -1654,27 +1715,6 @@ class LoseBot:
                 break
             self.deepest_probe_completed = max(self.deepest_probe_completed, n)
 
-        if (
-            self.plan is not None
-            and self.profile.herd_search_depth > 0
-            and self.profile.herd_search_cap > 0
-        ):
-            herd = herding_move(
-                board,
-                self.plan,
-                board.turn,
-                self.profile.herd_search_depth,
-                self.opponent_model,
-                self.profile.herd_search_cap,
-                moves=safe,
-            )
-            self.herd_search_nodes += herd.nodes
-            if herd.status is ProofStatus.PROVEN and herd.move is not None:
-                self.herd_search_hits += 1
-                return herd.move
-            if herd.status is ProofStatus.UNKNOWN:
-                self.herd_search_exhaustions += 1
-
         if self.plan is not None and self.profile.vi_herding:
             plan_before = self.plan
             vi_move = self._vi_choice(board, planned_now, safe_for_vi)
@@ -1693,6 +1733,34 @@ class LoseBot:
                     board, base_safe, planned_now
                 )
             safe = self._filter_refused_resets(safe)
+
+        if (
+            self.plan is not None
+            and self.profile.herd_search_depth > 0
+            and self.profile.herd_search_cap > 0
+        ):
+            # Ranks BELOW the solved sub-MDP and its clock machinery:
+            # PROVEN here means forced defender progress, not a proven
+            # win, so it must not preempt the reset/flip/adoption
+            # cascade — and it draws from the reset-filtered menu, so it
+            # cannot spend a pawn push the scan did not certify (review
+            # P1: the old pre-VI placement could replay a refused push
+            # on the strength of a mere herding proof).
+            herd = herding_move(
+                board,
+                self.plan,
+                board.turn,
+                self.profile.herd_search_depth,
+                self.opponent_model,
+                self.profile.herd_search_cap,
+                moves=safe,
+            )
+            self.herd_search_nodes += herd.nodes
+            if herd.status is ProofStatus.PROVEN and herd.move is not None:
+                self.herd_search_hits += 1
+                return herd.move
+            if herd.status is ProofStatus.UNKNOWN:
+                self.herd_search_exhaustions += 1
 
         if (
             self.plan is not None

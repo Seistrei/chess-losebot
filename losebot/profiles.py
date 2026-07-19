@@ -82,14 +82,17 @@ class EngineProfile:
     vi_conversion_ms: int = 3_000
     # Clock feasibility from the solved sub-MDP. The herd's era is capped
     # at 100 quiet plies by the fifty-move rule; the hitting stats are
-    # finish-inclusive (per-terminal tails live in herding_vi's
-    # _TERMINAL_TAILS — structural facts, not tunables). The hard gate
-    # min_hit > remaining is a certificate that the era cannot finish;
-    # the soft gate exp_hit * soft_factor > remaining is advisory
-    # headroom for hitting-time variance. relax_at is the remaining-ply
-    # threshold at which a refused strict release retries with unlimited
-    # losing replies — near the cliff any race with a winning reply
-    # beats the fifty-move zero.
+    # finish-inclusive in two tiers (per-terminal tails live in
+    # herding_vi — structural facts, not tunables): min_hit seeds the
+    # cheapest-conceivable floor and only ever REJECTS (the hard gate
+    # min_hit > remaining is a certificate that the era cannot finish),
+    # while fit_hit and exp_hit seed the audit-PROVEN completion tails
+    # and are what may AFFIRM a finish. The soft gate exp_hit *
+    # soft_factor > remaining is advisory headroom for hitting-time
+    # variance. relax_at is the remaining-ply threshold at which a
+    # refused strict release retries with unlimited losing replies —
+    # near the cliff any race with a winning reply beats the fifty-move
+    # zero.
     vi_clock_soft_factor: float = 1.5
     vi_clock_relax_at: int = 20
     # King-holder construction pulls: route the cage-colored bishop toward

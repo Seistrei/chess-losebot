@@ -1774,18 +1774,24 @@ def selftest() -> int:
     )
 
     # 23a. Clock feasibility: hitting-time statistics on the solved graph,
-    # FINISH-INCLUSIVE (each positively seeded terminal is seeded at its
-    # tail: one mating reply for a forced mate, release plus mating reply
-    # for a goal — review P1: a uniform overhead falsely rejected
-    # forced-mate finishes at the cliff). fm-organic-h reaches its
-    # forced-mate fan in one ply and finishes in 2 — which FITS remaining
-    # 2 (halfmove 98: one quiet move to clock 99, hxg2# mates), the
-    # review's exact false-rejection case. kh-herd-h4's root finishes in
-    # 6 on a deterministic optimal track (exp == min), best child 5,
-    # detour child 9, dead child HIT_INF. A their-turn root on the same
-    # static split (the clock-reset hypothetical's shape) certifies the
-    # REAL post-reply continuation: its children are the actual reply
-    # states, and every one of them still fits a fresh era.
+    # FINISH-INCLUSIVE in two tiers (review P1: rejection and affirmation
+    # need opposite conservatism). min_hit seeds the per-kind floor — one
+    # mating reply for a forced mate, release plus mating reply for a
+    # goal — and stays the rejection bound; fit_hit and exp_hit seed each
+    # goal's audit-PROVEN completion tail, the affirmative bound.
+    # fm-organic-h reaches its forced-mate fan in one ply and finishes in
+    # 2 on both tiers (a forced mate owes exactly the mating reply) —
+    # which FITS remaining 2 (halfmove 98: one quiet move to clock 99,
+    # hxg2# mates), the review's exact false-rejection case. kh-herd-h4's
+    # root REACHES its vacate goal floor-priced in 6 (best child 5,
+    # detour child 9, dead child HIT_INF), but the audited race needs
+    # probe-proven continuations (the Kh1/Kh3/Ng6/g2# branch), so the
+    # affirmative tier prices the finish at 10 = 4 plies of herd + the
+    # 2 + 2*probe_n proven tail, exp on the same deterministic track. A
+    # their-turn root on the same static split (the clock-reset
+    # hypothetical's shape) certifies the REAL post-reply continuation:
+    # its children are the actual reply states, and every one still fits
+    # a fresh era on the AFFIRMATIVE tier.
     from .herding_vi import HIT_INF
 
     hit_fm = HerdingPolicy.build(
@@ -1823,15 +1829,18 @@ def selftest() -> int:
         and hit_fm.report.root_converts
         and hit_fm.report.min_hit_root == 2
         and hit_fm.report.min_hit_root <= 2  # fits remaining 2 at clock 98
+        and hit_fm.report.fit_hit_root == 2
         and abs(hit_fm.report.exp_hit_root - 2.0) < 1e-9
         and hit_fm.report.hit_converged
         and hit_kh.report.ok
         and hit_kh.report.root_converts
         and hit_kh.report.min_hit_root == 6
-        and abs(hit_kh.report.exp_hit_root - 6.0) < 1e-6
+        and hit_kh.report.fit_hit_root == 10
+        and abs(hit_kh.report.exp_hit_root - 10.0) < 1e-6
         and hit_kh.report.hit_converged
         and kh_root_hits is not None
         and kh_root_hits[0] == 6
+        and kh_root_hits[1] == 10
         and kh_child_hits == {5, 9, HIT_INF}
         and hit_their.report.ok
         and hit_their.report.root_live
@@ -1840,8 +1849,10 @@ def selftest() -> int:
         and hit_their.reply_fit_fraction() == 1.0
         and hit_kh.reply_fit_fraction() is None,
         f"fm=({hit_fm.report.min_hit_root}, "
+        f"fit {hit_fm.report.fit_hit_root}, "
         f"{hit_fm.report.exp_hit_root:.2f}); "
         f"kh=({hit_kh.report.min_hit_root}, "
+        f"fit {hit_kh.report.fit_hit_root}, "
         f"{hit_kh.report.exp_hit_root:.2f}); "
         f"kh-children={sorted(kh_child_hits)}; "
         f"their-root=({hit_their.report.min_hit_root}, "
@@ -1849,14 +1860,15 @@ def selftest() -> int:
     )
 
     # 23b. The near-cliff release relaxation consults the solved MDP: with
-    # the policy warm and the audited 1/2 vacate goal a finish-inclusive
-    # 6 plies away, remaining 16 affirms the herd still fits (min_hit
-    # and soft-factored exp_hit inside the budget, both honesty flags
-    # required for the affirmation — review P1), so the strict standard
-    # holds and the bot herds Ra2 toward the better race; remaining 6
-    # has no soft-feasible herd left (9 > 6), and the bot takes the best
-    # positive lottery available now — Kh1 at race 1/3 — under relaxed
-    # standards.
+    # the policy warm and the audited 1/2 vacate goal's PROVEN finish an
+    # affirmative 10 plies away (review P1: the floor said 6, but the
+    # audited race owes probe-proven continuations the floor cannot
+    # see), remaining 16 affirms the herd still fits (fit_hit 10 and
+    # soft-factored exp_hit 15 inside the budget, both honesty flags
+    # required for the affirmation), so the strict standard holds and
+    # the bot herds Ra2 toward the better race; remaining 6 has no
+    # affirmable herd left (10 > 6), and the bot takes the best positive
+    # lottery available now — Kh1 at race 1/3 — under relaxed standards.
     def _warm_kh_bot():
         warm = LoseBot(
             depth=1, opponent_model="zach", profile="vi", vi_herders=1
@@ -1886,6 +1898,51 @@ def selftest() -> int:
         f"(relaxed={relax_bot.vi_clock_relaxed_releases})",
     )
 
+    # 23f. A p/m pass truncated behind a CONVERGED solve is not permanent
+    # (review P1: solve_more never runs once converged, so nothing ever
+    # recomputed the stats and hit_converged=False starved the release
+    # affirmation forever). End to end: simulate the shared-deadline
+    # truncation on a warm policy and the fits consumer itself retries on
+    # a dedicated budget — the affirmation lights back up and the herd
+    # holds Ra2 at remaining 16 instead of cashing the lottery. At the
+    # policy level the retry is single-shot per value basis: a spent
+    # ledger keeps returning the honest False instead of redoing
+    # identical truncated work every move, and only a recompute on new
+    # values (burn re-solves, resumed builds) re-arms it.
+    refresh_bot = _warm_kh_bot()
+    refresh_policy = refresh_bot._vi_policy
+    refresh_policy.report.hit_converged = False
+    refresh_policy.report.exp_hit_root = 0.0
+    refresh_policy._exp_hit = None
+    refresh_board = chess.Board(motif["kh-herd-h4"].fen)
+    refresh_board.halfmove_clock = 84
+    refresh_move = refresh_bot.choose_move(refresh_board)
+    hit_kh.report.hit_converged = False
+    hit_kh.report.exp_hit_root = 0.0
+    hit_kh._exp_hit = None
+    hit_kh._hit_refresh_spent = True
+    spent_refused = hit_kh.refresh_hit_stats(30_000)
+    spent_exp = hit_kh.report.exp_hit_root
+    hit_kh._hit_refresh_spent = False
+    rearmed = hit_kh.refresh_hit_stats(30_000)
+    check(
+        "truncated hitting stats refresh where consumed, once per basis",
+        refresh_move == chess.Move.from_uci("a1a2")
+        and refresh_bot.vi_hit_refreshes == 1
+        and refresh_policy.report.hit_converged
+        and abs(refresh_policy.report.exp_hit_root - 10.0) < 1e-6
+        and not spent_refused
+        and spent_exp == 0.0
+        and rearmed
+        and hit_kh.report.hit_converged
+        and abs(hit_kh.report.exp_hit_root - 10.0) < 1e-6,
+        f"refresh-pick={refresh_board.san(refresh_move)} "
+        f"(refreshes={refresh_bot.vi_hit_refreshes}, "
+        f"exp={refresh_policy.report.exp_hit_root:.2f}); "
+        f"spent refused={not spent_refused} (exp={spent_exp:.2f}); "
+        f"re-armed exp={hit_kh.report.exp_hit_root:.2f}",
+    )
+
     # 23c. The clock-hard cascade on a converting side. min_hit over the
     # remaining budget certifies this era cannot finish, so a certified
     # pawn push manufactures a fresh one: with the spare a2 pawn the
@@ -1893,12 +1950,15 @@ def selftest() -> int:
     # move (review P1: an our-turn root certified a state the game never
     # reaches) and the active policy's herder subset — certifies
     # live-and-converting with every real reply state fitting, and the
-    # bot plays the reset. The f4-f5 push breaks the pocket, so its
-    # hypothetical refuses honestly and the refusal is RECORDED in
-    # _vi_reset_refused (review P1: the fallback must not replay it).
+    # bot plays the reset. Arming the flags vetoes the WHOLE scan domain
+    # for this decision (review P1: unjudged pushes must not reach the
+    # fallbacks either), so _vi_reset_refused holds the refused f4-f5
+    # (its hypothetical breaks the pocket and refuses honestly) AND the
+    # never-scanned a2-a4, with only the certified a2-a3 lifted out.
     # Without the spare pawn nothing certifies, every ranked candidate
     # prunes as unfinishable, and the move falls through to the
-    # fallbacks — a blind push is never played.
+    # fallbacks with the veto still armed — a blind push is never
+    # played.
     reset_board = chess.Board("5NN1/6k1/8/8/5P2/5Pp1/P5K1/R5B1 w - - 0 1")
     reset_board.halfmove_clock = 96
     reset_bot = LoseBot(
@@ -1919,7 +1979,8 @@ def selftest() -> int:
         and reset_bot.vi_clock_reset_builds == 2
         and reset_bot.vi_clock_hard_plies == 1
         and reset_bot.vi_clock_pruned == 0
-        and reset_bot._vi_reset_refused == {f4f5}
+        and reset_bot._vi_reset_refused
+        == {f4f5, chess.Move.from_uci("a2a4")}
         and nospare_bot.vi_clock_resets == 0
         and nospare_bot.vi_clock_reset_builds == 1
         and nospare_bot.vi_clock_hard_plies == 1
@@ -1933,7 +1994,8 @@ def selftest() -> int:
         f"refused={sorted(m.uci() for m in reset_bot._vi_reset_refused)}); "
         f"no-spare={nospare_board.san(nospare_move)} "
         f"(pruned={nospare_bot.vi_clock_pruned}, "
-        f"builds={nospare_bot.vi_clock_reset_builds})",
+        f"builds={nospare_bot.vi_clock_reset_builds}, "
+        f"vetoes={nospare_bot.vi_clock_reset_vetoes})",
     )
 
     # 23d. The flip gate requires era feasibility of the prospect: the
@@ -1959,15 +2021,18 @@ def selftest() -> int:
         f"boundary100 fired={boundary_fired}",
     )
 
-    # 23e. Refused resets stay out of the heuristic fallbacks (review
-    # P1). Piece mode has no blanket pawn veto, so on this fixture — the
-    # 13b construction plus a spare h2 pawn outside it — the clock-urgent
-    # negamax nudge picks the unaudited h2-h3 push the moment the VI path
-    # stands down (vi_herders=0 forces the fall-through). With the same
-    # pushes recorded as audit-refused, the fallback filter vetoes both
-    # and the search picks a quiet move instead; a refusal set that would
-    # empty the menu is ignored rather than obeyed.
-    def _leak_bot(refused):
+    # 23e. Uncertified resets stay out of the heuristic fallbacks, and
+    # the veto is SAME-DECISION evidence (review P1). Piece mode has no
+    # blanket pawn veto, so on this fixture — the 13b construction plus a
+    # spare h2 pawn outside it — the clock-urgent negamax nudge picks the
+    # unaudited h2-h3 push the moment the VI path stands down
+    # (vi_herders=0 forces the fall-through) and no veto is armed. The
+    # filter leg vetoes both pushes and counts them; a set that would
+    # empty the menu is ignored rather than obeyed. The stale leg seeds a
+    # "last turn" refusal and shows the next VI decision clears it before
+    # the fallbacks run: a veto never outlives the root it was audited
+    # against (the in-decision end-to-end veto is 23c's no-spare bot).
+    def _leak_bot():
         leak = LoseBot(
             depth=1, opponent_model="zach", profile="vi",
             probe_cap=64, max_probe_n=1, vi_herders=0,
@@ -1980,33 +2045,43 @@ def selftest() -> int:
             checked_side=-1,
             created_ply=0,
         )
-        leak._vi_reset_refused = set(refused)
         board = chess.Board("k7/p7/Pp6/1B6/K7/PP6/7P/6RR w - - 0 1")
         board.halfmove_clock = 70
-        return leak, leak.choose_move(board)
+        return leak, board
 
-    leak_control_bot, leak_control = _leak_bot(())
-    leak_refused_bot, leak_refused = _leak_bot(
-        (chess.Move.from_uci("h2h3"), chess.Move.from_uci("h2h4"))
+    leak_control_bot, leak_control_board = _leak_bot()
+    leak_control = leak_control_bot.choose_move(leak_control_board)
+    veto_bot, veto_board = _leak_bot()
+    veto_bot._vi_reset_refused = {
+        chess.Move.from_uci("h2h3"), chess.Move.from_uci("h2h4")
+    }
+    veto_kept = veto_bot._filter_refused_resets(
+        list(veto_board.legal_moves)
     )
-    keep_bot, _ = _leak_bot(())
+    keep_bot, _ = _leak_bot()
     keep_bot._vi_reset_refused = {chess.Move.from_uci("a1a2")}
     kept_all = keep_bot._filter_refused_resets(
         [chess.Move.from_uci("a1a2")]
     )
+    stale_bot, stale_board = _leak_bot()
+    stale_bot._vi_reset_refused = {chess.Move.from_uci("h2h3")}
+    stale_pick = stale_bot.choose_move(stale_board)
     check(
-        "audit-refused pushes are kept out of the heuristic fallbacks",
+        "uncertified pushes veto same-decision; stale vetoes die",
         leak_control == chess.Move.from_uci("h2h3")
         and leak_control_bot.vi_clock_reset_vetoes == 0
-        and leak_refused not in (
-            chess.Move.from_uci("h2h3"), chess.Move.from_uci("h2h4")
-        )
-        and leak_refused_bot.vi_clock_reset_vetoes == 2
-        and kept_all == [chess.Move.from_uci("a1a2")],
+        and chess.Move.from_uci("h2h3") not in veto_kept
+        and chess.Move.from_uci("h2h4") not in veto_kept
+        and veto_bot.vi_clock_reset_vetoes == 2
+        and kept_all == [chess.Move.from_uci("a1a2")]
+        and stale_pick == chess.Move.from_uci("h2h3")
+        and stale_bot._vi_reset_refused == set(),
         f"control={leak_control.uci()}; "
-        f"refused-pick={leak_refused.uci()} "
-        f"(vetoes={leak_refused_bot.vi_clock_reset_vetoes}); "
-        f"all-refused keeps={[m.uci() for m in kept_all]}",
+        f"vetoed keeps {len(veto_kept)} moves "
+        f"(vetoes={veto_bot.vi_clock_reset_vetoes}); "
+        f"all-refused keeps={[m.uci() for m in kept_all]}; "
+        f"stale-pick={stale_pick.uci()} "
+        f"(residue={sorted(m.uci() for m in stale_bot._vi_reset_refused)})",
     )
 
     # 13. A promoted piece means the king-and-pawns phase has ended. The

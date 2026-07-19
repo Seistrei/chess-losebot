@@ -38,19 +38,32 @@ up as the losing side of the race.
 
 The herd phase is all quiet moves, so the arena's fifty-move rule caps an
 era at 100 plies — a budget the discounted values cannot see (gamma prices
-time softly; the cliff is hard). Two hitting-time statistics per state close
-the gap, both FINISH-INCLUSIVE: distances are seeded at each positively
-seeded terminal's ``_TERMINAL_TAILS`` cost (the plies the win still owes
-past arrival), so they measure plies to COMPLETE the win, not to reach a
-proxy. ``min_hit`` takes the min over children at our nodes and their nodes
-alike (a unit-edge backward BFS): exact, solver-independent, and still a
-sound lower bound after any repetition burn (burning only removes paths),
-which makes ``min_hit > remaining`` a certificate that this era cannot
-finish and the per-child form a sound candidate veto. ``exp_hit`` is the
-expected plies to finish under the greedy stationary policy, conditioned on
-hitting — advisory by design (it prices the pristine graph under one fixed
-policy, not the burned one play follows), computed at build time and
-recomputed when a resumed solve first converges.
+time softly; the cliff is hard). Hitting-time statistics per state close
+the gap, all FINISH-INCLUSIVE: distances are seeded at per-terminal tail
+costs (the plies the win still owes past arrival), so they measure plies
+to COMPLETE the win, not to reach a proxy. The tails come in two tiers,
+because rejection and affirmation need opposite conservatism. ``min_hit``
+seeds each terminal at its ``_TERMINAL_TAILS`` floor — the cheapest finish
+any terminal of that kind could have — and takes the min over children at
+our nodes and their nodes alike (a unit-edge backward BFS): exact,
+solver-independent, and still a sound lower bound after any repetition
+burn (burning only removes paths), which makes ``min_hit > remaining`` a
+certificate that this era cannot finish and the per-child form a sound
+candidate veto. It must never AFFIRM: a goal's audited win can owe more
+plies than the floor (a king-holder vacate race spends closer moves the
+floor cannot see). ``fit_hit`` is the same BFS seeded at each terminal's
+PROVEN completion tail — recorded by the conversion audit from its
+accepted race, a conservative upper bound where the probe proved early —
+so ``fit_hit <= remaining`` is the sound form for affirmative decisions:
+suppressing the near-cliff lottery, certifying a clock reset's per-reply
+fits. ``exp_hit`` is the expected plies to finish under the greedy
+stationary policy, conditioned on hitting and seeded with the same proven
+tails (it feeds affirmations too) — advisory by design (it prices the
+pristine graph under one fixed policy, not the burned one play follows),
+computed at build time, recomputed when a resumed solve first converges,
+and retried on a dedicated budget when the build deadline truncated it
+(``refresh_hit_stats``; a truncation behind a converged solve would
+otherwise be permanent).
 
 Those goals are proxies — they stop one move short of the release and the
 actual selfmate. The conversion audit closes the gap: every reachable goal
@@ -136,24 +149,35 @@ _WIN_KINDS = (GOAL_CONTAINED, GOAL_RACE, FORCED_MATE, GOAL_VACATE)
 HIT_INF = 1 << 30
 
 # Plies still owed AFTER a positively seeded terminal is reached, per
-# terminal kind — the finish tail the hitting-time statistics fold in. A
+# terminal kind — the FLOOR the min_hit lower bound folds in. A
 # FORCED_MATE terminal is Zach to move with every reply mating us: the
 # arena adjudicates draws before his reply, so the terminal itself must
 # sit at clock <= 99 and the tail is exactly one ply. A goal terminal is
-# our turn: the cheapest finish is the release push (its landing must be
-# at clock <= 99) plus an immediately mating reply — two plies. Races
-# whose winning replies need probe-proven continuations cost more, but
-# the release scorer prices those exactly at fire time; for LOWER-bound
-# gates the minimal tail is the sound choice. A uniform tail was not: it
-# falsely rejected forced-mate finishes one ply from the cliff (review
-# P1 — fm-organic-h at halfmove 98: one quiet move reaches clock 99 and
-# hxg2# still wins).
+# our turn: the cheapest conceivable finish is the release push (its
+# landing must be at clock <= 99) plus an immediately mating reply — two
+# plies. Races whose winning replies need probe-proven continuations owe
+# more; the conversion audit records each converting goal's PROVEN tail
+# and the AFFIRMATIVE statistics (fit_hit, exp_hit) seed with that
+# instead. A floor is only ever sound for hard rejection — a uniform
+# tail falsely rejected forced-mate finishes one ply from the cliff
+# (review P1 — fm-organic-h at halfmove 98: one quiet move reaches clock
+# 99 and hxg2# still wins), and the bare floor falsely AFFIRMED
+# king-holder finishes whose audited race owes closer moves past the
+# release (review P1 — the Kh1/Kh3/Ng6/g2# branch is a four-ply tail).
 _TERMINAL_TAILS = {
     FORCED_MATE: 1,
     GOAL_CONTAINED: 2,
     GOAL_RACE: 2,
     GOAL_VACATE: 2,
 }
+
+# Depth, in our own moves, of the release scorer's per-reply continuation
+# probes. A winning reply is an immediate mate or a PROVEN selfmate within
+# this many of our moves, so an accepted race completes within
+# release + reply + 2 * probe_n plies of its goal — the conservative
+# affirmative tail whenever the audit did not record a tighter one.
+_RELEASE_PROBE_N = 2
+_GOAL_TAIL_CAP = 2 + 2 * _RELEASE_PROBE_N
 
 # Herder preference: rooks cut files (the classic boxing tool), bishops hold
 # diagonals cheaply, knights tempo, queens last (they widen branching without
@@ -207,18 +231,21 @@ class BuildReport:
     conversion_complete: bool = False
     root_converts: bool = False
     # Clock feasibility: hitting-time statistics over the completed graph,
-    # finish-inclusive (each positively seeded terminal is seeded at its
-    # _TERMINAL_TAILS cost, so the numbers are plies to COMPLETE the win).
-    # min_hit_root is that distance from the root when every reply
-    # cooperates (best-case Zach) — a sound lower bound on the quiet plies
-    # this era still needs, so min_hit_root > remaining certifies the era
-    # cannot finish. 0 means no positively seeded terminal is reachable at
-    # all (or the stats were never computed): callers must read 0 as
-    # unknown, never as "instant". exp_hit_root is the expected plies to
-    # finish under the greedy stationary policy conditioned on hitting
-    # (0.0 = not available), and hit_converged reports whether that
-    # iteration drained before its cap.
+    # finish-inclusive (each positively seeded terminal is seeded at a
+    # per-kind tail, so the numbers are plies to COMPLETE the win).
+    # min_hit_root seeds the _TERMINAL_TAILS floor and takes best-case
+    # Zach — a sound lower bound on the quiet plies this era still needs,
+    # so min_hit_root > remaining certifies the era cannot finish; it may
+    # never affirm. fit_hit_root seeds each terminal's audit-proven
+    # completion tail instead — the sound bound for affirmative reads.
+    # 0 means no positively seeded terminal is reachable at all (or the
+    # stats were never computed): callers must read 0 as unknown, never
+    # as "instant". exp_hit_root is the expected plies to finish under
+    # the greedy stationary policy conditioned on hitting, seeded with
+    # the proven tails (0.0 = not available), and hit_converged reports
+    # whether that iteration drained before its cap.
     min_hit_root: int = 0
+    fit_hit_root: int = 0
     exp_hit_root: float = 0.0
     hit_converged: bool = False
 
@@ -356,6 +383,12 @@ class HerdingPolicy:
         # Conversion audit results: goal-terminal index -> probability that
         # the best acceptable release converts (0.0 = probed and refused).
         self._conversion: dict[int, float] = {}
+        # goal-terminal index -> proven completion tail in plies (release,
+        # reply, and the continuation depth its winning replies actually
+        # needed), recorded for converting goals only. Seeds the
+        # affirmative hitting statistics; absent entries fall back to the
+        # conservative _GOAL_TAIL_CAP.
+        self._conversion_tail: dict[int, int] = {}
         self._stripped = False
         # King-holder mode (set by _split_board): our king is the arrival
         # holder, goals are classified against the hypothetically vacated
@@ -395,7 +428,11 @@ class HerdingPolicy:
 
         # Hitting-time statistics (computed once at build, after the solve).
         self._min_hit: list[int] | None = None
+        self._fit_hit: list[int] | None = None
         self._exp_hit: list[float] | None = None
+        # One dedicated retry of a deadline-truncated p/m pass per value
+        # basis (see refresh_hit_stats).
+        self._hit_refresh_spent = False
 
         # Play-time repetition burn: states whose position the current
         # reversible era has already seen twice. Entering one again is the
@@ -1031,6 +1068,7 @@ class HerdingPolicy:
                     self.report.conversion_unknowns += 1
                 continue
             self._conversion[index] = choice.winning / choice.pool
+            self._conversion_tail[index] = choice.tail
             self.report.converting_goals += 1
         self.report.conversion_nodes = nodes[0]
         self.report.conversion_complete = (
@@ -1181,34 +1219,80 @@ class HerdingPolicy:
             self._compute_hit_stats(deadline)
         return self.report.converged
 
+    def refresh_hit_stats(self, time_budget_ms: int) -> bool:
+        """Retry a deadline-truncated p/m pass behind a finished solve.
+
+        The build shares one deadline between exploration, audit, solver,
+        and hitting stats, so value iteration can converge while the p/m
+        pass is cut short — and with ``converged`` True, ``solve_more``
+        never runs again to trigger the recompute, leaving ``exp_hit``
+        truncated for the policy's whole life (review P1). One dedicated
+        full-budget retry per value basis: the pass restarts from zero,
+        so a second identical budget would redo identical work — the
+        spent flag clears whenever the stats are recomputed on new values
+        (burn re-solves, resumed builds). Returns ``hit_converged``.
+        """
+        if self._stripped or not self.report.ok or not self.report.converged:
+            return self.report.hit_converged
+        if self.report.hit_converged or self._hit_refresh_spent:
+            return self.report.hit_converged
+        deadline = time.monotonic() + time_budget_ms / 1000.0
+        self._compute_hit_stats(deadline)
+        if not self.report.hit_converged:
+            self._hit_refresh_spent = True
+        return self.report.hit_converged
+
     # ------------------------------------------------------------------
     # Clock feasibility: hitting-time statistics
     # ------------------------------------------------------------------
 
+    def _affirm_tail(self, index: int) -> int:
+        """Proven completion tail for a positively seeded terminal.
+
+        A FORCED_MATE owes exactly the one mating reply. A converting
+        goal owes what its audited race proved (``ReleaseChoice.tail``);
+        a goal seeded without an audit record — the flat proxy values of
+        a non-converting graph — owes the conservative cap. Affirmative
+        numbers may overstate a finish, never understate it.
+        """
+        if self._kind[index] == FORCED_MATE:
+            return 1
+        return self._conversion_tail.get(index, _GOAL_TAIL_CAP)
+
     def _compute_hit_stats(self, deadline: float) -> None:
         """Hitting-time statistics for the fifty-move feasibility gates.
 
-        Both statistics are FINISH-INCLUSIVE: every positively seeded
-        terminal is seeded at its ``_TERMINAL_TAILS`` cost — the plies
-        the win still owes past arrival (one mating reply for a forced
-        mate, release plus mating reply for a goal) — so a state's
-        number compares against ``remaining`` directly, with no external
-        overhead to get wrong per terminal kind (review P1: a uniform
-        overhead falsely rejected forced-mate finishes at the cliff).
+        All statistics are FINISH-INCLUSIVE — seeded at per-terminal tail
+        costs, the plies the win still owes past arrival, so a state's
+        number compares against ``remaining`` directly. The tails come in
+        two tiers because rejection and affirmation need opposite
+        conservatism (review P1: a uniform overhead falsely rejected
+        forced-mate finishes at the cliff, and the bare floor falsely
+        affirmed goals whose audited race owes more than the cheapest
+        conceivable finish).
 
         min_hit: plies to complete the win when EVERY reply cooperates —
         min over children at our nodes and their nodes alike, i.e. a
-        unit-edge backward BFS from the tail-seeded terminals over the
-        parent lists. Exact, independent of the solver, and still a sound
-        lower bound after any repetition burn (burning only removes
-        paths), which is what makes ``min_hit > remaining`` a certificate
-        that the era cannot finish and the per-child form a sound
-        candidate veto. Computed unconditionally: it is one O(V+E) pass.
+        unit-edge backward BFS from terminals seeded at the
+        ``_TERMINAL_TAILS`` floor, over the parent lists. Exact,
+        independent of the solver, and still a sound lower bound after
+        any repetition burn (burning only removes paths), which is what
+        makes ``min_hit > remaining`` a certificate that the era cannot
+        finish and the per-child form a sound candidate veto. Never an
+        affirmation. Computed unconditionally: it is one O(V+E) pass.
+
+        fit_hit: the same backward pass seeded at each terminal's PROVEN
+        completion tail (``_affirm_tail``), so ``fit_hit <= remaining``
+        is the sound affirmative form — the finish it promises is one the
+        audit actually proved, or a conservative bound on it. Computed
+        only when the root converts, like exp_hit: affirmative consumers
+        are all behind that condition, and without a conversion there is
+        no proven finish to price.
 
         exp_hit: expected plies to finish under the greedy stationary
         policy (argmax child value; min_hit, then index as tie-breaks),
         conditioned on hitting. p is the absorption probability and m the
-        mass E[plies * 1{hit}] (tail included via the seed mass),
+        mass E[plies * 1{hit}] (proven tail included via the seed mass),
         iterated by the same parent-driven worklist discipline as the
         values — both are monotone from a zero start, so the iteration
         converges from below and cutting it short (update cap or the
@@ -1222,10 +1306,13 @@ class HerdingPolicy:
         condition, and churning p/m over a large non-converting graph
         bought pure wall clock — the case-2 reference paid ~50% for
         numbers nothing reads. Recomputed when a resumed solve first
-        converges (review P1: build-deadline stats could otherwise stay
-        stale for the policy's whole life).
+        converges, and retried once on a dedicated budget when truncation
+        outlived a converged solve (``refresh_hit_stats``, review P1).
         ``hit_converged`` is trivially True when the pass is skipped.
         """
+        # Any recompute prices a fresh value basis: the dedicated-retry
+        # ledger starts over (see refresh_hit_stats).
+        self._hit_refresh_spent = False
         states = len(self._states)
         seeds = [
             index for index, kind in enumerate(self._kind)
@@ -1250,6 +1337,21 @@ class HerdingPolicy:
         self.report.hit_converged = True
         if not self.report.root_converts:
             return
+
+        fit_hit = [HIT_INF] * states
+        for index in seeds:
+            fit_hit[index] = self._affirm_tail(index)
+            queue.append(index)
+        while queue:
+            index = queue.popleft()
+            step = fit_hit[index] + 1
+            for parent in self._parents[index]:
+                if fit_hit[parent] > step:
+                    fit_hit[parent] = step
+                    queue.append(parent)
+        self._fit_hit = fit_hit
+        if root is not None and fit_hit[root] < HIT_INF:
+            self.report.fit_hit_root = fit_hit[root]
 
         # The fixed policy exp_hit prices: best child by solved value,
         # shortest min_hit among value ties (of the near-optimal moves
@@ -1278,7 +1380,7 @@ class HerdingPolicy:
         queued = bytearray(states)
         for index in seeds:
             prob[index] = 1.0
-            mass[index] = float(_TERMINAL_TAILS[kinds[index]])
+            mass[index] = float(self._affirm_tail(index))
             for parent in parents[index]:
                 if not queued[parent]:
                     queued[parent] = 1
@@ -1330,13 +1432,17 @@ class HerdingPolicy:
         if root is not None and prob[root] > 1e-9:
             self.report.exp_hit_root = self._exp_hit[root]
 
-    def hit_estimates(self, board: chess.Board) -> tuple[int, float] | None:
-        """(min_hit, exp_hit) plies for the current our-turn state.
+    def hit_estimates(
+        self, board: chess.Board
+    ) -> tuple[int, int, float] | None:
+        """(min_hit, fit_hit, exp_hit) plies for the current our-turn state.
 
         None when the position does not map into the graph or the stats
-        are unavailable. min_hit is HIT_INF when no positively seeded
-        terminal is reachable; exp_hit is inf when the greedy policy
-        never absorbs from here.
+        are unavailable. min_hit is the rejection bound (HIT_INF when no
+        positively seeded terminal is reachable). fit_hit is the
+        affirmative bound seeded at proven completion tails — HIT_INF
+        when unavailable, because an unknown must never affirm. exp_hit
+        is inf when the greedy policy never absorbs from here.
         """
         if self._stripped or self._min_hit is None:
             return None
@@ -1346,12 +1452,17 @@ class HerdingPolicy:
         index = self._index.get(state)
         if index is None:
             return None
+        fit = (
+            self._fit_hit[index]
+            if self._fit_hit is not None
+            else HIT_INF
+        )
         exp = (
             self._exp_hit[index]
             if self._exp_hit is not None
             else float("inf")
         )
-        return self._min_hit[index], exp
+        return self._min_hit[index], fit, exp
 
     def child_min_hit(self, index: int) -> int:
         """min_hit of a state index as returned by ``ranked_moves``.
@@ -1369,12 +1480,13 @@ class HerdingPolicy:
         A their-turn root's children are exactly the positions we will
         face after each equally likely opponent reply. Returns the
         fraction of them from which a positively seeded terminal can
-        still FINISH inside a fresh era (finish-inclusive min_hit <= 99:
-        the reply itself consumed the era's first ply). None when the
-        root is not a their-turn root or the stats are unavailable — an
-        unknown must never affirm.
+        still FINISH inside a fresh era (affirmative finish-inclusive
+        fit_hit <= 99: the reply itself consumed the era's first ply, and
+        an affirmation must price the PROVEN completion, not the floor —
+        review P1). None when the root is not a their-turn root or the
+        stats are unavailable — an unknown must never affirm.
         """
-        if self._stripped or self._min_hit is None:
+        if self._stripped or self._fit_hit is None:
             return None
         if self._root_state is None or self._root_state[0]:
             return None
@@ -1384,7 +1496,7 @@ class HerdingPolicy:
         kids = self._children[root]
         if not kids:
             return None
-        fit = sum(1 for kid in kids if self._min_hit[kid] <= 99)
+        fit = sum(1 for kid in kids if self._fit_hit[kid] <= 99)
         return fit / len(kids)
 
     # ------------------------------------------------------------------
@@ -1594,9 +1706,11 @@ class HerdingPolicy:
         self._worklist = None
         self._queued = None
         self._conversion = {}
+        self._conversion_tail = {}
         self._burned = None
         self._burned_set = set()
         self._min_hit = None
+        self._fit_hit = None
         self._exp_hit = None
 
 
@@ -1662,11 +1776,18 @@ class ReleaseChoice:
     losing: int
     pool: int
     nodes: int
+    # Plies from the pre-release position to the completed mate along the
+    # slowest winning reply: release plus reply when every winning reply
+    # mates immediately, plus the probe bound when any needed a proven
+    # continuation. The conversion audit seeds the affirmative
+    # hitting-time statistics with this.
+    tail: int = 2
 
 
 def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                         model: str | None, max_losing: int,
-                        probe_n: int = 2, probe_cap: int = 6_000,
+                        probe_n: int = _RELEASE_PROBE_N,
+                        probe_cap: int = 6_000,
                         nodes_out: list | None = None,
                         unknown_out: list | None = None,
                         ) -> ReleaseChoice | None:
@@ -1714,6 +1835,7 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
         winning = 0
         losing = 0
         unknowns = 0
+        probed_wins = 0
         if not pool:
             # Every legal reply mates us: a guaranteed win the main probe
             # normally takes first, but accept it here as well.
@@ -1732,6 +1854,7 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                 board.pop()
                 if status is ProofStatus.PROVEN:
                     winning += 1
+                    probed_wins += 1
                 else:
                     losing += 1
                     if status is ProofStatus.UNKNOWN:
@@ -1741,7 +1864,10 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
             if unknowns and unknown_out is not None:
                 unknown_out[0] += 1
             continue
-        candidate = ReleaseChoice(move, winning, losing, pool_size, 0)
+        # Release plus reply completes the race; a probe-proven reply owes
+        # up to probe_n more of our moves, each answered by a mate.
+        tail = 2 + (2 * probe_n if probed_wins else 0)
+        candidate = ReleaseChoice(move, winning, losing, pool_size, 0, tail)
         if (
             best is None
             or (candidate.losing / candidate.pool, -candidate.winning)
