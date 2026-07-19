@@ -2771,6 +2771,153 @@ def selftest() -> int:
             f"builds={edge_bot.vi_relocation_builds}",
         )
 
+    # 26a. The release-scan taxonomy on the corner vacate itself — the
+    # pose every case-7 live-side stalemate released from (their king a4,
+    # walker landed b3, our king holding b2). The holder's whole legal
+    # menu is two squares (the walker's pawn attacks bar a2 and c2), and
+    # the vacate b2a1 is scored a literal coin flip: pool {Ka3 steps onto
+    # the defense square -> the probe proves the b2# net; b3-b2+ pushes
+    # early -> Kxb2 burns the executioner}, 1W/1L/2P. detail_out records
+    # that verdict and names why the other retreat refuses (no winning
+    # reply), without changing what the scan returns.
+    vacate_board = chess.Board("2N5/8/8/3R4/k1P5/1pP5/1K6/1B2R3 w - - 24 28")
+    vacate_stub = SimpleNamespace(arrival_square=chess.B2)
+    vacate_detail: list = []
+    vacate_choice = score_release_moves(
+        vacate_board, vacate_stub, "zach", 1, detail_out=vacate_detail,
+    )
+    vacate_verdicts = {
+        record["move"]: record["verdict"] for record in vacate_detail
+    }
+    vacate_control = score_release_moves(vacate_board, vacate_stub, "zach", 1)
+    check(
+        "the corner vacate scores a 1W/1L/2P coin flip, taxonomy attached",
+        vacate_choice is not None
+        and vacate_choice.move == chess.Move.from_uci("b2a1")
+        and (vacate_choice.winning, vacate_choice.losing, vacate_choice.pool)
+        == (1, 1, 2)
+        and vacate_verdicts == {"b2a1": "scored", "b2c1": "no-winning"}
+        and vacate_control is not None
+        and vacate_control.move == vacate_choice.move
+        and (vacate_control.winning, vacate_control.losing,
+             vacate_control.pool)
+        == (vacate_choice.winning, vacate_choice.losing, vacate_choice.pool),
+        f"choice={'none' if vacate_choice is None else vacate_choice.move.uci()}; "
+        f"verdicts={vacate_verdicts}",
+    )
+
+    # 26b. The release-audit flag is observation only: a bot with it set
+    # releases the identical vacate and logs the decision (accepted odds,
+    # per-candidate verdicts, the stall bit), while the default bot logs
+    # nothing. At this pose the release fires before any policy build, so
+    # the event honestly records an unmapped state and no twin — the
+    # fetch-order fact the full-game data must be read against.
+    audit_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+        probe_cap=0, max_probe_n=1, release_audit=True,
+    )
+    audit_bot.plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king"
+    )
+    plain_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+        probe_cap=0, max_probe_n=1,
+    )
+    plain_bot.plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king"
+    )
+    audit_move = audit_bot.choose_move(vacate_board.copy())
+    plain_move = plain_bot.choose_move(vacate_board.copy())
+    audit_event = (
+        audit_bot.release_audit_events[0]
+        if audit_bot.release_audit_events else None
+    )
+    check(
+        "the release-audit flag records the vacate without touching it",
+        audit_move == plain_move
+        and audit_move == chess.Move.from_uci("b2a1")
+        and len(audit_bot.release_audit_events) == 1
+        and audit_event is not None
+        and audit_event["chosen"] == "b2a1"
+        and (audit_event["winning"], audit_event["losing"],
+             audit_event["pool"]) == (1, 1, 2)
+        and audit_event["stall"] is False
+        and audit_event["defender_steps"] == 1
+        and audit_event["state"] is None
+        and audit_event["twin"] is None
+        and bool(audit_event["candidates"])
+        and not plain_bot.release_audit_events
+        and not plain_bot.release_audit_tables,
+        f"audit={'none' if audit_move is None else audit_move.uci()}; "
+        f"plain={'none' if plain_move is None else plain_move.uci()}; "
+        f"events={len(audit_bot.release_audit_events)}",
+    )
+
+    # 26c. The audited odds are readable, and they agree with play. A
+    # policy built two herding steps out (their king a6) reaches the a4
+    # vacate pose as a GOAL_VACATE terminal; the conversion table reports
+    # its audited race at exactly the 0.5 play accepts, state_view maps
+    # the delivered board onto that row (and refuses an off-graph king),
+    # and audit_board reconstructs the same placement the audit scored —
+    # the twin whose rescore isolates clock/history divergence in the
+    # full-game data.
+    from .herding_vi import HerdingPolicy as _AuditPolicy
+
+    herd_root = chess.Board("2N5/8/k7/3R4/2P5/1pP5/1K6/1B2R3 w - - 20 26")
+    herd_plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king"
+    )
+    herd_target = herd_plan.resolve(herd_root, chess.WHITE)
+    table_ok = False
+    table_detail = "no template"
+    if herd_target is not None and herd_target.arrival_square == chess.B2:
+        table_policy = _AuditPolicy.build(
+            herd_root, herd_target, 1, 200_000, 8_000, 0.96,
+            herders=((chess.D5, chess.ROOK),),
+            model="zach", race_max_losing=1, conversion_ms=8_000,
+        )
+        rows = table_policy.conversion_table()
+        vacate_rows = [
+            row for row in rows
+            if row["kind"] == "goal-vacate" and row["zk"] == "a4"
+            and row["herders"] == "Rd5"
+        ]
+        delivered_view = table_policy.state_view(vacate_board)
+        root_view = table_policy.state_view(herd_root)
+        off_graph = table_policy.state_view(
+            chess.Board("2N4k/8/8/3R4/2P5/1pP5/1K6/1B2R3 w - - 24 28")
+        )
+        twin_board = table_policy.audit_board(vacate_board)
+        table_ok = (
+            table_policy.report.ok
+            and table_policy.report.root_converts
+            and len(vacate_rows) == 1
+            and vacate_rows[0]["fraction"] == 0.5
+            and not vacate_rows[0]["burned"]
+            and delivered_view is not None
+            and delivered_view["kind"] == "goal-vacate"
+            and delivered_view["index"] == vacate_rows[0]["index"]
+            and delivered_view["fraction"] == 0.5
+            and root_view is not None
+            and root_view["kind"] == "interior"
+            and off_graph is None
+            and twin_board is not None
+            and twin_board.board_fen() == vacate_board.board_fen()
+            and twin_board.turn == chess.WHITE
+        )
+        table_detail = (
+            f"goals={table_policy.report.converting_goals}"
+            f"/{table_policy.report.goal_states}; "
+            f"a4-row={'none' if not vacate_rows else vacate_rows[0]['fraction']}; "
+            f"view={'none' if delivered_view is None else delivered_view['kind']}; "
+            f"twin={'none' if twin_board is None else 'reconstructed'}"
+        )
+    check(
+        "the audit table, state view, and twin agree on the vacate pose",
+        table_ok,
+        table_detail,
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -2854,6 +3001,7 @@ def endgames(args) -> int:
             probe_cap=args.probe_cap,
             max_probe_n=args.probe_depth,
             vi_herders=args.vi_herders,
+            release_audit=args.release_audit,
         )
         zach = ZachBot(seed=args.seed + i)
         start_board = chess.Board(fen)
@@ -2980,6 +3128,8 @@ def endgames(args) -> int:
                 f"/{bot.vi_relocation_builds} builds",
                 flush=True,
             )
+        if args.release_audit:
+            _print_release_audit(bot)
         if args.show_fen:
             print(f"  final FEN: {board.fen()}", flush=True)
     print(
@@ -2987,6 +3137,91 @@ def endgames(args) -> int:
         f"{converted}/{len(cases)}"
     )
     return 0
+
+
+def _print_release_audit(bot) -> None:
+    """Dump the release-audit logs: the odds the build promised (audited
+    conversion tables) against the odds play saw (per-candidate scan
+    verdicts, the pose's graph view, and the clean-board twin rescore)."""
+
+    def odds(winning, losing, pool) -> str:
+        if winning is None:
+            return "refused"
+        return f"{winning}W/{losing}L/{pool}P"
+
+    def cand_line(record: dict) -> str:
+        return (
+            f"{record['move']} {record['verdict']} "
+            f"{record['winning']}W/{record['losing']}L/{record['pool']}P"
+            f" u{record['unknowns']}"
+        )
+
+    for table in bot.release_audit_tables:
+        print(
+            f"  release-audit table@ply{table['ply']}"
+            f" arrival={table['arrival']}"
+            f" root={table['root_value']:.3f}"
+            f" converts={table['root_converts']}"
+            f" goals={table['converting_goals']}/{table['goal_states']}"
+            f" fm={table['forced_mates']}"
+            f" complete={table['conversion_complete']}",
+            flush=True,
+        )
+        for row in table["table"]:
+            fraction = row["fraction"]
+            print(
+                f"    goal {row['kind']} zk={row['zk']}"
+                f" [{row['herders']}]"
+                f" f={'n/a' if fraction is None else format(fraction, '.3f')}"
+                f" tail={row['tail']}"
+                + (" BURNED" if row["burned"] else ""),
+                flush=True,
+            )
+    for ev in bot.release_audit_events:
+        view = ev["state"]
+        if view is None:
+            state = "unmapped"
+        else:
+            fraction = view["fraction"]
+            value = view["value"]
+            state = (
+                f"{view['kind']}(zk={view['zk']}"
+                f" v={'n/a' if value is None else format(value, '.3f')}"
+                f" f={'n/a' if fraction is None else format(fraction, '.3f')}"
+                + (" BURNED" if view["burned"] else "")
+                + ")"
+            )
+        twin = ev["twin"]
+        if twin is None:
+            twin_text = "n/a"
+        else:
+            twin_text = (
+                f"{twin['chosen'] or 'refused'}"
+                f" {odds(twin['winning'], twin['losing'], twin['pool'])}"
+            )
+        print(
+            f"  release-audit ply{ev['ply']}"
+            f" clock={ev['clock']} rem={ev['remaining']}"
+            f" def={ev['defender_steps']}"
+            f" state={state}"
+            f" chosen={ev['chosen'] or 'REFUSED'}"
+            f" {odds(ev['winning'], ev['losing'], ev['pool'])}"
+            + (" STALL" if ev["stall"] else "")
+            + (
+                ""
+                if ev["relax_fits"] is None
+                else f" relax-fits={ev['relax_fits']}"
+            )
+            + f" twin={twin_text}",
+            flush=True,
+        )
+        for record in ev["candidates"] or []:
+            print(f"    cand {cand_line(record)}", flush=True)
+        for record in ev["relaxed_candidates"] or []:
+            print(f"    relaxed {cand_line(record)}", flush=True)
+        if twin is not None:
+            for record in twin["candidates"]:
+                print(f"    twin {cand_line(record)}", flush=True)
 
 
 def main() -> int:
@@ -3006,6 +3241,9 @@ def main() -> int:
     eg.add_argument("--probe-depth", type=int, default=None)
     eg.add_argument("--vi-herders", type=int, default=None,
                     help="override the vi profile's mobile herder count")
+    eg.add_argument("--release-audit", action="store_true",
+                    help="log every release-scan decision: candidate "
+                         "verdicts, audited goal odds, clean-board twin")
     eg.add_argument("--show-fen", action="store_true")
     eg.add_argument("--pgn-dir", default=None)
 

@@ -1958,3 +1958,123 @@ round changes only the scan and its candidate filter, no solver or
 audit code. Next-steps order unchanged: live-side post-arrival
 stalls, multi-move repairs, funnel pricing / executioner selection /
 multi-pawn stacking.
+
+## Release audit: the live-side stalls are lost coin flips, not refusals (2026-07-19)
+
+The last entry's top item carried a question written before the walk-
+pressure and relocation rounds settled the references: why do audited-
+converting goals refuse every race at play time? Instrumenting the
+release path answers it with data, and the answer is that they never
+do. The premise is stale: the final references contain no goal-stall
+wait squeeze at all (vi_goal_stalls=0 in every stall-family game — the
+squeeze lived in session 10's discarded iterations, not in what
+shipped). Every live-side stalemate in the battery is the SAME single
+event, and it is not a refusal. It is the corner template's designed
+endgame — the vacate race — offered at exactly its audited odds,
+accepted at exactly its audited odds, and lost on the coin.
+
+The instrument, all behind a new opt-in `--release-audit` flag
+(`LoseBot(release_audit=True)`), all read-only: `score_release_moves`
+grows a `detail_out` that records one verdict per candidate release —
+"scored" with its W/L/pool odds, "no-winning", "over-losing", or the
+landing adjudication that refused it before scoring — with identical
+decisions whether or not it is supplied. The policy grows three
+read-only accessors: `conversion_table()` (every audited win-kind
+terminal with its graph state, race fraction, and proven tail — the
+odds the build promised), `state_view(board)` (which graph state a
+pose maps onto, its kind, value, burn, and audited fraction), and
+`audit_board(board)` (the clean reconstruction the audit scored: same
+placement, build-time clock, no history). The bot records one event
+per release scan — pose, clock, per-candidate verdicts, the state
+view, and a TWIN rescore of the same strict scan on the audit_board
+reconstruction, so any play/twin disagreement isolates exactly what
+the era's clock and repetition history changed. Flag off, batteries
+are provably untouched: seeds 1/7/8 PGNs byte-identical with the flag
+on vs off, gauges identical to the digit; case-2 seed-5 and the
+motifs byte-identical vs a HEAD-worktree control (wall-ms aside);
+case-6 at its exact reference plies.
+
+What the data says, seed by seed. The audited conversion tables for
+every stall game have one shape: every goal state is `goal-vacate` at
+zk=a4 — the delivered pose, one row per herder post — and every
+converting row is EXACTLY f=0.500 with tail 6. Seed 1 (rook herder):
+6/7 at 0.500, Rb5 at 0.000. Seeds 7 and 6 (knight herder): 6/10 at
+0.500. Seed 2, the converted control: 1/20 at 0.500 (only the Nd7
+post converts — the knight must reach the b6 seal in one hop). There
+is no better-than-half goal anywhere in the family, and the policy's
+value at the delivered pose reads 0.500 — the discounted root values
+(0.171/0.157/0.083/0.097) are that coin seen from afar. At the
+release ply every game shows the same line: state=goal-vacate
+(v=0.500 f=0.500), chosen=b2a1 1W/1L/2P, twin=b2a1 1W/1L/2P,
+candidate-for-candidate agreement between play and the clean board.
+The pool is {Ka3, b2+}: Ka3 steps onto the defense square and the
+probe proves the net (Nb6 seals a4, b2# is his only move); b2+ pushes
+early, Kxb2 is our only non-stalemating reply, and the capture bares
+his king into an instant stalemate — the "forced-stalemate landing"
+is the LOSS branch landing, not a refusal artifact. Zach drew b2+ in
+seeds 1/6/7/8 and Ka3 in seed 2 (20...b2# at ply 40, the fastest
+conversion on record). Eight vacate races were offered across the
+ten-seed battery; four won (seeds 0/2/3/5), four lost (1/6/7/8). The
+4/10 conversion rate IS the audited coin performing exactly to
+specification.
+
+The refusal machinery, where it does fire, is right. Seed 8's king
+touched a4 at ply 64 with the rook off rank 5: the scan refused
+b2a1 as over-losing (1W/2L/3P — a5 open adds a third reply), the twin
+agreed, the pose mapped to an INTERIOR state (v=0.369, not a goal),
+the policy re-sealed rank 5 (Rd7-d5+), and four plies later the true
+goal-vacate pose accepted its 1W/1L/2P. Strict max-losing=1 is doing
+exactly its job: it refuses loose poses and tightens them into the
+audited race. And the audit's f=0.000 rows are geometry, not noise:
+with the dynamic rook on b5, the vacated b3 opens the b-file and OUR
+OWN rook guards b2 — after Ka3, Nb6, b2+ the "mate" dies to Rxb2, so
+the probe scores 0W/2L (verified directly). The zero knight posts
+(Nd4/Nd6/Na7/Nc7...) cannot reach the b6 seal inside the probe
+window. The release theorem's shadow reaches into the king-holder
+family too: any of our pieces re-attacking the arrival square refutes
+the mate, which is why the walk-pressure funnel electing rank-5 rook
+posts (session 10's poison) produced 0/5 arrivals.
+
+The structural fact this closes on: the a1-corner vacate race is
+capped at one half BY CONSTRUCTION. The vacate legalizes the push —
+b2 empties, so b3-b2+ is always in the pool — and the funnel that
+makes the pose a goal (every quiet reply enters the defense zone)
+means the only other reply is Ka3. One winning, one losing, pool
+two, forever: no herder placement, wait choice, or steering can buy
+a better fraction inside this template, because the defense square
+is the only in-zone quiet step and the push is unremovable. The cap
+is not a bug to fix but a design ceiling to raise, and the lever is
+already on the list: the losing half is only terminal because the
+arrival square is undefended at push time (Kxb2 burns the lone
+executioner). A second their-pawn covering b2 — multi-pawn stacking,
+with executioner selection at strip time keeping adjacent b/c-file
+pawns alive for it — makes Kxb2 illegal: the winning branch keeps
+its mate and the losing branch stops losing (the defended pawn
+survives, the race renews instead of ending). That converts the
+one-shot coin into a repeatable one and is now the family's whole
+expected-value story.
+
+Suite 77 -> 80. 26a pins the vacate scan itself on the stall pose
+(b2a1 scored 1W/1L/2P, the b3-pawn bars a2/c2 so the menu is two
+moves, b2c1 refuses no-winning, detail_out changes nothing). 26b
+pins flag parity end to end (audit and plain bots choose the same
+b2a1; the event records the accepted odds and honestly reports an
+unmapped state — the release fires before any policy build on a
+fresh bot). 26c builds the policy two herding steps out and pins the
+whole audit surface: the a4/Rd5 row at exactly 0.5, state_view
+mapping the delivered board onto that row and refusing an off-graph
+king, audit_board reconstructing the audited placement.
+
+Next, in expected-value order:
+
+1. Multi-pawn stacking + executioner selection at strip time —
+   promoted from the tail of the list: the vacate race's 1/2 cap is
+   structural, every live-side loss is that cap realized, and a
+   defended arrival square is the one lever that raises it (the
+   losing branch stops being terminal). Design work: a corner
+   template variant whose walls admit a second THEIR-pawn guarding
+   the arrival square, and strip-phase preferences that keep such
+   pawn pairs alive.
+2. Multi-move repairs (seed 4: rook AND knight both misplaced; the
+   one-move relocation horizon cannot compose them; unchanged).
+3. Deeper funnel pricing (two-ply funnels; unchanged).

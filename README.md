@@ -63,6 +63,11 @@ docker run --rm losebot pypy3 -m losebot endgames --profile vi `
 docker run --rm losebot pypy3 -m losebot endgames --profile vi `
   --case 7 --seed 1 --vi-herders 1 --max-plies 240 --show-fen
 
+# Same drill with the release audit: log every release-scan decision
+# (candidate verdicts, audited goal odds, clean-board twin rescore)
+docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+  --case 7 --seed 1 --vi-herders 1 --max-plies 240 --release-audit
+
 # Adjudicate conversion motifs (king-holder release, forced capture-mate)
 # with the conversion audit under research budgets
 docker run --rm losebot pypy3 -m losebot motifs

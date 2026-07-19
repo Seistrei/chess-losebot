@@ -79,7 +79,8 @@ class LoseBot:
                  name: str = "losebot", profile: str = "current",
                  probe_cap: int | None = None,
                  max_probe_n: int | None = None,
-                 vi_herders: int | None = None):
+                 vi_herders: int | None = None,
+                 release_audit: bool = False):
         self.depth = depth
         self.opponent_model = opponent_model
         self.name = name
@@ -87,6 +88,17 @@ class LoseBot:
         self.probe_cap = probe_cap
         self.max_probe_n = max_probe_n
         self.vi_herders = vi_herders
+        # Release-audit instrumentation (opt-in, read-only): every
+        # release-scan decision is recorded with its per-candidate
+        # verdicts, the policy's view of the pose, and an audit-twin
+        # rescore on the clean reconstruction — the data that answers
+        # "what odds did play accept or refuse at the goal, and does the
+        # build-time audit agree". Off by default so batteries stay
+        # byte-identical; recording never feeds back into a decision.
+        self.release_audit = release_audit
+        self.release_audit_events: list[dict] = []
+        self.release_audit_tables: list[dict] = []
+        self._release_audit_seen: set[int] = set()
         self.forced_selfmates_found = 0
         self.probe_nodes = 0
         self.probe_budget_exhaustions = 0
@@ -777,6 +789,92 @@ class LoseBot:
             return fresh
         return moves
 
+    def _record_release_audit(
+        self,
+        board: chess.Board,
+        target: PawnMateTemplate,
+        remaining: int,
+        choice,
+        detail: list | None,
+        relaxed_detail: list | None,
+        relax_fits: bool | None,
+    ) -> None:
+        """Append one release-scan decision to the audit log (opt-in).
+
+        Read-only diagnostics behind ``release_audit``: the per-candidate
+        verdicts the scans already collected, the active policy's view of
+        the pose (graph kind, value, burn, audited fraction), and — when
+        the pose maps into the graph — the same strict scan rescored on
+        the audit's clean reconstruction. Play/twin disagreement isolates
+        what the era's clock and repetition history changed; the policy's
+        audited conversion table is dumped once per policy for the odds
+        the build promised. Nothing here feeds back into a decision.
+        """
+        policy = self._vi_policy
+        view = None
+        twin = None
+        if (
+            policy is not None
+            and policy.arrival == target.arrival_square
+            and policy.report.ok
+        ):
+            if id(policy) not in self._release_audit_seen:
+                self._release_audit_seen.add(id(policy))
+                report = policy.report
+                self.release_audit_tables.append({
+                    "ply": board.ply(),
+                    "arrival": chess.square_name(policy.arrival),
+                    "root_value": report.root_value,
+                    "root_converts": report.root_converts,
+                    "goal_states": report.goal_states,
+                    "converting_goals": report.converting_goals,
+                    "forced_mates": report.forced_mates,
+                    "conversion_complete": report.conversion_complete,
+                    "table": policy.conversion_table(),
+                })
+            view = policy.state_view(board)
+            twin_board = policy.audit_board(board)
+            if twin_board is not None:
+                twin_detail: list = []
+                twin_choice = score_release_moves(
+                    twin_board, target, self.opponent_model,
+                    self.profile.vi_race_max_losing,
+                    detail_out=twin_detail,
+                )
+                twin = {
+                    "chosen": (
+                        None if twin_choice is None
+                        else twin_choice.move.uci()
+                    ),
+                    "winning": (
+                        None if twin_choice is None else twin_choice.winning
+                    ),
+                    "losing": (
+                        None if twin_choice is None else twin_choice.losing
+                    ),
+                    "pool": (
+                        None if twin_choice is None else twin_choice.pool
+                    ),
+                    "candidates": twin_detail,
+                }
+        self.release_audit_events.append({
+            "ply": board.ply(),
+            "fen": board.fen(),
+            "clock": board.halfmove_clock,
+            "remaining": remaining,
+            "defender_steps": target.defender_steps,
+            "chosen": None if choice is None else choice.move.uci(),
+            "winning": None if choice is None else choice.winning,
+            "losing": None if choice is None else choice.losing,
+            "pool": None if choice is None else choice.pool,
+            "stall": choice is None and target.defender_steps == 0,
+            "relax_fits": relax_fits,
+            "candidates": detail,
+            "relaxed_candidates": relaxed_detail,
+            "state": view,
+            "twin": twin,
+        })
+
     def _vi_choice(
         self,
         board: chess.Board,
@@ -827,9 +925,13 @@ class LoseBot:
         # instead of tempoing forever. This deliberately bypasses the hold
         # filter: a scored release is the point of having held at all.
         if target.defender_steps <= 1:
+            detail: list | None = [] if self.release_audit else None
+            relaxed_detail: list | None = None
+            relax_fits: bool | None = None
             choice = score_release_moves(
                 board, target, self.opponent_model,
                 self.profile.vi_race_max_losing,
+                detail_out=detail,
             )
             if choice is None and remaining <= self.profile.vi_clock_relax_at:
                 # Near the cliff a refused strict race is re-scored with
@@ -912,12 +1014,20 @@ class LoseBot:
                             and exp_hit * self.profile.vi_clock_soft_factor
                             <= remaining
                         )
+                relax_fits = fits
                 if not fits:
+                    relaxed_detail = [] if self.release_audit else None
                     choice = score_release_moves(
                         board, target, self.opponent_model, 64,
+                        detail_out=relaxed_detail,
                     )
                     if choice is not None:
                         self.vi_clock_relaxed_releases += 1
+            if self.release_audit:
+                self._record_release_audit(
+                    board, target, remaining, choice,
+                    detail, relaxed_detail, relax_fits,
+                )
             if choice is not None:
                 self.vi_releases += 1
                 self.vi_release_nodes += choice.nodes

@@ -1084,6 +1084,92 @@ class HerdingPolicy:
             fraction > 0.0 for fraction in self._conversion.values()
         )
 
+    def conversion_table(self) -> list[dict]:
+        """The audit's verdict at every win-kind terminal, as plain data.
+
+        Release-audit diagnostics only — never read by play. One row per
+        goal/forced-mate terminal: the graph state (their king square,
+        herder placements), the terminal kind, and the audited race
+        fraction and proven tail. ``fraction`` is None for a goal the
+        audit deadline never reached (distinct from an audited 0.0
+        refusal); FORCED_MATE rows report 1.0 by definition. Empty on a
+        stripped certificate.
+        """
+        rows: list[dict] = []
+        if self._stripped:
+            return rows
+        for index, kind in enumerate(self._kind):
+            if kind not in _WIN_KINDS:
+                continue
+            _, zk, herders = self._states[index]
+            if kind == FORCED_MATE:
+                fraction: float | None = 1.0
+            else:
+                fraction = self._conversion.get(index)
+            rows.append({
+                "index": index,
+                "kind": _TERMINAL_NAMES[kind],
+                "zk": chess.square_name(zk),
+                "herders": " ".join(
+                    chess.piece_symbol(ptype).upper() + chess.square_name(sq)
+                    for ptype, sq in herders
+                ),
+                "fraction": fraction,
+                "tail": self._conversion_tail.get(index),
+                "burned": index in self._burned_set,
+            })
+        return rows
+
+    def state_view(self, board: chess.Board) -> dict | None:
+        """Diagnostic view of the graph state a position maps onto.
+
+        Release-audit instrumentation: answers "where does the graph
+        think this pose sits" — the state's kind (goal terminals by
+        name, non-terminals as "interior"), its current value, whether
+        the era has burned it, and its audited conversion when it is a
+        goal. None when the position does not map into the explored
+        graph (itself the diagnostic: play is off the audited map).
+        Read-only; never called by play.
+        """
+        if self._stripped:
+            return None
+        state = self._dynamic_state(board)
+        if state is None:
+            return None
+        index = self._index.get(state)
+        if index is None:
+            return None
+        kind = self._kind[index]
+        if kind == FORCED_MATE:
+            fraction: float | None = 1.0
+        else:
+            fraction = self._conversion.get(index)
+        return {
+            "index": index,
+            "kind": _TERMINAL_NAMES.get(kind, "interior"),
+            "zk": chess.square_name(state[1]),
+            "value": self._values[index] if self._values else None,
+            "burned": index in self._burned_set,
+            "fraction": fraction,
+            "tail": self._conversion_tail.get(index),
+        }
+
+    def audit_board(self, board: chess.Board) -> chess.Board | None:
+        """The clean reconstruction the conversion audit scores for this
+        position's graph state: same placement, the build-time halfmove
+        clock, no repetition history. Rescoring a release on it isolates
+        what the era added — anything play refuses here that the twin
+        accepts is the clock or the history talking, not the geometry.
+        None off-graph. Release-audit diagnostics; never called by play.
+        """
+        if self._stripped:
+            return None
+        state = self._dynamic_state(board)
+        if state is None or state not in self._index:
+            return None
+        _, zk, herders = state
+        return self.board_for(zk, herders, our_move=True)
+
     # ------------------------------------------------------------------
     # Asynchronous value iteration (parent-driven worklist, resumable)
     # ------------------------------------------------------------------
@@ -1891,6 +1977,7 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                         probe_cap: int = 6_000,
                         nodes_out: list | None = None,
                         unknown_out: list | None = None,
+                        detail_out: list | None = None,
                         ) -> ReleaseChoice | None:
     """Find the holder retreat with the best forced-mate odds.
 
@@ -1906,6 +1993,13 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
     candidate could flip to accepted. Acceptances are unaffected: a reply
     only counts as winning on a completed PROVEN probe, so an accepted race
     is a sound lower bound whatever the unknowns did.
+
+    ``detail_out`` collects one record per candidate release — the odds
+    and the per-candidate verdict ("scored", "no-winning", "over-losing",
+    or the landing adjudication that refused it before scoring). Pure
+    diagnostics for the release-audit instrumentation: the scoring
+    decisions are identical whether or not it is supplied, and the caller
+    reads the accepted candidate off the return value as before.
 
     The exact probe only accepts guaranteed nets, so it refuses any release
     that leaves Zach a pool like {step onto the defense square, push the pawn
@@ -1925,12 +2019,22 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
         # The arena adjudicates fifty-move, repetition, and insufficient
         # material BEFORE Zach replies: a release that lands on any of them
         # never gets its "guaranteed" mate (the halfmove-99 Rb7 failure).
-        if (
-            board.is_checkmate()
-            or board.is_stalemate()
-            or arena_draw(board) is not None
-        ):
+        landing = None
+        if board.is_checkmate():
+            landing = "landing-checkmate"
+        elif board.is_stalemate():
+            landing = "landing-stalemate"
+        else:
+            adjudicated = arena_draw(board)
+            if adjudicated is not None:
+                landing = "landing-" + adjudicated
+        if landing is not None:
             board.pop()
+            if detail_out is not None:
+                detail_out.append({
+                    "move": move.uci(), "verdict": landing,
+                    "winning": 0, "losing": 0, "pool": 0, "unknowns": 0,
+                })
             continue
         pool = support_zach(board)
         winning = 0
@@ -1961,6 +2065,17 @@ def score_release_moves(board: chess.Board, target: PawnMateTemplate,
                     if status is ProofStatus.UNKNOWN:
                         unknowns += 1
         board.pop()
+        if detail_out is not None:
+            detail_out.append({
+                "move": move.uci(),
+                "verdict": (
+                    "scored"
+                    if winning > 0 and losing <= max_losing
+                    else ("no-winning" if winning == 0 else "over-losing")
+                ),
+                "winning": winning, "losing": losing,
+                "pool": pool_size, "unknowns": unknowns,
+            })
         if winning == 0 or losing > max_losing:
             if unknowns and unknown_out is not None:
                 unknown_out[0] += 1
