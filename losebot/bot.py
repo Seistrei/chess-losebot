@@ -1605,6 +1605,17 @@ class LoseBot:
         but nothing less than a converting verdict is accepted, because a
         merely-live relocated pose trades zero for zero and a tempo.
 
+        Unlike the reset's pawn push, the relocation is REVERSIBLE: it
+        opens no fresh era, so the game's history rides into the
+        hypothetical (review P1, both findings). The candidate filter
+        rejects landings the arena adjudicates on arrival — a
+        third-occurrence square, the fifty-move brink — the rebuild
+        burns every twice-seen era state before its affirmative
+        evidence is read (a burn the scan budget cannot re-price
+        refuses the candidate: stale fit never affirms), and era
+        feasibility charges the relocation's own ply by pricing the
+        budget on the post-move clock.
+
         Candidates are ordered by the walk-pressure funnel potential of
         the landed position (corridor-clean, off-lane, race-debt-free
         poses first), so the shared build budget is spent where the
@@ -1636,7 +1647,6 @@ class LoseBot:
         candidates = self._relocation_candidates(
             board, target, herder_squares
         )
-        remaining = 100 - board.halfmove_clock
         deadline = time.monotonic() + self.profile.vi_build_ms / 1000.0
         # Eight is the audition, not the shortlist: the funnel prior has
         # already ordered every stable candidate, and a pose the top eight
@@ -1649,8 +1659,16 @@ class LoseBot:
             remaining_ms = (deadline - time.monotonic()) * 1000.0
             if remaining_ms < 250.0:
                 break  # scan budget exhausted: the rest stay uncertified
-            hypothetical = board.copy(stack=False)
+            # The relocation is reversible, so the rebuild stays inside
+            # the current era: the history rides along for the burn
+            # walk below, and the quiet move itself spends one era ply
+            # before the rebuilt root ever moves — feasibility prices
+            # the POST-move clock (review P1: the flip reads the
+            # board's clock only because its hypothetical re-poses the
+            # same root; this root is a ply later).
+            hypothetical = board.copy(stack=True)
             hypothetical.push(move)
+            remaining = 100 - hypothetical.halfmove_clock
             resolved = plan.resolve(hypothetical, us)
             if resolved is None:
                 continue
@@ -1664,6 +1682,33 @@ class LoseBot:
                 conversion_ms=self.profile.vi_conversion_ms,
                 root_theirs=True,
             )
+            # Twice-seen era states are draws-in-waiting the pristine
+            # rebuild prices as fresh (review P1: the era's own Rb8
+            # shuttle re-certified). Burn them, then re-price on the
+            # moved set — solve_more recomputes the hitting stats when
+            # it reconverges, and the dedicated refresh covers a burn
+            # that moved no Bellman value. The fit flood-fill is exact
+            # whenever it recomputes, so the solve's convergence — not
+            # the advisory exp tail's — is the freshness bar; a drain
+            # the budget cannot finish leaves pre-burn numbers
+            # standing, and stale fit never affirms.
+            _, burn_changed = probe.apply_repetition_history(
+                hypothetical
+            )
+            if burn_changed:
+                if not probe.report.converged:
+                    probe.solve_more(max(0, int(
+                        (deadline - time.monotonic()) * 1000.0
+                    )))
+                if (
+                    probe.report.converged
+                    and not probe.report.hit_converged
+                ):
+                    probe.refresh_hit_stats(max(0, int(
+                        (deadline - time.monotonic()) * 1000.0
+                    )))
+                if not probe.report.converged:
+                    continue
             report = probe.report
             fraction = probe.reply_fit_fraction()
             if (
@@ -1695,13 +1740,19 @@ class LoseBot:
 
         The domain is quiet non-checking moves of our non-king,
         non-pawn pieces standing OUTSIDE the active herder subset, minus
-        exact inverses of relocations already played. Stability replays
-        the clock-reset discipline: the plan must still resolve with no
-        construction metric regressed and no new race debt, and Zach's
-        reply pool must hold neither a forced capture nor an adjudication
-        trap. The funnel potential of the landed position orders the
-        survivors so the build budget is spent on corridor-clean poses
-        first; the UCI in the sort key keeps replays exact.
+        exact inverses of relocations already played. The landing must
+        first survive the arena itself (review P1): a quiet move onto a
+        twice-seen square IS the repetition draw the instant it lands,
+        and any quiet move at the fifty-move brink adjudicates before
+        Zach ever replies — the real board carries the game history
+        here, so ``arena_draw`` renders the arena's own verdict.
+        Stability then replays the clock-reset discipline: the plan
+        must still resolve with no construction metric regressed and no
+        new race debt, and Zach's reply pool must hold neither a forced
+        capture nor an adjudication trap. The funnel potential of the
+        landed position orders the survivors so the build budget is
+        spent on corridor-clean poses first; the UCI in the sort key
+        keeps replays exact.
         """
         us = board.turn
         plan = self.plan
@@ -1724,6 +1775,12 @@ class LoseBot:
             if (move.to_square, move.from_square) in self._vi_relocated:
                 continue
             board.push(move)
+            if arena_draw(board) is not None:
+                # The landing adjudicates before Zach can even reply
+                # (review P1): a third-occurrence square, or any quiet
+                # move played at the fifty-move brink.
+                board.pop()
+                continue
             future = plan.resolve(board, us)
             stable = (
                 future is not None

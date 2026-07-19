@@ -2690,6 +2690,87 @@ def selftest() -> int:
         f"builds={domain_bot.vi_relocation_builds}",
     )
 
+    # 25d. The relocation stays inside the current reversible era
+    # (review P1). A quiet relocation resets nothing, so the game's
+    # history rides into both the candidate filter and the rebuild:
+    # landing on a twice-seen square hands the arena its threefold the
+    # instant the rook arrives — the domain drops it — and landing on a
+    # once-seen square roots the rebuild one re-entry from the draw,
+    # whose burn zeroes the proven fit before the gate reads it. The
+    # stackless hypothetical priced both eras as fresh and certified
+    # Rb8 into an instant half point.
+    era_base = chess.Board("1RN5/2k5/8/4R3/2P5/1pP5/1K6/1B6 b - - 0 18")
+    era_third = era_base.copy()
+    for uci in ("c7d7", "b8b5", "d7c7", "b5b8", "c7d7", "b8b5", "d7c7"):
+        era_third.push_uci(uci)
+    era_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+        probe_cap=0, max_probe_n=1,
+    )
+    era_bot.plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king"
+    )
+    era_target = era_bot.plan.resolve(era_third, chess.WHITE)
+    shuttled = [
+        uci
+        for _, uci, _ in era_bot._relocation_candidates(
+            era_third, era_target, frozenset({chess.C8})
+        )
+    ]
+    fresh = [
+        uci
+        for _, uci, _ in era_bot._relocation_candidates(
+            chess.Board(era_third.fen()), era_target,
+            frozenset({chess.C8}),
+        )
+    ]
+    era_second = era_base.copy()
+    for uci in ("c7d7", "b8b5", "d7c7"):
+        era_second.push_uci(uci)
+    era_move = era_bot.choose_move(era_second.copy())
+    check(
+        "a relocation cannot land on or route through the era's repeats",
+        "b5b8" not in shuttled
+        and "b5b8" in fresh
+        and era_move != chess.Move.from_uci("b5b8")
+        and (chess.B5, chess.B8) not in era_bot._vi_relocated
+        and era_bot.vi_relocation_builds >= 2,
+        f"shuttled={shuttled[:4]}; fresh has b5b8: {'b5b8' in fresh}; "
+        f"move={'none' if era_move is None else era_move.uci()}; "
+        f"builds={era_bot.vi_relocation_builds}",
+    )
+
+    # 25e. The relocation's own ply is charged before the era gate
+    # reads the evidence (review P1). The certified Rb8 rebuild proves
+    # fit 15 from the POST-move root, and the quiet relocation spends
+    # one era ply getting there: halfmove 84 is the last clock that
+    # affords both, and 85 — which the pre-move measure still priced at
+    # fifteen remaining — must refuse what 84 certifies.
+    for edge_clock, edge_wants in ((84, True), (85, False)):
+        edge_bot = LoseBot(
+            depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+            probe_cap=0, max_probe_n=1,
+        )
+        edge_bot.plan = ConstructionPlan(
+            pawn_file=1, checked_side=-1, created_ply=0,
+            holder_mode="king",
+        )
+        edge_move = edge_bot.choose_move(chess.Board(
+            f"2N5/2k5/8/1R2R3/2P5/1pP5/1K6/1B6 w - - {edge_clock} 60"
+        ))
+        edge_took = (
+            edge_move == chess.Move.from_uci("b5b8")
+            and (chess.B5, chess.B8) in edge_bot._vi_relocated
+        )
+        check(
+            f"the relocation clock ply is charged at halfmove "
+            f"{edge_clock}",
+            edge_took == edge_wants
+            and edge_bot.vi_relocation_builds >= 2,
+            f"move={'none' if edge_move is None else edge_move.uci()}; "
+            f"builds={edge_bot.vi_relocation_builds}",
+        )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(

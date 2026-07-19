@@ -1890,3 +1890,71 @@ Next, in expected-value order:
    one-move relocation horizon cannot compose them).
 3. Deeper funnel pricing (two-ply funnels; unchanged), executioner
    selection at strip time, multi-pawn stacking (unchanged).
+
+## The relocation rides the era: repetition carriage and the charged ply (2026-07-19)
+
+Review round on the relocation device, two P1s taken, both the same
+blind spot: the hypothetical rebuild treated a REVERSIBLE quiet move
+like the reset's pawn push. The push earns its stackless copy — an
+irreversible move opens a fresh era and a fresh clock — but a
+relocation resets nothing: the game's twice-seen positions and its
+spent quiet plies both follow the piece to the new square, and the
+rebuild priced neither.
+
+First, the era. `copy(stack=False)` dropped the reversible-era
+history, so the rebuilt policy priced twice-seen graph states as
+fresh — and the candidate loop never asked whether the landing ITSELF
+already stood at two occurrences. On a shuttled era (Rb5-b8 played
+into its third occurrence) the scan certified and returned a move the
+arena adjudicated drawn before Zach could reply: a certified instant
+half point from the device whose whole purpose is escaping zeros. Two
+repairs. The candidate filter now pushes each landing on the REAL
+board and rejects any `arena_draw` verdict — the game history is on
+that board, so this is the arena's own adjudication, and it retires
+the fifty-move brink for free (every relocation is quiet, so at clock
+99 the domain honestly empties). And the hypothetical now carries the
+stack, so the probe runs `apply_repetition_history` after its build
+and burns every twice-seen era state before the gate reads anything
+affirmative: a landing at one prior occurrence roots the rebuild one
+re-entry from the draw, the burn cuts the root off from every proven
+finish, `fit_hit_root` reads zero, and the gate refuses. The
+freshness discipline mirrors play: `solve_more` recomputes the
+hitting stats when a value-moving burn reconverges, the dedicated
+refresh covers a burn that moved no Bellman value, and a drain the
+scan budget cannot finish refuses the candidate outright. The bar is
+the SOLVE's convergence, never the advisory exp tail's — the fit
+flood-fill is deadline-free and exact whenever it recomputes, and on
+the battery pose the exp pass stays honestly unconverged while fit
+and fraction are proven facts.
+
+Second, the ply. `remaining` was measured on the pre-move board while
+every hitting stat starts at the post-relocation root — and the quiet
+relocation spends one era ply getting there. The certified Rb8
+rebuild proves fit 15; at halfmove 85 the pre-move measure still said
+fifteen remaining and accepted a finish that owed fifteen plies with
+fourteen left. `remaining` is now `100 - hypothetical.halfmove_clock`,
+read off the pushed board beside the build it gates. The flip keeps
+its pre-move read — its hypothetical re-poses the SAME root; this one
+is a ply later.
+
+Suite 74 -> 77. 25d builds the shuttled eras end to end: the
+third-occurrence landing drops out of the domain while its stackless
+twin keeps it (pinning the exclusion on history, not geometry), and
+on the once-seen era the scan burns Rb8 down and certifies b5d5 on
+build three instead — the device still rescues the pose, just not
+through the repeat. 25e pins the boundary: halfmove 84 certifies Rb8
+on two builds, 85 refuses it and every other audition (eight builds,
+no certificate, the fallbacks play on). Battery: the four case-7
+games that run the scan at all (seeds 2/4/6/9) replayed against a
+HEAD control — byte-identical PGNs and identical gauges (2 converts
+@40 with relocations=1/2, 4 refuses its 96 auditions to the same
+fifty-move@108, 6 relocates once into the same stalemate@111, 9
+relocates once to the same fifty-move@152): the reference relocations
+all fire at low clocks inside fresh eras, so the new gates are
+provably inert where they should be and the constructed suite eras
+prove they fire where they must. The six no-scan seeds, case-6,
+case-2 seed-5, and the motifs are untouched by construction — this
+round changes only the scan and its candidate filter, no solver or
+audit code. Next-steps order unchanged: live-side post-arrival
+stalls, multi-move repairs, funnel pricing / executioner selection /
+multi-pawn stacking.
