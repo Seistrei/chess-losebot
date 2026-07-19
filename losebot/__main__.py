@@ -1946,6 +1946,71 @@ def selftest() -> int:
         f"re-armed exp={hit_kh.report.exp_hit_root:.2f}",
     )
 
+    # 23i. Affirmative gates read THIS decision's burn set (review P1:
+    # the recount used to run after the release affirmation and the
+    # clock gates, so second visits created by the last move-pair were
+    # invisible exactly when the affirmation fired — a herd whose every
+    # converting goal had just burned still read fit 10, suppressed the
+    # lottery, and herded into a threefold-dead graph). The rook tour
+    # below enters every converting vacate goal twice — each
+    # (zk=h4, rook-on-rank-5) state via the rank-5 check and the forced
+    # Kh4, cycled through the 6th/7th-rank tempo lanes so no position
+    # reaches a third occurrence — and ends back at the fixture root.
+    # The clock rides in the starting FEN (14 + 70 tour plies = 84):
+    # a manual halfmove_clock override would be silently rebuilt by
+    # is_repetition's pop/re-push walk. The warm bot recounts inside
+    # the release gate, the affirmation dies honestly at fit INF, and
+    # the Kh1 lottery fires at remaining 16 instead of being suppressed
+    # by the stale fit of 10.
+    def _kh_burn_history():
+        tour = chess.Board(
+            "5NN1/8/1R6/7k/5P2/5Pp1/6K1/6B1 w - - 14 1"
+        )
+        tour_files = "bcdef"
+        san = []
+        for i, x in enumerate(tour_files):
+            san += [
+                f"R{x}5", "Kh4", f"R{x}6", "Kh5",
+                f"R{x}5", "Kh4", f"R{x}7", "Kh5",
+            ]
+            nxt = "a" if x == "f" else tour_files[i + 1]
+            san += [f"R{nxt}7", "Kh4", f"R{nxt}6", "Kh5"]
+        san += [
+            "Ra5", "Kh4", "Ra6", "Kh5", "Ra5", "Kh4",
+            "Ra7", "Kh5", "Ra1", "Kh4",
+        ]
+        for step in san:
+            tour.push_san(step)
+        return tour
+
+    tour_board = _kh_burn_history()
+    tour_bot = _warm_kh_bot()
+    tour_pick = tour_bot.choose_move(tour_board)
+    tour_policy = tour_bot._vi_policy
+    tour_est = (
+        None if tour_policy is None
+        else tour_policy.hit_estimates(tour_board)
+    )
+    check(
+        "release affirmation prices this decision's burns, not last turn's",
+        tour_board.halfmove_clock == 84
+        and tour_board.board_fen()
+        == chess.Board(motif["kh-herd-h4"].fen).board_fen()
+        and not tour_board.is_repetition(3)
+        and tour_pick == chess.Move.from_uci("g2h1")
+        and tour_bot.vi_clock_relaxed_releases == 1
+        and tour_bot.vi_releases == 1
+        and tour_bot.vi_burn_updates >= 1
+        and tour_est is not None
+        and tour_est[1] == HIT_INF,
+        f"pick={tour_board.san(tour_pick)} "
+        f"(relaxed={tour_bot.vi_clock_relaxed_releases}, "
+        f"burn-updates={tour_bot.vi_burn_updates}, "
+        f"burned={tour_bot.vi_burned_states}, "
+        f"fit="
+        f"{'INF' if tour_est and tour_est[1] >= HIT_INF else tour_est})",
+    )
+
     # 23g. Affirmative statistics respect repetition burns (review P1:
     # the fit/p-m passes traversed burned states, so a threefold-dead
     # route still proved affirmative finishes). Burning every converting

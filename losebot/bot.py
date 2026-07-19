@@ -838,21 +838,43 @@ class LoseBot:
                     and policy.report.ok
                     and policy.report.root_live
                     and policy.report.root_converts
-                    and policy.report.converged
                 ):
-                    if not policy.report.hit_converged:
-                        # A p/m pass truncated behind a converged solve
-                        # would otherwise leave this affirmation dark for
-                        # the policy's whole life — solve_more never runs
-                        # again (review P1). Retry it exactly where it is
-                        # consumed; single-shot per value basis.
-                        if policy.refresh_hit_stats(
+                    # The affirmation must price THIS decision's burn
+                    # set: our previous move and Zach's reply can have
+                    # created second visits whose re-entry is the draw,
+                    # and the burn-aware statistics are only as fresh as
+                    # the last recount (review P1: the recount ran after
+                    # this gate, so a herd whose every converting goal
+                    # had just burned still affirmed with the stale fit
+                    # and suppressed the lottery). Recount, drain the
+                    # fallout, then retry a truncated p/m pass exactly
+                    # where it is consumed — single-shot per value
+                    # basis.
+                    _, burn_changed = (
+                        policy.apply_repetition_history(board)
+                    )
+                    if burn_changed:
+                        self.vi_burn_updates += 1
+                    self.vi_burned_states = policy.burned_states
+                    if not policy.report.converged:
+                        before = policy.report.updates
+                        policy.solve_more(self.profile.vi_build_ms)
+                        self.vi_updates += (
+                            policy.report.updates - before
+                        )
+                        self.vi_resolves += 1
+                    if (
+                        policy.report.converged
+                        and not policy.report.hit_converged
+                        and policy.refresh_hit_stats(
                             self.profile.vi_build_ms
-                        ):
-                            self.vi_hit_refreshes += 1
+                        )
+                    ):
+                        self.vi_hit_refreshes += 1
                     hits = (
                         policy.hit_estimates(board)
-                        if policy.report.hit_converged
+                        if policy.report.converged
+                        and policy.report.hit_converged
                         else None
                     )
                     if hits is not None:
@@ -925,6 +947,32 @@ class LoseBot:
             return None
         if not policy.report.root_live:
             return None
+        # Price the arena's threefold rule into the values BEFORE anything
+        # reads them (review P1: the recount used to run after the clock
+        # gates, which therefore judged this decision on the previous
+        # turn's burn set — a herd whose converting goals had just burned
+        # still read a live fit). Every state whose position this era has
+        # already seen twice is a draw on re-entry, and Zach's replies can
+        # funnel play into one from successors that are themselves fresh
+        # (the Rf5/Rf7 shuttle drew on an our-turn position no successor
+        # tally of our own choices could see). Burning re-solves the
+        # sub-MDP with those states as losing terminals, so the gates and
+        # the ranking below already route around — or honestly zero —
+        # every funnel.
+        counts, burn_changed = policy.apply_repetition_history(board)
+        if burn_changed:
+            self.vi_burn_updates += 1
+        self.vi_burned_states = policy.burned_states
+        if not policy.report.converged:
+            # The certificate is exact regardless; the *ranking* is not.
+            # Keep solving across moves rather than following a half-baked
+            # value table into the fallbacks' arms; reconvergence also
+            # recomputes the hitting statistics on the new burn set.
+            before = policy.report.updates
+            policy.solve_more(self.profile.vi_build_ms)
+            self.vi_updates += policy.report.updates - before
+            self.vi_resolves += 1
+            self.vi_root_value = policy.report.root_value
         # Clock feasibility, read off the solved graph. Only a converting
         # side races the clock at all: with nothing to convert to, hitting
         # a proxy goal sooner changes nothing, and the audit-negative
@@ -1022,29 +1070,11 @@ class LoseBot:
                     return None
                 if clock_hard and self._consider_kh_adoption(board):
                     return None
-        # Price the arena's threefold rule into the values before reading
-        # them: every state whose position this era has already seen twice
-        # is a draw on re-entry, and Zach's replies can funnel play into
-        # one from successors that are themselves fresh (the Rf5/Rf7
-        # shuttle drew on an our-turn position no successor tally of our
-        # own choices could see). Burning re-solves the sub-MDP with those
-        # states as losing terminals, so the ranking below already routes
-        # around — or honestly zeroes — every funnel.
-        counts, burn_changed = policy.apply_repetition_history(board)
-        if burn_changed:
-            self.vi_burn_updates += 1
-        self.vi_burned_states = policy.burned_states
         if not policy.report.converged:
-            # The certificate is exact regardless; the *ranking* is not.
-            # Keep solving across moves rather than following a half-baked
-            # value table into the fallbacks' arms.
-            before = policy.report.updates
-            policy.solve_more(self.profile.vi_build_ms)
-            self.vi_updates += policy.report.updates - before
-            self.vi_resolves += 1
-            self.vi_root_value = policy.report.root_value
-            if not policy.report.converged:
-                return None
+            # The drain above ran out of budget: the certificates and the
+            # cadence had their say on exact facts, but ranking a
+            # half-baked value table is worse than the fallbacks.
+            return None
 
         ranked = policy.ranked_moves(board)
         if ranked is None:
