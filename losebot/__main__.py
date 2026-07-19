@@ -25,6 +25,7 @@ from .search import (
 )
 from .templates import (
     ConstructionPlan,
+    PawnMateTemplate,
     best_pawn_mate_template,
     herding_metrics,
     pawn_mate_templates,
@@ -2493,7 +2494,11 @@ def selftest() -> int:
     # every leaf) against clearing off the file entirely, it clears — the
     # exact move the converting seeds needed luck to find. The double-push
     # walk arithmetic and the contracts (member of the menu, None on an
-    # empty menu) ride along.
+    # empty menu) ride along — and the walk recount FOLLOWS the committed
+    # pawn (review P2): with doubled white walkers on b2 and b4 and the
+    # target committed to b4, the rear pawn's three must not shadow the
+    # walker's two, and after the walker's own push the count tracks it
+    # to the successor square.
     pressure_pick = walk_pressure_move(
         wait_base, wait_target, chess.WHITE,
         [chess.Move.from_uci("a5a3"), chess.Move.from_uci("a5h5")],
@@ -2503,6 +2508,15 @@ def selftest() -> int:
         "2N5/1p6/2k5/RR6/2P5/2P5/1K6/1B6 w - - 0 1"
     )
     home_walk_target = adopt_plan.resolve(home_walk_board, chess.WHITE)
+    doubled_board = chess.Board("k7/8/8/8/1P6/8/1P6/7K w - - 0 1")
+    doubled_pushed = chess.Board("k7/8/8/1P6/8/8/1P6/7K w - - 0 1")
+    doubled_target = PawnMateTemplate(
+        pawn_square=chess.B4, arrival_square=chess.B7,
+        checked_square=chess.A8, our_king_steps=0, defender_steps=0,
+        cage_occupancy=1, arrival_blocked=False, runway_blocked=False,
+        holding_blocker=False, holding_blocker_defended=False,
+        king_holder=True, race_clear=True, pawn_walk=2, walk_blockers=0,
+    )
     check(
         "walk pressure clears the corridor and keeps its contracts",
         pressure_pick == chess.Move.from_uci("a5h5")
@@ -2512,10 +2526,16 @@ def selftest() -> int:
         and home_walk_target is not None
         and home_walk_target.pawn_walk == 3
         and _pressure_walk(home_walk_board, chess.BLACK, home_walk_target)
-        == 3,
+        == 3
+        and _pressure_walk(doubled_board, chess.WHITE, doubled_target) == 2
+        and _pressure_walk(doubled_pushed, chess.WHITE, doubled_target)
+        == 1,
         f"pick={'none' if pressure_pick is None else pressure_pick.uci()}; "
         f"home walk="
-        f"{_pressure_walk(home_walk_board, chess.BLACK, home_walk_target)}",
+        f"{_pressure_walk(home_walk_board, chess.BLACK, home_walk_target)}; "
+        f"doubled="
+        f"{_pressure_walk(doubled_board, chess.WHITE, doubled_target)}/"
+        f"{_pressure_walk(doubled_pushed, chess.WHITE, doubled_target)}",
     )
 
     # 24c. The gate: on the mid-wait pose a vi bot's wait ply is chosen by
@@ -2556,6 +2576,31 @@ def selftest() -> int:
         f"gate={gate_move.uci()} direct="
         f"{'none' if gate_direct is None else gate_direct.uci()}; "
         f"planner-fires={control_bot.vi_walk_pressure_moves}",
+    )
+
+    # 24d. Reply draws are terminal zeros, not positions (review P1). At
+    # halfmove 98 the funnel guard's all-trapped fallback hands the
+    # chooser candidates whose quiet replies adjudicate, and priced
+    # geometrically those leaves LOOK wonderful: Rb6+ forces the lone
+    # evasion Ka5 — his king delivered to the corridor, leaf cost ~14 —
+    # but the evasion lands at halfmove 100 and the game is drawn on the
+    # spot. The quiet Rh7 leaves Zach exactly the clock-resetting push
+    # (his only legal quiet move), a live continuation at a worse-looking
+    # leaf. The draw penalty must dominate every geometric cost so the
+    # certain zero loses to the living line.
+    cliff_board = chess.Board("2N4R/8/k7/1R6/1pP5/2P5/1K6/1B6 w - - 98 60")
+    cliff_target = adopt_plan.resolve(cliff_board, chess.WHITE)
+    cliff_pick = walk_pressure_move(
+        cliff_board, cliff_target, chess.WHITE,
+        [chess.Move.from_uci("b5b6"), chess.Move.from_uci("h8h7")],
+        "zach",
+    )
+    check(
+        "a certain reply draw loses to a live continuation",
+        cliff_target is not None
+        and cliff_target.pawn_walk == 1
+        and cliff_pick == chess.Move.from_uci("h8h7"),
+        f"pick={'none' if cliff_pick is None else cliff_pick.uci()}",
     )
 
     # 13. A promoted piece means the king-and-pawns phase has ended. The

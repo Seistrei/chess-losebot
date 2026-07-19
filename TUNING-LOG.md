@@ -1752,3 +1752,50 @@ Next, in expected-value order:
 3. Executioner selection at strip time (standard fixtures 1-5 all
    veto their walks on our own intact b2/g2 pawns). Multi-pawn race
    stacking.
+
+### Review follow-up (2026-07-19, both taken)
+
+External review of the walk-pressure work: one P1, one P2, both
+verified against concrete positions and taken.
+
+1. **Zach reply draws were scored as live positions (P1).** The
+   chooser's reply loop special-cased only checkmate; stalemate and
+   every arena adjudication fell through to the geometric potential.
+   The funnel guard strips most such candidates upstream, but its
+   all-trapped fallback hands them back exactly at the fifty-move
+   cliff, where EVERY quiet reply adjudicates — and priced
+   geometrically, a certain draw could outrank a live lottery, the
+   precise inversion the clock layer's relaxed release exists to
+   prevent. The verified repro (now suite 24d): halfmove 98, his king
+   a6, Rb5-b6+ forces the lone evasion Ka5 — delivered to the
+   corridor, a beautiful leaf of ~14 — and the game is drawn on the
+   spot at halfmove 100, while quiet Rh8-h7 leaves Zach exactly the
+   clock-resetting push (his only legal quiet move) at a worse-looking
+   leaf of ~89. The old argmin checked him into the draw. Reply draws
+   now cost `_PRESSURE_DRAW` (10k, the jackpot's mirror): any live
+   continuation beats any certain draw, and partial-draw lotteries
+   rank by draw probability first, geometry second.
+2. **The walk recount followed the wrong pawn of a doubled pair
+   (P2).** `_pressure_walk` scanned for the first walking pawn on the
+   target file; with doubled walkers the rear pawn's count shadowed
+   the committed walker's (the rear pawn's own template is rejected by
+   the path-block veto at emission, so the target is always the front
+   pawn). The drill's black walkers dodged the bug only because
+   ascending square order happens to visit the front pawn first —
+   mirror-color games and the planned multi-pawn stacking would not.
+   The recount now follows the committed pawn itself: root square, one
+   push ahead, or two pushes ahead from the home rank (the double-push
+   case the review's suggested fix would itself have missed) —
+   between root and leaf exactly one reply has happened, so nothing
+   else can hold those squares. White-boxed in 24b: doubled white
+   walkers b2+b4 committed to b4 read two (the rear pawn's three
+   shadowed it before), and after the walker's own push the count
+   tracks its successor square.
+
+Suite 70 -> 71 (24b extended in place, 24d new). Full battery byte-identical
+across the board — case-7 all ten PGNs match the just-pinned
+reference exactly (no drill ply ever scored a drawing reply: the
+funnel guard's trapped tier caught them all before the chooser, and
+the walking file is never doubled), case-6 at the exact reference
+plies, case-2 seed-5 the same game to the move (solo run,
+builds=12 with 5 failed pawn-not-frozen), motifs byte-identical.

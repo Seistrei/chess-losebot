@@ -252,28 +252,46 @@ _PRESSURE_PREMATURE = 25.0
 _PRESSURE_CORRIDOR = 8.0
 _PRESSURE_RACE = 25.0
 _PRESSURE_JACKPOT = -10_000.0
+# A reply that adjudicates the game is a terminal zero, not a position: it
+# must outrank every geometric cost so that any live lottery beats a
+# certain draw (the same standard the clock layer's relaxed release
+# holds), while staying the mirror of the jackpot.
+_PRESSURE_DRAW = 10_000.0
 
 
 def _pressure_walk(board: chess.Board, them: chess.Color,
                    target: PawnMateTemplate) -> int:
-    """Zach pushes still owed by the walking pawn, read from the board.
+    """Zach pushes still owed by the COMMITTED walking pawn.
 
     The root template's ``pawn_walk`` is stale one push later, so the leaf
-    recounts it with the same arithmetic the walking-template emission uses
-    (one push covers two ranks from the home square). A stray pawn of
-    theirs below the pre-corner square is not the walker and never counts.
+    recounts it — by following the committed pawn itself (review P2: a
+    first-walking-pawn-on-the-file scan reads the REAR pawn of a doubled
+    pair, whose own template the path-block veto rejects at emission; the
+    drill's black walkers dodged it only because ascending square order
+    happens to visit the front pawn first). Between the root and a leaf
+    exactly one reply has happened, so the walker sits on its root square,
+    one push ahead, or two pushes ahead from the home rank; the rank
+    arithmetic mirrors the walking-template emission.
     """
-    file = chess.square_file(target.arrival_square)
     step = 8 if them == chess.WHITE else -8
     pre_rank = chess.square_rank(target.arrival_square - step)
     home_rank = 1 if them == chess.WHITE else 6
-    for pawn in board.pieces(chess.PAWN, them):
-        if chess.square_file(pawn) != file:
+    candidates = [target.pawn_square, target.pawn_square + step]
+    if chess.square_rank(target.pawn_square) == home_rank:
+        candidates.append(target.pawn_square + 2 * step)
+    for square in candidates:
+        piece = board.piece_at(square)
+        if (
+            piece is None
+            or piece.color != them
+            or piece.piece_type != chess.PAWN
+        ):
             continue
-        rank = chess.square_rank(pawn)
+        rank = chess.square_rank(square)
         walking = rank < pre_rank if them == chess.WHITE else rank > pre_rank
-        if walking:
-            return abs(pre_rank - rank) - (1 if rank == home_rank else 0)
+        if not walking:
+            return 0
+        return abs(pre_rank - rank) - (1 if rank == home_rank else 0)
     return 0
 
 
@@ -398,6 +416,16 @@ def walk_pressure_move(board: chess.Board, target: PawnMateTemplate,
                 board.push(reply)
                 if board.is_checkmate():
                     total += _PRESSURE_JACKPOT
+                elif _draw(board):
+                    # A reply that adjudicates — or stalemates us — is a
+                    # terminal zero, not a position (review P1). The funnel
+                    # guard strips most such candidates upstream, but its
+                    # all-trapped fallback hands them back exactly at the
+                    # fifty-move cliff, where every quiet reply draws —
+                    # and priced geometrically, a forcing check whose one
+                    # reply draws CERTAINLY outranked waits that kept the
+                    # clock-resetting push alive in the pool.
+                    total += _PRESSURE_DRAW
                 else:
                     total += walk_pressure_cost(board, target, us)
                 board.pop()
