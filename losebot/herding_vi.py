@@ -56,14 +56,19 @@ PROVEN completion tail — recorded by the conversion audit from its
 accepted race, a conservative upper bound where the probe proved early —
 so ``fit_hit <= remaining`` is the sound form for affirmative decisions:
 suppressing the near-cliff lottery, certifying a clock reset's per-reply
-fits. ``exp_hit`` is the expected plies to finish under the greedy
-stationary policy, conditioned on hitting and seeded with the same proven
-tails (it feeds affirmations too) — advisory by design (it prices the
-pristine graph under one fixed policy, not the burned one play follows),
+fits. Unlike ``min_hit``, the affirmative statistics treat burned states
+as BARRIERS (a path through a twice-seen position draws, proving no
+finish) and go stale the moment the burn set moves. ``exp_hit`` is the
+expected plies to finish under the greedy stationary policy, conditioned
+on hitting and seeded with the same proven tails (it feeds affirmations
+too) — advisory by design (one fixed policy, not the play that follows),
 computed at build time, recomputed when a resumed solve first converges,
 and retried on a dedicated budget when the build deadline truncated it
 (``refresh_hit_stats``; a truncation behind a converged solve would
-otherwise be permanent).
+otherwise be permanent). Consumers that AFFIRM — and the advisory soft
+clock trigger, whose truncated ratio can err either way — require the
+``converged`` + ``hit_converged`` honesty flags; only the min_hit
+certificates may speak from a half-solved graph.
 
 Those goals are proxies — they stop one move short of the release and the
 actual selfmate. The conversion audit closes the gap: every reachable goal
@@ -1284,10 +1289,14 @@ class HerdingPolicy:
         fit_hit: the same backward pass seeded at each terminal's PROVEN
         completion tail (``_affirm_tail``), so ``fit_hit <= remaining``
         is the sound affirmative form — the finish it promises is one the
-        audit actually proved, or a conservative bound on it. Computed
-        only when the root converts, like exp_hit: affirmative consumers
-        are all behind that condition, and without a conversion there is
-        no proven finish to price.
+        audit actually proved, or a conservative bound on it. Burned
+        states are barriers here and in the p/m pass below (review P1:
+        entering a twice-seen position IS the draw, so a route through
+        one proves nothing), and ``_set_burned`` stales these statistics
+        on any set movement so they recompute on the new barriers.
+        Computed only when the root converts, like exp_hit: affirmative
+        consumers are all behind that condition, and without a conversion
+        there is no proven finish to price.
 
         exp_hit: expected plies to finish under the greedy stationary
         policy (argmax child value; min_hit, then index as tie-breaks),
@@ -1298,10 +1307,13 @@ class HerdingPolicy:
         converges from below and cutting it short (update cap or the
         build deadline) is reported honestly in ``hit_converged``; note
         the RATIO m/p of two truncated quantities can err in either
-        direction, which is why affirmative consumers must require the
-        honesty flags while the one-sided soft trigger need not. Advisory
-        by design: it prices the pristine graph under one fixed policy,
-        not the burned graph that play actually follows. Computed only
+        direction, which is why every consumer — the affirmations and
+        the advisory soft trigger alike (review P1: an early pass
+        commonly reads inf, and a junk-armed cascade spends resets and
+        flips, not just builds) — must require the honesty flags.
+        Advisory by design: one fixed greedy policy, not the play that
+        actually follows, even though the pass does respect the current
+        burn barriers. Computed only
         when the root converts: every consumer is behind that same
         condition, and churning p/m over a large non-converting graph
         bought pure wall clock — the case-2 reference paid ~50% for
@@ -1311,8 +1323,13 @@ class HerdingPolicy:
         ``hit_converged`` is trivially True when the pass is skipped.
         """
         # Any recompute prices a fresh value basis: the dedicated-retry
-        # ledger starts over (see refresh_hit_stats).
+        # ledger starts over (see refresh_hit_stats), and the report
+        # roots regenerate rather than going stale when a claim dies
+        # (a burn can cut the root off from every proven finish).
         self._hit_refresh_spent = False
+        self.report.min_hit_root = 0
+        self.report.fit_hit_root = 0
+        self.report.exp_hit_root = 0.0
         states = len(self._states)
         seeds = [
             index for index, kind in enumerate(self._kind)
@@ -1338,14 +1355,26 @@ class HerdingPolicy:
         if not self.report.root_converts:
             return
 
+        # The affirmative passes treat burned states as BARRIERS (review
+        # P1): entering a twice-seen position IS the arena's draw, so a
+        # path through one proves no finish — a burned terminal seeds
+        # nothing and a burned interior state neither takes nor
+        # propagates a distance. min_hit above deliberately ignores
+        # burns: a lower bound survives path removal, and the certificate
+        # and per-child vetoes need the stable pristine floor.
+        burned = self._burned
         fit_hit = [HIT_INF] * states
         for index in seeds:
+            if burned is not None and burned[index]:
+                continue
             fit_hit[index] = self._affirm_tail(index)
             queue.append(index)
         while queue:
             index = queue.popleft()
             step = fit_hit[index] + 1
             for parent in self._parents[index]:
+                if burned is not None and burned[parent]:
+                    continue
                 if fit_hit[parent] > step:
                     fit_hit[parent] = step
                     queue.append(parent)
@@ -1379,6 +1408,8 @@ class HerdingPolicy:
         worklist: deque = deque()
         queued = bytearray(states)
         for index in seeds:
+            if burned is not None and burned[index]:
+                continue
             prob[index] = 1.0
             mass[index] = float(self._affirm_tail(index))
             for parent in parents[index]:
@@ -1393,6 +1424,8 @@ class HerdingPolicy:
                 break
             index = worklist.popleft()
             queued[index] = 0
+            if burned is not None and burned[index]:
+                continue  # pinned: the draw absorbs, p = m = 0
             kind = kinds[index]
             if kind == NORMAL_OUR:
                 kid = choice[index]
@@ -1581,6 +1614,14 @@ class HerdingPolicy:
         self._burned_set = set(burned)
         if self._worklist:
             self.report.converged = False
+        # The affirmative statistics treat burned states as barriers, so
+        # ANY burn-set movement stales them — even one that moves no
+        # Bellman value (review P1); min_hit ignores burns and keeps its
+        # floor. The stale flag holds affirmative consumers conservative
+        # until the re-solve — or, when no value moved, the dedicated
+        # refresh — recomputes on the new barrier set.
+        self.report.hit_converged = False
+        self._hit_refresh_spent = False
         return True
 
     # ------------------------------------------------------------------

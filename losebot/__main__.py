@@ -1419,6 +1419,7 @@ def selftest() -> int:
         report = dict(
             ok=True, root_live=True, root_converts=False,
             conversion_complete=True, root_value=0.5, min_hit_root=0,
+            fit_hit_root=0,
         )
         report.update(report_fields)
         gate_bot = LoseBot(depth=1, opponent_model="zach", profile="vi")
@@ -1439,7 +1440,9 @@ def selftest() -> int:
             _bot_module.prospective_flip_policy = real
         return fired, gate_bot
 
-    converts_fired, converts_bot = _flip_case(True, root_converts=True)
+    converts_fired, converts_bot = _flip_case(
+        True, root_converts=True, fit_hit_root=12
+    )
     refused_fired, refused_bot = _flip_case(True)
     starved_fired, starved_bot = _flip_case(True, conversion_complete=False)
     hopeless_fired, hopeless_bot = _flip_case(False)
@@ -1943,6 +1946,106 @@ def selftest() -> int:
         f"re-armed exp={hit_kh.report.exp_hit_root:.2f}",
     )
 
+    # 23g. Affirmative statistics respect repetition burns (review P1:
+    # the fit/p-m passes traversed burned states, so a threefold-dead
+    # route still proved affirmative finishes). Burning every converting
+    # goal on the kh graph must kill the affirmative tier — fit INF, exp
+    # inf, report roots back to no-claim — while min_hit keeps its
+    # pristine floor (a lower bound survives path removal); lifting the
+    # burns restores the proven 10. A burn that moves NO Bellman value
+    # (a stalemate terminal already worth zero) still stales the stats —
+    # barriers changed even though values did not — and the dedicated
+    # refresh recomputes them on the unchanged numbers.
+    from .herding_vi import STALEMATE as _STALEMATE
+
+    kh_root_board = chess.Board(motif["kh-herd-h4"].fen)
+    burn_goals = {
+        index for index, fraction in hit_kh._conversion.items()
+        if fraction > 0.0
+    }
+    hit_kh._set_burned(burn_goals)
+    burn_deconverged = not hit_kh.report.converged
+    hit_kh.solve_more(30_000)
+    burned_est = hit_kh.hit_estimates(kh_root_board)
+    burned_fit_root = hit_kh.report.fit_hit_root
+    hit_kh._set_burned(set())
+    hit_kh.solve_more(30_000)
+    restored_est = hit_kh.hit_estimates(kh_root_board)
+    quiet_index = next(
+        index for index, kind in enumerate(hit_kh._kind)
+        if kind == _STALEMATE
+    )
+    hit_kh._set_burned({quiet_index})
+    quiet_stale = (
+        hit_kh.report.converged and not hit_kh.report.hit_converged
+    )
+    quiet_refreshed = hit_kh.refresh_hit_stats(30_000)
+    quiet_est = hit_kh.hit_estimates(kh_root_board)
+    check(
+        "affirmative hitting stats treat burned states as barriers",
+        burn_deconverged
+        and burned_est is not None
+        and burned_est[0] == 6
+        and burned_est[1] == HIT_INF
+        and burned_est[2] == float("inf")
+        and burned_fit_root == 0
+        and restored_est is not None
+        and restored_est[:2] == (6, 10)
+        and abs(restored_est[2] - 10.0) < 1e-6
+        and quiet_stale
+        and quiet_refreshed
+        and quiet_est is not None
+        and quiet_est[:2] == (6, 10)
+        and abs(quiet_est[2] - 10.0) < 1e-6,
+        f"burned=({burned_est[0]}, "
+        f"{'INF' if burned_est[1] == HIT_INF else burned_est[1]}, "
+        f"{burned_est[2]}, fit_root={burned_fit_root}); "
+        f"restored={restored_est[:2]}; "
+        f"quiet burn stale={quiet_stale} "
+        f"refreshed={quiet_refreshed} est={quiet_est[:2]}",
+    )
+
+    # 23h. The soft clock trigger requires honest statistics (review P1:
+    # a truncated p/m ratio errs either way — an early pass commonly
+    # reads inf — and the junk-armed cascade spent reset scans, flip
+    # probes, and fallback vetoes on MOVE ONE of a fresh 100-ply era).
+    # A mid-herd root on the kh statics builds converged but its p/m
+    # pass exceeds the update cap: the fixed code keeps clock_soft dark
+    # (no cascade, no veto armed), where the old code fired it at clock
+    # 0. Marking the pass drained re-arms the gate: the same numbers
+    # then flag soft honestly and the cascade runs.
+    far_board = chess.Board(
+        motif["kh-herd-h4"].fen.replace("5P1k", "5P2")
+    )
+    far_board.set_piece_at(chess.D5, chess.Piece(chess.KING, chess.BLACK))
+    far_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1
+    )
+    far_bot.choose_move(far_board)
+    far_policy = far_bot._vi_policy
+    far_truncated = (
+        far_policy is not None
+        and far_policy.report.ok
+        and far_policy.report.converged
+        and not far_policy.report.hit_converged
+    )
+    dark_softs = far_bot.vi_clock_soft_plies
+    dark_veto = set(far_bot._vi_reset_refused)
+    if far_truncated:
+        far_policy.report.hit_converged = True
+        far_bot.choose_move(far_board)
+    check(
+        "the soft clock gate reads only honest hitting statistics",
+        far_truncated
+        and dark_softs == 0
+        and far_bot.vi_clock_hard_plies == 0
+        and dark_veto == set()
+        and far_bot.vi_clock_soft_plies == 1,
+        f"truncated={far_truncated} softs-dark={dark_softs} "
+        f"veto-dark={sorted(m.uci() for m in dark_veto)}; "
+        f"honest softs={far_bot.vi_clock_soft_plies}",
+    )
+
     # 23c. The clock-hard cascade on a converting side. min_hit over the
     # remaining budget certifies this era cannot finish, so a certified
     # pawn push manufactures a fresh one: with the spare a2 pawn the
@@ -1998,27 +2101,45 @@ def selftest() -> int:
         f"vetoes={nospare_bot.vi_clock_reset_vetoes})",
     )
 
-    # 23d. The flip gate requires era feasibility of the prospect: the
-    # mirror herds inside the SAME fifty-move era, so a live prospect
-    # whose finish-inclusive best case cannot fit the remaining budget is
-    # refused with the long back-off whatever its audit says — while
-    # min_hit_root == 0 (stats absent) never condemns. flip_board sits
-    # at clock 0: a finish of 100 fits the 100-ply era exactly, 101
-    # cannot fit any era.
+    # 23d. The flip gate requires era feasibility of the prospect in two
+    # tiers: min_hit_root is the rejection floor (a live prospect whose
+    # best case cannot fit the budget is refused with the long back-off
+    # whatever its audit says, while 0 — stats absent — never condemns),
+    # and a conversion-required flip must additionally AFFIRM with a
+    # nonzero fit_hit_root inside the budget — the floor only means
+    # impossibility was not proven, so min 6 with a proven finish of 101
+    # (or no fit claim at all) may not approve leaving a live side
+    # (review P1). flip_board sits at clock 0: a finish of 100 fits the
+    # 100-ply era exactly, 101 cannot fit any era.
     infeasible_fired, infeasible_bot = _flip_case(
         True, root_converts=True, min_hit_root=101
     )
     boundary_fired, boundary_bot = _flip_case(False, min_hit_root=100)
+    unfit_fired, unfit_bot = _flip_case(
+        True, root_converts=True, min_hit_root=6, fit_hit_root=101
+    )
+    unclaimed_fired, unclaimed_bot = _flip_case(
+        True, root_converts=True, min_hit_root=6
+    )
     check(
         "side flips require the mirror to fit the remaining era",
         not infeasible_fired
         and infeasible_bot._vi_next_flip_ply == 16
         and infeasible_bot.vi_side_flips == 0
         and boundary_fired
-        and boundary_bot.vi_side_flips == 1,
+        and boundary_bot.vi_side_flips == 1
+        and not unfit_fired
+        and unfit_bot._vi_next_flip_ply == 16
+        and unfit_bot.vi_side_flips == 0
+        and not unclaimed_fired
+        and unclaimed_bot._vi_next_flip_ply == 16
+        and unclaimed_bot.vi_side_flips == 0,
         f"infeasible fired={infeasible_fired} "
         f"(cooldown={infeasible_bot._vi_next_flip_ply}); "
-        f"boundary100 fired={boundary_fired}",
+        f"boundary100 fired={boundary_fired}; "
+        f"floor6-fit101 fired={unfit_fired} "
+        f"(cooldown={unfit_bot._vi_next_flip_ply}); "
+        f"no-fit-claim fired={unclaimed_fired}",
     )
 
     # 23e. Uncertified resets stay out of the heuristic fallbacks, and

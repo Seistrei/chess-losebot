@@ -954,13 +954,22 @@ class LoseBot:
                     clock_hard = True
                     self.vi_clock_hard_plies += 1
                 elif (
-                    exp_hit * self.profile.vi_clock_soft_factor > remaining
+                    policy.report.converged
+                    and policy.report.hit_converged
+                    and exp_hit * self.profile.vi_clock_soft_factor
+                    > remaining
                 ):
-                    # One-sided by construction: a truncated p/m pass can
-                    # misprice exp_hit, but a spurious soft flag only
-                    # costs cadenced reconsideration builds, while gating
-                    # it on the honesty flags would suppress the cascade
-                    # exactly on the big graphs where the solver labors.
+                    # Honest numbers only (review P1): a truncated p/m
+                    # ratio errs in either direction — an early pass
+                    # commonly reads inf, and mid-herd builds armed the
+                    # cascade on move one of a fresh era from exactly
+                    # that junk. A spurious soft flag is not just extra
+                    # builds: the cascade can spend a certified reset,
+                    # leave the side, and veto fallback pushes. The
+                    # refresh path makes truncation transient wherever
+                    # the p/m update cap allows; where it cannot
+                    # converge, the min_hit certificate and per-child
+                    # vetoes still guard the cliff.
                     clock_soft = True
                     self.vi_clock_soft_plies += 1
         if clock_hard or clock_soft:
@@ -1288,18 +1297,26 @@ class LoseBot:
         if prospect is not None and prospect.report.ok:
             report = prospect.report
             self.vi_flip_value = report.root_value
-            # The mirror herds inside the SAME era, so a prospect whose
-            # best-case finish (min_hit_root is finish-inclusive) cannot
-            # fit the remaining fifty-move budget is worthless whatever
-            # its audit says. min_hit_root 0 means the stats made no
-            # claim and must never condemn.
+            # The mirror herds inside the SAME era, and feasibility is
+            # two-tier (review P1). min_hit_root is the rejection floor:
+            # exceeding the budget condemns the prospect whatever its
+            # audit says, while 0 means the stats made no claim and must
+            # never condemn. Abandoning a LIVE side (require_conversion)
+            # is an affirmative act on top of that, so the prospect's
+            # PROVEN finish must positively fit — nonzero fit_hit_root
+            # inside the budget. The floor may not stand in for it:
+            # unproven impossibility approved flips into finishes the
+            # audit priced past the era (min 6, fit 10, six plies left).
+            remaining = 100 - board.halfmove_clock
             feasible = (
                 report.min_hit_root == 0
-                or report.min_hit_root <= 100 - board.halfmove_clock
+                or report.min_hit_root <= remaining
             )
-            if report.root_live and feasible and (
-                not require_conversion or report.root_converts
-            ):
+            affirmed = not require_conversion or (
+                report.root_converts
+                and 0 < report.fit_hit_root <= remaining
+            )
+            if report.root_live and feasible and affirmed:
                 self.plan = mirrored
                 self.vi_side_flips += 1
                 if require_conversion:
@@ -1309,6 +1326,18 @@ class LoseBot:
             if not feasible and report.root_live:
                 # Live but unfinishable in this era — a refusal that only
                 # hardens as the clock runs. Long back-off.
+                self._vi_next_flip_ply = ply + 16
+                return False
+            if (
+                require_conversion
+                and report.root_live
+                and report.root_converts
+                and not affirmed
+            ):
+                # Converting, but its PROVEN finish cannot fit this era
+                # (or the stats made no affirmative claim): like the
+                # floor-infeasible case, this only hardens as the clock
+                # runs. Long back-off.
                 self._vi_next_flip_ply = ply + 16
                 return False
             if report.root_live and not report.conversion_complete:
