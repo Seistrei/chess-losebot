@@ -434,6 +434,7 @@ class HerdingPolicy:
         # Hitting-time statistics (computed once at build, after the solve).
         self._min_hit: list[int] | None = None
         self._fit_hit: list[int] | None = None
+        self._seed_reach: bytearray | None = None
         self._exp_hit: list[float] | None = None
         # One dedicated retry of a deadline-truncated p/m pass per value
         # basis (see refresh_hit_stats).
@@ -1352,6 +1353,39 @@ class HerdingPolicy:
         if root is not None and min_hit[root] < HIT_INF:
             self.report.min_hit_root = min_hit[root]
         self.report.hit_converged = True
+
+        # The ranking's exact-zero certificate is tier-agnostic (review
+        # P2 follow-up): burn-aware reachability from whatever terminals
+        # currently seed positive value — the audited conversions when
+        # the root converts, the flat proxy goals when it does not. A
+        # live-but-unconvertible side OUTLIVES the flip/adoption cascade
+        # when no mirror converts, keeps ranking its proxy values, and a
+        # total burn leaves the same crumbs (measured 5e-5 at gamma
+        # 0.99), so the certificate cannot hide behind fit_hit's
+        # conversion gate. One flood fill beside min_hit; fit_hit below
+        # stays conversion-only, because an affirmation priced off proxy
+        # seeds would promise a finish nothing audited. Stale only when
+        # a burn movement leaves the solve converged (zero-value states
+        # only), and then only toward keeping a candidate — the same
+        # safe direction as the no-claim default.
+        burned = self._burned
+        reach = bytearray(states)
+        for index in seeds:
+            if burned is not None and burned[index]:
+                continue
+            reach[index] = 1
+            queue.append(index)
+        while queue:
+            index = queue.popleft()
+            for parent in self._parents[index]:
+                if reach[parent] or (
+                    burned is not None and burned[parent]
+                ):
+                    continue
+                reach[parent] = 1
+                queue.append(parent)
+        self._seed_reach = reach
+
         if not self.report.root_converts:
             return
 
@@ -1507,25 +1541,30 @@ class HerdingPolicy:
             return 0
         return self._min_hit[index]
 
-    def child_can_convert(self, index: int) -> bool:
-        """Whether a ``ranked_moves`` child still reaches a proven finish.
+    def child_value_live(self, index: int) -> bool:
+        """Whether a ``ranked_moves`` child's value is live or burn crumb.
 
         The burn-aware complement of ``child_min_hit`` (review P2):
-        fit_hit treats burned states as barriers, so HIT_INF here is an
-        exact certificate that no unburned route to a positively seeded
-        terminal survives — the child's true value is 0, and any
-        positive residue in the ranking is Bellman crumb (up to
-        tolerance/(1-gamma)) left by a truncated decreasing re-solve,
-        which no fixed epsilon can tell from a genuinely tiny conversion
-        chance. Fresh wherever the ranking is: any burn movement stales
-        the stats and the re-solve or the dedicated refresh recomputes
-        them before a converged consumer reads. True (no claim) when
-        the stats are unavailable: an unknown must never condemn a
-        candidate.
+        burned states are barriers in the seed-reachability pass, so
+        False is an exact certificate that no unburned route to a
+        positively seeded terminal survives — the child's true value is
+        0, and any positive residue in the ranking is Bellman crumb (up
+        to tolerance/(1-gamma)) left by a truncated decreasing
+        re-solve, which no fixed epsilon can tell from a genuinely tiny
+        live value. Tier-agnostic where fit_hit is deliberately
+        conversion-only (review P2 follow-up): the certificate follows
+        whatever ``_terminal_seed_value`` currently seeds, so the flat
+        proxy tier of a live-but-unconvertible graph prunes its crumbs
+        too. Distinct from ``root_live``: per child, burn-aware, and
+        about the current seed tier, not the pristine graph. Fresh
+        wherever the ranking is: any value-moving burn stales the solve
+        and reconvergence recomputes the pass before a converged
+        consumer reads. True (no claim) when the stats are unavailable:
+        an unknown must never condemn a candidate.
         """
-        if self._fit_hit is None or index >= len(self._fit_hit):
+        if self._seed_reach is None or index >= len(self._seed_reach):
             return True
-        return self._fit_hit[index] < HIT_INF
+        return bool(self._seed_reach[index])
 
     def reply_fit_fraction(self) -> float | None:
         """Per-reply finish evidence at a their-turn root.
@@ -1773,6 +1812,7 @@ class HerdingPolicy:
         self._min_hit = None
         self._fit_hit = None
         self._exp_hit = None
+        self._seed_reach = None
 
 
 def prospective_flip_policy(board: chess.Board, target: PawnMateTemplate,

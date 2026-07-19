@@ -2107,26 +2107,26 @@ def selftest() -> int:
     # tolerance, let alone the ranking's 1e-9 cutoff) that ranked as
     # real value, anchored the floor window, and noise-walked a herd
     # whose true value was 0. With every converting goal burned, every
-    # ranked child reads child_can_convert False — fit INF is an exact
-    # zero-value certificate while min_hit keeps its pristine floor, so
-    # the clock veto never catches these — and the play-time loop
-    # crumb-prunes them all into the honest zero fallback. Restored,
-    # the live children affirm again and only the genuinely dead a5
-    # child stays False: a pristine monotone-from-zero solve gives
-    # value > 0 only to states that reach a seed, so the filter never
-    # bites a burn-free graph.
+    # ranked child reads child_value_live False — an exact zero-value
+    # certificate while min_hit keeps its pristine floor, so the clock
+    # veto never catches these — and the play-time loop crumb-prunes
+    # them all into the honest zero fallback. Restored, the live
+    # children affirm again and only the genuinely dead a5 child stays
+    # False: a pristine monotone-from-zero solve gives value > 0 only
+    # to states that reach a seed, so the filter never bites a
+    # burn-free graph.
     hit_kh._set_burned(burn_goals)
     hit_kh.solve_more(30_000)
     crumb_ranked = hit_kh.ranked_moves(kh_root_board) or []
     crumb_top = crumb_ranked[0][0] if crumb_ranked else 0.0
     crumb_convertible = [
-        hit_kh.child_can_convert(child) for _, _, child in crumb_ranked
+        hit_kh.child_value_live(child) for _, _, child in crumb_ranked
     ]
     hit_kh._set_burned(set())
     hit_kh.solve_more(30_000)
     live_ranked = hit_kh.ranked_moves(kh_root_board) or []
     live_convertible = {
-        move.uci(): hit_kh.child_can_convert(child)
+        move.uci(): hit_kh.child_value_live(child)
         for _, move, child in live_ranked
     }
     check(
@@ -2142,6 +2142,67 @@ def selftest() -> int:
         f"{sum(crumb_convertible)}/{len(crumb_convertible)}; "
         f"live dead-children="
         f"{sorted(m for m, ok in live_convertible.items() if not ok)}",
+    )
+
+    # 23l. The exact-zero certificate covers the flat proxy tier
+    # (review P2 follow-up): fit_hit is deliberately absent when the
+    # root does not convert, so a fit-based filter no-claims EVERY
+    # child of a live-but-unconvertible policy — and such a policy
+    # outlives the flip/adoption cascade whenever no mirror converts,
+    # ranking flat proxy values that burn like any others. On a fresh
+    # 14d fixture (14h re-seeds the shared one), burning all seven
+    # proxy goals leaves ~5e-5 of residue at gamma 0.99 — the
+    # tolerance/(1-gamma) scale, three decades over the ranking
+    # epsilon — and seed-reachability reads every crumb child dead
+    # while fit stays honestly absent. Restored, every
+    # solver-visible-positive child reads live again (the tiny-value
+    # converse is not asserted: a monotone solve can freeze genuinely
+    # reachable states at exactly 0.0 below the update tolerance).
+    from .herding_vi import _WIN_KINDS as _WINS
+
+    proxy_policy = HerdingPolicy.build(
+        vi_board, vi_target, max_herders=1, state_cap=200_000,
+        time_budget_ms=60_000, gamma=0.99, conversion_ms=30_000,
+    )
+    proxy_seeds = {
+        index for index, kind in enumerate(proxy_policy._kind)
+        if kind in _WINS
+        and proxy_policy._terminal_seed_value(index) > 0.0
+    }
+    proxy_policy._set_burned(proxy_seeds)
+    proxy_policy.solve_more(60_000)
+    proxy_ranked = proxy_policy.ranked_moves(vi_board) or []
+    proxy_top = proxy_ranked[0][0] if proxy_ranked else 0.0
+    proxy_live = [
+        proxy_policy.child_value_live(child)
+        for _, _, child in proxy_ranked
+    ]
+    proxy_policy._set_burned(set())
+    proxy_policy.solve_more(60_000)
+    unburned_ranked = proxy_policy.ranked_moves(vi_board) or []
+    unburned_positive_live = all(
+        proxy_policy.child_value_live(child)
+        for value, _, child in unburned_ranked
+        if value > 1e-6
+    )
+    check(
+        "the exact-zero certificate covers the flat proxy tier",
+        proxy_policy.report.ok
+        and not proxy_policy.report.root_converts
+        and proxy_policy._fit_hit is None
+        and len(proxy_seeds) == 7
+        and len(proxy_ranked) == 13
+        and 1e-9 < proxy_top < 1e-3
+        and not any(proxy_live)
+        and bool(unburned_ranked)
+        and unburned_ranked[0][0] > 0.5
+        and unburned_positive_live,
+        f"converts={proxy_policy.report.root_converts}, "
+        f"fit-absent={proxy_policy._fit_hit is None}, "
+        f"seeds={len(proxy_seeds)}; crumb top={proxy_top:.2e}, "
+        f"live={sum(proxy_live)}/{len(proxy_live)}; restored top="
+        f"{unburned_ranked[0][0] if unburned_ranked else 0.0:.3f} "
+        f"(positive all live={unburned_positive_live})",
     )
 
     # 23h. The soft clock trigger requires honest statistics (review P1:

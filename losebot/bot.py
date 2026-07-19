@@ -1125,20 +1125,22 @@ class LoseBot:
                 # veto never cuts a finishable line.
                 self.vi_clock_pruned += 1
                 continue
-            if not policy.child_can_convert(child):
+            if not policy.child_value_live(child):
                 # Exact reachability, not an epsilon (review P2): burns
-                # are barriers in fit_hit, so a child with no unburned
-                # route to a positive terminal has true value 0 — but a
-                # total burn's decreasing re-solve leaves Bellman crumbs
-                # (measured 5.7e-6, above any tolerance-scale cutoff)
-                # that would otherwise rank as real value, anchor the
-                # floor window, and noise-walk a herd the arena has
-                # already drawn dead. min_hit ignores burns by design,
-                # so the clock veto above never catches these. Pruned
-                # BEFORE the window anchors: a crumb outranking a
-                # genuinely tiny live line must not set the floor over
-                # it. When every candidate prunes, the zero fallback
-                # below says honestly that nothing here converts.
+                # are barriers in the seed-reachability pass, so a child
+                # with no unburned route to a positively seeded terminal
+                # has true value 0 — but a total burn's decreasing
+                # re-solve leaves Bellman crumbs (measured 5.7e-6 on a
+                # converting graph, 5e-5 on the flat proxy tier the
+                # follow-up caught) that would otherwise rank as real
+                # value, anchor the floor window, and noise-walk a herd
+                # the arena has already drawn dead. min_hit ignores
+                # burns by design, so the clock veto above never catches
+                # these. Pruned BEFORE the window anchors: a crumb
+                # outranking a genuinely tiny live line must not set the
+                # floor over it. When every candidate prunes, the zero
+                # fallback below says honestly that nothing here still
+                # scores.
                 self.vi_crumb_pruned += 1
                 continue
             if top_value is None:
