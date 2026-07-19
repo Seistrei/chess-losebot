@@ -1489,3 +1489,95 @@ battery on the fixed code:
   identical to the move.
 - Case-2 seed-5: same game to the move, every clock gauge inert.
 - Motifs: byte-identical verdicts and odds.
+
+## Review hardening rounds and re-pinned battery references (2026-07-18/19)
+
+Four further review rounds landed on the clock/burn layer after the
+last logged battery, three of them without a battery entry — so the
+seed-2 and case-2 references below this section's battery block are
+the ones that count now. The rounds, in order:
+
+- **57bd823 (four findings)** — affirmative tails, same-decision
+  vetoes: the conversion audit records each converting goal's PROVEN
+  completion tail and a second BFS (`fit_hit`) plus the exp_hit seed
+  mass price affirmations with it (`_TERMINAL_TAILS` stays the
+  rejection floor); deadline-truncated p/m passes get one dedicated
+  retry per value basis (`refresh_hit_stats`); herd search ranks below
+  the solved sub-MDP and draws from the reset-filtered menu; reset
+  vetoes are same-decision evidence — cleared on entry, re-armed with
+  the whole uncertified scan domain when the flags arm.
+- **7f04ebd (three findings)** — honest tiers all the way down:
+  conversion-required flips demand a nonzero `fit_hit_root` inside the
+  budget; fit_hit and the p/m pass treat burned states as BARRIERS and
+  `_set_burned` stales `hit_converged` on ANY set movement;
+  `clock_soft` requires converged + hit_converged (a truncated p/m
+  ratio errs both ways — fresh mid-herd builds armed the cascade on
+  move one of a 100-ply era from junk exp ~89).
+- **94d739c (one finding)** — burns are priced where they are read:
+  the era recount runs BEFORE the release affirmation and the clock
+  gates, so every affirmative consumer prices THIS decision's burn
+  set; the 23i rook tour drives the failure end to end (a herd whose
+  every converting goal just burned read the stale fit of 10 and
+  suppressed the lottery).
+- **956f00e + 41d62fd (two findings + follow-up)** — exact reachability
+  over epsilons: the ranking's 1e-9 zero cutoff treated
+  Bellman-tolerance residue as real value after a total burn (a
+  DECREASING re-solve stops inside the 1e-6 tolerance, leaving crumbs
+  up to tolerance/(1-gamma): measured 5.66e-6 on the burned kh
+  fixture at gamma 0.96, 4.98e-5 on the burned 14d proxy fixture at
+  0.99). The certificate is `_seed_reach` — burn-aware reachability
+  from whatever terminals `_terminal_seed_value()` currently seeds
+  positive, computed unconditionally beside min_hit — read by
+  `child_value_live` and pruned (`vi_crumb_pruned`) BEFORE the floor
+  window anchors; fit_hit stays conversion-only (an affirmation off
+  proxy seeds would promise a finish nothing audited); the follow-up
+  made it tier-agnostic because a live-but-unconvertible proxy policy
+  OUTLIVES the flip/adoption cascade and burns like any other. Also:
+  the near-cliff release affirmation gates on `policy.contains(board)`
+  BEFORE the recount — a cached policy that no longer maps can never
+  answer `hit_estimates`, and the old order paid a recount plus up to
+  a `vi_build_ms` re-solve per decision for an affirmation that was
+  never coming. Suite 60 -> 68 across the rounds (23f through 23l).
+
+Full battery on 41d62fd, with a baseline control at 94d739c (the
+commit before the last two rounds) on every seed that diverged from
+the stale log — **the control matched HEAD on all 12 compared games,
+outcomes AND plies, so every divergence from the older entries belongs
+to the three previously unlogged rounds, none to the newest two**:
+
+- **Case-6, 10 seeds**: 7 converted at the exact reference plies
+  (48/52/34/64/42/38/34), seeds 7/9 stalemate — unchanged. Seed 2
+  stays fifty-move but the game is NEW: fifty-move in 100 plies, ~3s,
+  soft=0 / hard=3 / pruned=23 / resets 0-of-1, exp-hit=n/a,
+  zero-value=3, crumb-pruned=0. The old logged seed-2 diagnostics
+  (soft=23, resets 0-of-7) belong to 5e7ef30-era code: with the honest
+  soft gate, the truncated p/m pass on this graph keeps the cascade
+  dark, so the game never spends the reset scans and dies at the raw
+  adjudication. Diagnosis unchanged (unsalvageable-in-era); the repro
+  is just cheaper now.
+- **Case-7, 10 seeds**: 4 converted at the exact reference plies
+  (68/76/86/106 — seeds 2/5/6/7); losses: seeds 1/3 stalemate
+  (101/111 = lost races), seeds 0/4 fifty-move (170/110), seeds 8/9
+  max-plies (240). **Seed 0 is the only game in the entire battery
+  that exercised the new filter** — kh adoption to a 0/19-audit
+  arrival, 9 burn updates with 7 burned at end, crumb-pruned=31 over
+  zero-value=3 decisions. The baseline control played the same
+  position by noise-walking the crumbs (zero-value=0, played=30 vs 47)
+  to the SAME fifty-move at ply 170: the filter changed the route, not
+  the outcome, and the gauges now tell the truth about it.
+- **Case-2 seed-5**: fifty-move in 225 plies, 98 VI moves, builds=12
+  (5 failed pawn-not-frozen), burn-updates=30 (20 at end), root 0.000,
+  side-flips=1 (prospect 0.0), crumb-pruned=0 — identical at the
+  baseline, so this too is the affirmative-tier rounds' game, not the
+  newest commits'. The logged 125-ply / 47-VI-move reference is
+  5e7ef30-era; THIS is the reference now.
+- **Motifs**: verdicts and odds byte-identical (kh-corner-h/a and
+  kh-herd-h4 POSITIVE 0.500; fm-organic-h/a and fm-deep-h POSITIVE
+  1.000; ph-contained-root NEGATIVE, all refusals DISPROVEN).
+
+Loss ledger after re-pinning, unchanged in shape: case-7's fifty-moves
+and max-plies are unconvertible or 0/N-audit arrivals — nothing herds
+their king during the walk — so next-steps order stands: (1)
+walk-phase defender pressure, (2) deeper funnel pricing (two-ply
+funnels), (3) executioner selection at strip time, (4) multi-pawn
+stacking.
