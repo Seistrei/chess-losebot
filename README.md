@@ -220,3 +220,7 @@ herd, and audited-race machinery finishes the game.
   as a deep tactical oracle for forced selfmate nets.
 - ~~Lichess BOT bridge (lichess-bot)~~ — done; see *Play against it on
   lichess*. Still the only misère bot there, as far as we know.
+- The human frontier: donation guard + a capture-tolerant "sloppy human"
+  opponent model. Zach never captures, so the arena never punished the
+  bot for shedding its construction material — real humans do. Findings
+  and priorities in TUNING-LOG.md, *Lichess field notes* (2026-07-20).

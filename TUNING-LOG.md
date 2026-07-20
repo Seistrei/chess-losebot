@@ -2254,3 +2254,83 @@ Next, in expected-value order:
 4. Stack donation engineering (forcing cxb recaptures to CREATE
    doubled files against a never-capturing opponent) — speculative,
    only the strip terms' organic stacks come free today.
+
+## Lichess field notes: the first human opponents (2026-07-20)
+
+The bridge is live: BOT account **LoseBotAI**, lichess-bot pinned by
+commit SHA in `Dockerfile.lichess` (the project's git tags died in 2020
+and the newest one pins python-chess 0.24 — bump SHAs deliberately; any
+replacement `homemade.py` must keep an `ExampleEngine` class because
+`test_bot/homemade.py` imports it unconditionally). Casual standard
+challenges only, rapid 10+0 through unlimited; wrapper env knobs and a
+clock governor in `lichess/homemade.py`; ops details in the README's
+lichess section. Default engine after game 1: `LOSEBOT_PROFILE=vi
+LOSEBOT_MODEL=zach`. Every game lands in `lichess/game_records/`
+(gitignored) — the first corpus of real mate-avoidant humans.
+
+Three games against the author playing the anti-losebot recipe:
+
+- **sNiyNb4S** — aborted before the bot's first turn: 30s abort fuse +
+  a 165-char greeting lichess silently refused to send (cap is 140
+  after `{me}` expands). Both fixed (fuse 120s; smoke test measures
+  every greeting at a 20-char username).
+- **BnQ263xT** (`current`, model-free) — the strip and squeeze WORK on
+  a human: fed pieces, stripped him to K+pawn, squeezed him to
+  mobility 1, even manufactured its own executioner (102.Rb2 axb2 —
+  the strip-time exec terms shopping) and preserved it 44 moves. But
+  the generalist carries no construction machinery, so it shuffled
+  checks and promoted TWO OF ITS OWN QUEENS (clock_urgent +
+  irreversible_move_bonus walking pawns to promotion = fifty-move
+  survival without a plan) until the human resigned: 1-0, the one
+  result the bot exists to avoid. The generalist can shop but cannot
+  build — hence the vi default.
+- **R9tSLBLK** (`vi` + `zach`) — fifty-move draw at move 115, the
+  honest Zach-class stall, and the vi discipline is visible: it held a
+  completely free c2 pawn through the entire final 50 moves because
+  every reset scan honestly certified nothing converting (contrast the
+  queen-promotion farce above), and its final move 115.Qc4 offered
+  queen + their-capture clock reset one ply after the clock hit 100.
+  The real failure was upstream: it donated the rook (45.Rb5+ Kxb5)
+  and bishop (48.Bb2+ Kxb2) into forced king captures, reaching Q+K by
+  move 48 — a lone queen is the release theorem's favorite meal and
+  one free piece cannot be cage, closer, and herder at once. The
+  certify sweep was right; the material was already gone.
+
+**The structural discovery: Zach never captures, so a donation has
+never once been punished in the arena — the training opponent cannot
+even express the failure mode.** Humans take the gifts. Every
+shed-our-men instinct implicitly assumed the offer dangles forever;
+against accepting opponents the bot strips ITSELF below construction
+minimum. Secondary finding: 59.Qxb3+ ate their b3 pawn one step from
+the b2 renewal square — check_bonus (40) outbid exec_file_bonus (40).
+Deliberately NOT a bug: 65.Qxh1 ate their fresh promotion — against a
+mate-avoidant opponent their queen is zugzwang-immune shuffle fuel and
+eating it is model-consistent (whether to PRESERVE their queen against
+blunder-prone humans who might eventually mate with it is an
+opponent-classification question, not an eval fix).
+
+Next for the human frontier, in expected-value order (the Zach-program
+list above remains valid for the drills):
+
+1. **Donation guard / herder-material floor**: while their side is
+   strippable-but-unconverted, veto or price moves that drop our free
+   pieces below what any resolvable template family requires (cage +
+   closer + herder; templates.py knows the sets). Acceptance test:
+   45.Rb5+ and 48.Bb2+ of R9tSLBLK must not both pass.
+2. **A sloppy-human opponent model** in opponents.py: Zach's
+   mate-avoidance BUT captures hanging material (parameterize capture
+   probability; "terrible but takes pieces occasionally"). Wire as
+   `opponent_model="sloppy"` through the probe menus; arena A/B
+   against it as the second benchmark beside Zach. Honest scope
+   warning: the herding sub-MDP's frozen-statics premise BREAKS under
+   a capturing kernel (their king can eat the cage; capture edges
+   explode the state space) — model the strip/midgame phases first and
+   keep vi herding Zach-scoped; a capture-tolerant sub-MDP is new
+   solver work, not a knob.
+3. **Exec-preservation vs check_bonus weighting** (the 59.Qxb3+
+   family): their b/g pawns adjacent to renewal squares should outbid
+   a quiet check.
+4. **Corpus protocol**: every PGN in `lichess/game_records/` gets a
+   post-game read (`losebot.analyze` + eyeball) and its findings land
+   in this log. Three games in, each one taught something the arena
+   never could.
