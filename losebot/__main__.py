@@ -3531,18 +3531,19 @@ def selftest() -> int:
         f" vetoes+={field_bot.donation_vetoes - vetoes_before_va}",
     )
 
-    # 29g. Nothing outbids the LAST family: same shape without the
-    # light bishop, so the dark bishop is the whole toolkit and the
-    # 2 -> 0 gap is 900 > 810 — the queen strip is refused and the
-    # bishop-saving retreat survives instead. The strip finishes some
-    # other way or the eval carries it; the floor never sells out.
+    # 29g. Nothing outbids the last ON-FILE family: same shape without
+    # the light bishop, so the dark bishop is the whole toolkit and
+    # the 2 -> 0 gap is 900 > 810 — the queen strip is refused and the
+    # bishop-saving retreat survives instead. (A last DONOR-ONLY
+    # family is queen-priced like any tier 1 — its 1 -> 0 gap is 450 —
+    # a lend they can revoke never outranks killing the queen.)
     last_family = chess.Board("7k/8/8/4p3/p2q2p1/4B3/8/RN4KN w - - 0 1")
     last_kept = field_bot._filter_donation_guard(
         last_family,
         [chess.Move.from_uci("e3d4"), chess.Move.from_uci("e3c1")],
     )
     check(
-        "tier veto: no prize buys the last family (gap 900 > queen 810)",
+        "tier veto: no prize buys the last on-file family (900 > 810)",
         last_kept == [chess.Move.from_uci("e3c1")],
         f"kept={[last_family.san(m) for m in last_kept]}"
         f" (want Bc1 alone: Bxd4 exd4 would leave tier 0)",

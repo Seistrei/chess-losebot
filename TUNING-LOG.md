@@ -2889,3 +2889,12 @@ pins vs the bf97462 control from this morning's full 32-file run:
 case-8 seed-0 byte-identical (stalemate@51, releases=2,
 renewal-captures=1), motifs byte-identical, both modulo wall-clock
 tokens.
+
+Follow-up [P3], taken (reword): "nothing buys the LAST family" was
+only true of the last ON-FILE family (2 -> 0 gap 900 > 810). A last
+donor-only family is queen-priced like any tier 1 (1 -> 0 gap 450) —
+intended behavior, now stated: a lend they can revoke by one quiet
+push never outranks killing the queen, since a living queen forecloses
+every conversion anyway. bot.py docstring, the floor_donor_bonus
+comment, and 29g's title now carry the qualifier; no behavior change,
+selftest 99/99.

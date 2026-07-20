@@ -352,7 +352,9 @@ FIELD = replace(
     # family's kit, while their queen (810) still does: the strip must
     # finish, and the filter's tier veto is value-aware to match
     # (2026-07-20 review) — a strip prize above the gap reaches the
-    # eval; nothing outprices the last family (900 > 810).
+    # eval; nothing outprices the last ON-FILE family (900 > 810),
+    # while a last donor-only family is queen-priced like any tier 1
+    # (450): a revocable lend never outranks killing the queen.
     floor_donor_bonus=450.0,
     # Narrowing to one supported family outbids a generic executioner
     # file (40) but yields to a piece win (their minor at strip scale

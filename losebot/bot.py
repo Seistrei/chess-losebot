@@ -620,7 +620,10 @@ class LoseBot:
           instead of dying here — their queen (810) buys a 2 -> 1
           drop (gap 450) because a living queen is infinite shuffle
           fuel and no corner ever converts against it, while no minor
-          (288/297) does, and nothing buys the LAST family (gap 900).
+          (288/297) does. Nothing buys the last ON-FILE family (the
+          2 -> 0 gap is 900); a last donor-only family is queen-priced
+          like any tier 1 (the 1 -> 0 gap is 450) — a lend they can
+          revoke by one quiet push never outranks killing the queen.
         - COUNT: at or below three free pieces — cage + closer + herder,
           the minimum ANY family needs — never a non-strip move that
           lets a reply eat one (45.Rb5+ Kxb5, 48.Bb2+ Kxb2). Captures of
