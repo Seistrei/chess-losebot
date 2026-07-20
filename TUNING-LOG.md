@@ -2460,3 +2460,43 @@ Next for the field frontier:
 3. **Corpus protocol continues**: the next accepting human should die
    with the toolkit intact — that game is the guard's real acceptance
    test.
+
+**Field notes addendum — GlcYtgKz (2026-07-20), the pre-guard control
+game.** Bot as BLACK for the first time, same human, and — by four
+minutes — the OLD image: losebot-lichess built 22:55, the guard
+committed 00:24, game started 00:28 on the unmerged main. So this is
+not the guard's acceptance test; it is a second control, and it
+replays the R9tSLBLK catalogue almost line for line. Replaying every
+Black move through the field build's actual filter (full legal menu,
+membership of the played move):
+
+- Four vetoes, each confirmed by the human's very next capture:
+  17...Ba6 (the light bishop — the g-family's cage on the mirrored
+  shade map, b8 dark/g8 light — donated to Bxa6 with the dark bishop
+  already dead since move 13: type floor), 29...Nc4 (knight hung at
+  free=3: count floor), 30...Nf4+ (last-knight donation check at
+  free=2), and 31...h5+ (fails to save the still-hanging knight —
+  the defense gradient, not just a donation veto).
+- Every allowance is the designed one: 11...Bxb4+ (bishop eats their
+  QUEEN; the recapture arrives two plies later through 12...d4, and
+  the b-family narrowing to g is family_bonus territory, not a veto),
+  15...Qxe2+ (queen for knight — strip-exempt, the queen is not floor
+  material), 19...Rd3+ (rook spent at free 4->3: the surplus
+  allowance), 40...Rxg3+ (rook for rook at free=1 — the strip must
+  finish), 45...Kxe2/55...Kxd3 (eating their donated pieces), and
+  93...Qxg4+ passing UNVETOED because the floor was already dead —
+  honest inertness, same as real-game move 59 of R9tSLBLK.
+- The executioner-eating shape RECURRED: 93...Qxg4+ ate their last
+  g-pawn and the viable column went g -> none — the 59.Qxb3+ family's
+  second occurrence in two games. It is a family, not an incident.
+- New pin of what the floor protects against: from move 41 the bot
+  had ZERO pieces, self-promoted 63...b1=Q under clock pressure, and
+  spent 56 consecutive moves giving queen checks until the human
+  resigned (0-1 — the second resignation win in three full games).
+  The guard's thesis is that this state is never REACHED; this game
+  is the queen-form portrait of the dead-floor stall.
+
+The floor predicates tracked the whole arc correctly as Black (viable
+bg -> g at move 72 when the b-stock ran out, g -> none at 93; typed g
+while the light bishop lived). Next live game needs the image rebuilt
+from the guard commit — until then every game is a control.
