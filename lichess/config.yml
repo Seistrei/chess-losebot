@@ -84,7 +84,10 @@ engine:
 
   silence_stderr: false
 
-abort_time: 30
+abort_time: 120                    # Seconds before aborting a game nobody has
+                                   # moved in. The bot answers in ~1s, so this
+                                   # fuse only ever burns on the HUMAN's first
+                                   # move — give them time to read the profile.
 fake_think_time: false
 rate_limiting_delay: 0
 move_overhead: 5000                # Generous: homemade engine spikes (probe
@@ -112,7 +115,10 @@ challenge:
                                    # movetime concept, only spike caps, so
                                    # fast time controls would be all governor
                                    # and no chess.
-  max_days: 14
+  max_days: .inf                   # .inf also accepts UNLIMITED games: an
+                                   # unlimited challenge carries no days value
+                                   # and lichess-bot only admits it when
+                                   # max_days is infinite (model.py).
   min_days: 1
   variants:
     - standard                     # Misère is a GOAL, not a variant: the bot
@@ -131,9 +137,11 @@ challenge:
   max_simultaneous_games_per_user: 5
 
 greeting:
-  hello: "Hi, I'm {me} — a misère bot. I am trying to LOSE this game: my goal is to force you to checkmate me. Beating me is easy. The real challenge: try to make me WIN."
-  goodbye: "gg! Check the final position — did I earn my checkmate, or did you out-stubborn me?"
-  hello_spectators: "Hi, I'm {me} — a misère bot: I play standard chess but my goal is to get myself checkmated. Watch me try to force my own demise."
+  # Lichess chat rejects messages over 140 characters AFTER {me} expands
+  # (usernames run up to 20 chars); the smoke test enforces the budget.
+  hello: "Hi! I'm {me} — I play to LOSE. Your real challenge: don't checkmate me. Try to make me WIN!"
+  goodbye: "gg! Did I earn my checkmate, or did you out-stubborn me?"
+  hello_spectators: "Hi! I'm {me} — a misère bot: standard chess, but I'm trying to get myself checkmated."
   goodbye_spectators: "Thanks for watching my pursuit of defeat!"
 
 pgn_directory: "game_records"      # Every lichess game lands here as PGN —

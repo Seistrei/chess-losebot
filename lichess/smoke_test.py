@@ -40,6 +40,32 @@ def main() -> int:
         f"engine={conf.engine.name}; modes={conf.challenge.modes}",
     )
 
+    # 1b. Live-test regressions (2026-07-20): unlimited correspondence is
+    # only accepted at max_days == inf; the abort fuse must outlast a
+    # human reading the bot profile before their first move.
+    import math
+
+    check(
+        "unlimited correspondence is accepted and the abort fuse is humane",
+        conf.challenge.max_days == math.inf and conf.abort_time >= 120,
+        f"max_days={conf.challenge.max_days}; abort_time={conf.abort_time}",
+    )
+
+    # 1c. Lichess silently drops chat messages over 140 characters after
+    # {me} expands — and the greeting is the bot's only way to explain
+    # itself. Budget for the longest legal username (20 chars).
+    long_name = "W" * 20
+    for field in ("hello", "goodbye", "hello_spectators",
+                  "goodbye_spectators"):
+        text = getattr(conf.greeting, field).format(
+            me=long_name, opponent=long_name
+        )
+        check(
+            f"greeting.{field} fits lichess chat with a 20-char name",
+            len(text) <= 140,
+            f"{len(text)} chars",
+        )
+
     # 2. Resolve the class through the production lookup (this also pulls
     # in test_bot/homemade.py, which imports ExampleEngine from our file)
     # and instantiate it with create_engine's exact argument shape.

@@ -85,8 +85,9 @@ docker run --rm losebot pypy3 -m losebot motifs --case 3 --conversion-ms 120000
 The bot runs as a lichess BOT account through the
 [lichess-bot](https://github.com/lichess-bot-devs/lichess-bot) bridge
 (pinned in `Dockerfile.lichess`; the wrapper is `lichess/homemade.py`).
-It accepts casual standard challenges at rapid (10+0) and slower — a bot
-that plays to lose has no business in rated pools or bullet.
+It accepts casual standard challenges at rapid (10+0) and slower,
+correspondence and unlimited included — a bot that plays to lose has no
+business in rated pools or bullet.
 
 One-time setup: create an OAuth token with the `bot:play` scope on the
 (already upgraded) BOT account, then
