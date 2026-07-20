@@ -751,3 +751,54 @@ def kh_supported_files(board: chess.Board, us: chess.Color,
         if any(_same_shade(square, cage_square) for square in bishops):
             supported.append(file)
     return tuple(supported)
+
+
+def kh_onfile_files(board: chess.Board, us: chess.Color) -> tuple:
+    """The corner files whose executioner already stands ON the file.
+
+    kh_viable_files' same-file arm alone, without the donor arm. The
+    distinction is who controls the family's future: an on-file pawn
+    can only leave its file by capturing one of OUR men (a donation we
+    choose), while a donor pawn exits the window by a quiet push of
+    THEIR own — vfGeEKhy's c4 ran c5-c8=Q out of donor range in three
+    unanswerable tempi after our own 27...Rxa3+ ate its twin. On-file
+    stock is a family we hold; donor-only stock is a family they lend.
+    """
+    them = not us
+    pawns = board.pieces(chess.PAWN, them)
+    if not pawns:
+        return ()
+    files = []
+    for file in (1, 6):
+        for square in pawns:
+            if chess.square_file(square) != file:
+                continue
+            rank = chess.square_rank(square)
+            if (rank >= 2 if them == chess.BLACK else rank <= 5):
+                files.append(file)
+                break
+    return tuple(files)
+
+
+def kh_floor_tier(board: chess.Board, us: chess.Color) -> int:
+    """The construction floor's stock class: 2 on-file, 1 donor-only, 0 none.
+
+    Tier 2: some supported family's executioner stands on its file —
+    the family survives every quiet move they make. Tier 1: every
+    supported family rests on donor pawns alone — one quiet push of
+    theirs per donor and the family is gone. Tier 0: no supported
+    family at all. The donation guard's type floor forbids our moves
+    (and the replies they invite) from DROPPING the tier: vfGeEKhy's
+    24...Bb7 gave up the light bishop — the on-file g-family's cage —
+    because the donor-only b-family still counted as support, and the
+    game died 2 -> 1 -> 0 over the next 23 moves without the opponent
+    ever accepting another gift.
+    """
+    viable = kh_viable_files(board, us)
+    if not viable:
+        return 0
+    supported = kh_supported_files(board, us, viable)
+    if not supported:
+        return 0
+    onfile = kh_onfile_files(board, us)
+    return 2 if any(file in onfile for file in supported) else 1

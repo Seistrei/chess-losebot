@@ -137,11 +137,18 @@ class EngineProfile:
     # non-strip move that lets a reply eat one; strip captures of their
     # mobile pieces are exempt, so 65.Qxh1 stays model-consistent). The
     # floor_* eval terms are the search-side gradient for the same
-    # facts, priced at the boundary only. All zero-defaulted: every
-    # existing profile, battery, and reference stays byte-identical;
-    # FIELD carries the live values.
+    # facts, priced at the boundary only. Family selection (2026-07-20):
+    # the type floor is TIERED by stock class — on-file executioners
+    # outrank donor-only families, whose pawns exit the capture window
+    # by a quiet push of their own (vfGeEKhy: 24...Bb7 spent the
+    # on-file g-family's cage bishop because donor-only b still counted
+    # as support; the donors then died to our own strip and a c4-c8=Q
+    # train) — and floor_donor_bonus is the lower price a donor-only
+    # floor earns. All zero-defaulted: every existing profile, battery,
+    # and reference stays byte-identical; FIELD carries the live values.
     donation_guard: bool = False
     floor_supported_bonus: float = 0.0
+    floor_donor_bonus: float = 0.0
     floor_family_bonus: float = 0.0
     floor_herder_bonus: float = 0.0
 
@@ -337,6 +344,14 @@ FIELD = replace(
     # scale is 0.90 * 900 = 810, so a leaf where the floor fell prices
     # worse than any capture that spent it.
     floor_supported_bonus=900.0,
+    # Donor-only support is half a floor: real (R9tSLBLK's a6 became
+    # the b3 executioner via 57...axb4) but revocable — every donor is
+    # one quiet push of theirs from leaving the capture window, and
+    # vfGeEKhy's c4 did exactly that. The 450 tier gap outprices any
+    # minor at strip scale (288), so no piece win buys the on-file
+    # family's kit, while their queen (810) still does: the strip must
+    # finish, and the filter's type arm polices which piece pays.
+    floor_donor_bonus=450.0,
     # Narrowing to one supported family outbids a generic executioner
     # file (40) but yields to a piece win (their minor at strip scale
     # is 288): the light bishop may buy their knight, never their pawn.

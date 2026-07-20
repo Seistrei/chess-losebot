@@ -38,6 +38,8 @@ from .templates import (
     best_pawn_mate_template,
     free_piece_count,
     kh_bishop_distance,
+    kh_floor_tier,
+    kh_onfile_files,
     kh_supported_files,
     kh_viable_files,
     pawn_mate_templates,
@@ -602,11 +604,16 @@ class LoseBot:
 
         - TYPE: with a supported family in hand (knight closer plus
           cage-shade bishop for some viable file), never a move that
-          leaves none — neither by our own capture eating the last
-          family's pawn stock (the 59.Qxb3+ shape) nor through any
-          immediate reply that recaptures the last role piece (21.Nxd4
-          cxd4 spent the final closer on a strip the queen could have
-          made later).
+          drops the floor TIER (kh_floor_tier: on-file support outranks
+          donor-only support outranks nothing) — neither by our own
+          capture eating the family's pawn stock (the 59.Qxb3+ shape,
+          and its tier-level analog: eating their last on-file
+          executioner while only donors remain) nor through any
+          immediate reply that recaptures a role piece (21.Nxd4 cxd4
+          spent the final closer on a strip the queen could have made
+          later; vfGeEKhy's 24...Bb7 Bxb7 spent the on-file g-family's
+          cage bishop because the donor-only b-family still counted —
+          two donors our own strip then ate and outran).
         - COUNT: at or below three free pieces — cage + closer + herder,
           the minimum ANY family needs — never a non-strip move that
           lets a reply eat one (45.Rb5+ Kxb5, 48.Bb2+ Kxb2). Captures of
@@ -630,6 +637,11 @@ class LoseBot:
         if not viable:
             return moves
         typed = kh_supported_files(board, us, viable)
+        onfile = kh_onfile_files(board, us)
+        tier = (
+            2 if any(file in onfile for file in typed)
+            else 1 if typed else 0
+        )
         free = free_piece_count(board, us)
         kept: list[chess.Move] = []
         for move in moves:
@@ -649,11 +661,13 @@ class LoseBot:
                 continue
             board.push(move)
             ok = True
-            if typed and not kh_supported_files(board, us):
-                # Our own move erased every supported family: only a
-                # capture of their executioner material can do that (our
-                # role pieces do not vanish by moving), so this arm is
-                # the Qxb3 veto.
+            if typed and kh_floor_tier(board, us) < tier:
+                # Our own move dropped the floor tier: only a capture of
+                # their executioner material can do that (our role
+                # pieces do not vanish by moving), so this arm is the
+                # Qxb3 veto — and, tier-aware, its donor-family analog:
+                # eating their last on-file pawn while only lent donor
+                # stock remains is a downgrade, not a wash.
                 ok = False
             if ok:
                 for reply in board.legal_moves:
@@ -671,10 +685,13 @@ class LoseBot:
                     ):
                         # A role piece dies, or their capturer is a pawn
                         # changing files (which can move their own
-                        # executioner stock): recheck the type floor on
+                        # executioner stock): recheck the floor tier on
                         # the position their reply actually leaves.
+                        # 24...Bb7 Bxb7 fails here now — the donor-only
+                        # b-family that survives it is tier 1 against
+                        # the on-file g-family's tier 2.
                         board.push(reply)
-                        if not kh_supported_files(board, us):
+                        if kh_floor_tier(board, us) < tier:
                             ok = False
                         board.pop()
                     if not ok:

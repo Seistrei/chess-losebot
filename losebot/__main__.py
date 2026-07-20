@@ -3204,6 +3204,8 @@ def selftest() -> int:
     # the strip exemption, and the zero-knob gates are all pinned here.
     from .templates import (
         free_piece_count as _free_count,
+        kh_floor_tier as _floor_tier,
+        kh_onfile_files as _onfile_files,
         kh_supported_files as _supported_files,
         kh_viable_files as _viable_files,
     )
@@ -3292,6 +3294,7 @@ def selftest() -> int:
     silent_field = _replace(
         field_profile,
         floor_supported_bonus=0.0,
+        floor_donor_bonus=0.0,
         floor_family_bonus=0.0,
         floor_herder_bonus=0.0,
     )
@@ -3367,6 +3370,143 @@ def selftest() -> int:
         gate_result is gate_moves and gate_bot.donation_vetoes == 0,
         f"identity={gate_result is gate_moves};"
         f" vetoes={gate_bot.donation_vetoes}",
+    )
+
+    # 29. Family selection: the floor is tiered by stock class. vfGeEKhy
+    # kept A toolkit while donating THE toolkit — 24...Bb7 spent the
+    # on-file g-family's cage bishop because the donor-only b-family
+    # (a3/c4) still counted as support; our own 27...Rxa3+ then ate one
+    # donor, the other ran c5-c8=Q out of the capture window, and the
+    # game dance-drew 138 certified-dead moves with a g5 executioner
+    # posed against the wrong-shade bishop. On-file support (tier 2) is
+    # ours to lose — the pawn leaves its file only by capturing one of
+    # our men; donor-only support (tier 1) is theirs to revoke by one
+    # quiet push. The type veto forbids dropping the tier; the eval
+    # prices the gap.
+
+    # 29a. The tier predicates on the pinned game positions: the
+    # vfGeEKhy move-24 pose is tier 2 (on-file g3/g4 against donor-only
+    # a3/c4, both families typed) and one Bb7 Rxb7 exchange later it is
+    # tier 1; counter_59's posed b3 executioner is tier 2; dead_59 and
+    # the R9tSLBLK move-45 pose have no typed family at all.
+    family_24 = chess.Board(
+        "rnb5/p2pkp1p/4r3/2b1P3/2P1PBP1/P4KP1/7P/1R5R b - - 2 24"
+    )
+    family_after = family_24.copy()
+    family_after.push_uci("c8b7")
+    family_after.push_uci("b1b7")
+    check(
+        "floor tiers: on-file outranks donor-only outranks nothing",
+        _onfile_files(family_24, chess.BLACK) == (6,)
+        and _viable_files(family_24, chess.BLACK) == (1, 6)
+        and _supported_files(family_24, chess.BLACK) == (1, 6)
+        and _floor_tier(family_24, chess.BLACK) == 2
+        and _floor_tier(family_after, chess.BLACK) == 1
+        and _floor_tier(counter_59, chess.WHITE) == 2
+        and _floor_tier(dead_59, chess.WHITE) == 0
+        and _floor_tier(donation_45, chess.WHITE) == 0,
+        f"onfile24={_onfile_files(family_24, chess.BLACK)} (want g);"
+        f" tier24={_floor_tier(family_24, chess.BLACK)} (want 2);"
+        f" after-Bxb7={_floor_tier(family_after, chess.BLACK)} (want 1);"
+        f" counter59={_floor_tier(counter_59, chess.WHITE)} (want 2);"
+        f" dead59={_floor_tier(dead_59, chess.WHITE)};"
+        f" move45={_floor_tier(donation_45, chess.WHITE)} (want 0s)",
+    )
+
+    # 29b. The log's acceptance test for family selection: at the
+    # move-24 pose, Bb7 must price or veto as donating the live
+    # g-family's cage. The guard does more than veto it: the pose has a
+    # standing Rxb8 threat on the closer, and the survivors are exactly
+    # the five answers that meet it at tier 2 — the knight steps out or
+    # the b-file is blocked with b-family or count material, never with
+    # the g-family's light bishop. Bb7, the played move, blocked with
+    # the wrong bishop and 25.Rxb7 collected it.
+    vetoes_before_24 = field_bot.donation_vetoes
+    family_kept = field_bot._filter_donation_guard(
+        family_24, list(family_24.legal_moves)
+    )
+    check(
+        "family selection: 24...Bb7 is vetoed, the tier-2 answers survive",
+        chess.Move.from_uci("c8b7") not in family_kept
+        and sorted(m.uci() for m in family_kept)
+        == ["b8a6", "b8c6", "c5b4", "c5b6", "e6b6"]
+        and field_bot.donation_vetoes - vetoes_before_24 == 26,
+        f"kept={sorted(family_24.san(m) for m in family_kept)}"
+        f" (want Bb4 Bb6 Na6 Nc6 Rb6, no Bb7);"
+        f" vetoes+={field_bot.donation_vetoes - vetoes_before_24}",
+    )
+
+    # 29c. The freedom the tier preserves: donor-only kit is spendable
+    # while an on-file family stands. Same stock shape as move 24 —
+    # on-file g against donor-only b — but clean of side threats:
+    # hanging the b-family's light bishop to the d8 rook keeps tier 2
+    # and passes; hanging the g-family's dark bishop is the Bb7 shape
+    # and fails; a quiet rook move passes.
+    family_free = chess.Board("3r4/7k/8/8/p1B3p1/4B3/8/RN2K3 w - - 0 1")
+    free_kept = field_bot._filter_donation_guard(
+        family_free,
+        [
+            chess.Move.from_uci("e3d4"),
+            chess.Move.from_uci("c4d5"),
+            chess.Move.from_uci("a1a2"),
+        ],
+    )
+    check(
+        "tier floor: the donor family's bishop is spendable, the on-file"
+        " family's is not",
+        free_kept
+        == [chess.Move.from_uci("c4d5"), chess.Move.from_uci("a1a2")],
+        f"kept={[family_free.san(m) for m in free_kept]}"
+        f" (want Bd5 Ra2: Bd4 hangs the g-cage to Rxd4)",
+    )
+
+    # 29d. The Qxb3 shape one tier up: eating their last ON-FILE
+    # executioner while only donor stock remains is a self-inflicted
+    # downgrade (Rxg4 leaves the lent h4 pawn as the whole g-family),
+    # while eating the donor under on-file cover is priced, not vetoed
+    # (Rxh4 keeps tier 2), and the quiet control passes.
+    family_stock = chess.Board("8/7k/8/8/R5pp/8/8/1NB1K2R w - - 0 1")
+    stock_kept = field_bot._filter_donation_guard(
+        family_stock,
+        [
+            chess.Move.from_uci("a4g4"),
+            chess.Move.from_uci("h1h4"),
+            chess.Move.from_uci("b1c3"),
+        ],
+    )
+    check(
+        "tier floor: on-file stock is not food while only donors remain",
+        stock_kept
+        == [chess.Move.from_uci("h1h4"), chess.Move.from_uci("b1c3")],
+        f"kept={[family_stock.san(m) for m in stock_kept]}"
+        f" (want Rxh4 Nc3: Rxg4 trades tier 2 for tier 1)",
+    )
+
+    # 29e. The eval prices the tier gap: same kit, on-file g4 pose
+    # carries the full supported bonus, the donor-only h4 pose carries
+    # the donor bonus, and the 450 gap is the family-selection gradient
+    # (above any minor at strip scale, below their queen — the strip
+    # still finishes). vi evaluates the tier-1 pose byte-identically to
+    # the silenced field, so the donor knob is gated with the rest.
+    family_tier1 = chess.Board("8/7k/8/8/R6p/8/8/1NB1K2R w - - 0 1")
+    tier2_delta = _evaluate(
+        family_stock, chess.WHITE, "zach", field_profile
+    ) - _evaluate(family_stock, chess.WHITE, "zach", silent_field)
+    tier1_delta = _evaluate(
+        family_tier1, chess.WHITE, "zach", field_profile
+    ) - _evaluate(family_tier1, chess.WHITE, "zach", silent_field)
+    vi_matches_tier1 = _evaluate(
+        family_tier1, chess.WHITE, "zach", PROFILES["vi"]
+    ) == _evaluate(family_tier1, chess.WHITE, "zach", silent_field)
+    check(
+        "the eval floor is tiered: 900 on-file, 450 donor-only, gap 450",
+        tier2_delta == 1200.0
+        and tier1_delta == 750.0
+        and tier2_delta - tier1_delta == 450.0
+        and vi_matches_tier1,
+        f"tier2-delta={tier2_delta} (want 900+300);"
+        f" tier1-delta={tier1_delta} (want 450+300);"
+        f" vi==silent-field {vi_matches_tier1}",
     )
 
     # 13. A promoted piece means the king-and-pawns phase has ended. The

@@ -19,6 +19,7 @@ from .templates import (
     best_pawn_mate_template,
     herding_metrics,
     kh_bishop_distance,
+    kh_onfile_files,
     kh_supported_files,
     kh_viable_files,
 )
@@ -78,9 +79,18 @@ def evaluate(board: chess.Board, root_color: chess.Color,
     # boundary carries gradient. Adversarial opponent nodes make the
     # boundary visible: the leaf after their recapture shows the floor
     # fallen, which the Zach arena — where no capture ever lands —
-    # never once priced.
+    # never once priced. The support bonus is TIERED by stock class:
+    # a family whose executioner stands on its file is ours to lose,
+    # a donor-only family is theirs to revoke by one quiet push
+    # (vfGeEKhy bet the estate on donors a3/c4 at 24...Bb7 and watched
+    # c4 run c5-c8=Q out of the window), so donor-only support prices
+    # at the lower knob — and the tier gap, not the filter, is what
+    # reaches donation channels the piece-scoped veto never scans,
+    # like baiting their on-file executioner into capturing our pawn
+    # off the file.
     if (
         profile.floor_supported_bonus
+        or profile.floor_donor_bonus
         or profile.floor_family_bonus
         or profile.floor_herder_bonus
     ):
@@ -88,7 +98,11 @@ def evaluate(board: chess.Board, root_color: chess.Color,
         if viable:
             supported = kh_supported_files(board, us, viable)
             if supported:
-                v += profile.floor_supported_bonus
+                onfile = kh_onfile_files(board, us)
+                if any(file in onfile for file in supported):
+                    v += profile.floor_supported_bonus
+                else:
+                    v += profile.floor_donor_bonus
                 v += profile.floor_family_bonus * (len(supported) - 1)
             if our_pieces >= 3:
                 v += profile.floor_herder_bonus

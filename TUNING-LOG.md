@@ -2630,3 +2630,115 @@ renewal-captures=1. The endgame drills cannot see the eval change
 (their_pieces > 0 gate; the drills start at king+pawns), so only
 strip-phase play on positions with a spent b/g pawn moves — the leak
 the fix exists to close.
+
+## Family selection: the floor is tiered by stock class (2026-07-20)
+
+vfGeEKhy's finding, taken. The donation guard held the floor all game
+— never below three free pieces, typed support to the end — but it
+held A toolkit, not THE toolkit. At move 24 the pose carried on-file
+executioners g3/g4 (their pawns, which leave the g-file only by
+capturing one of our men — a donation we would have to choose)
+against a donor-only b-family (a3/c4, each one quiet push of THEIRS
+from exiting the capture window), and the guard passed 24...Bb7
+because after 25.Rxb7 the donor-only family still counted as support.
+Our own 27...Rxa3+ then ate one donor, 44.c5-47.c8=Q ran the other
+out of the window, and the game dance-drew 138 certified-dead moves
+with a g5 executioner posed against the wrong-shade bishop.
+
+The fix names what the old floor could not: stock class.
+
+- templates.py: `kh_onfile_files` (kh_viable_files' same-file arm
+  alone, without the donor arm) and `kh_floor_tier` — 2 while some
+  supported family's executioner stands on its file, 1 while every
+  supported family rests on lent donor pawns, 0 with no supported
+  family at all. On-file stock is a family we hold; donor-only stock
+  is a family they lend.
+- bot.py: the type arm of `_filter_donation_guard` vetoes tier DROPS
+  instead of support extinction — the trigger structure is unchanged
+  (self-break check after our own move, the one-reply recapture
+  scan), only the predicate tightened. The Qxb3 shape gains its
+  tier-level analog: eating their last on-file executioner while only
+  donor stock remains is a 2 -> 1 downgrade, vetoed, where the old
+  floor saw support surviving and shrugged.
+- heuristics.py + profiles.py: the supported bonus splits by tier.
+  `floor_supported_bonus` (900) now prices on-file support only; the
+  new zero-defaulted `floor_donor_bonus` (450) prices donor-only
+  support. The 450 gap outbids any minor at strip scale (288), so no
+  piece win buys the on-file family's kit, while their queen (810)
+  still does — the strip must finish, and the filter's type arm
+  polices which piece pays. The gap also reaches a donation channel
+  the piece-scoped filter never scans: baiting their on-file
+  executioner into capturing our PAWN off the file is invisible to
+  the veto (pawn victims are not floor material) but now prices as a
+  tier drop at the adversarial leaf.
+
+At the move-24 pose the fix does something better than veto one move.
+The pose had a standing Rxb8 threat on the closer all along; the old
+guard funneled 31 legal moves to 6 survivors and the bot picked the
+one that paid with the wrong coin. The new guard funnels to 5 — Na6,
+Nc6 (the closer steps out), Bb4, Bb6, Rb6 (the b-file blocked with
+b-family or count material) — every one an answer to the threat that
+keeps tier 2. Bb7 was the sixth: a b-file block that spent the
+g-family's cage to buy the donor-only b-family's future.
+
+Verification:
+
+- selftest 97/97 (was 92). 29a pins the tier predicates on the game
+  poses (move-24 = 2, one Bb7 Rxb7 exchange later = 1, counter_59's
+  posed executioner = 2, dead_59 and R9tSLBLK move-45 = 0). 29b is
+  the log's own acceptance test: at the move-24 pose 24...Bb7 is
+  vetoed and the five tier-2 answers are the exact survivor set (26
+  vetoes counted). 29c pins the freedom the tier preserves: the donor
+  family's bishop is spendable at tier 2, the on-file family's is
+  not. 29d pins the Qxb3 donor analog: Rxg4 (last on-file pawn,
+  donors remain) vetoed, Rxh4+ (the donor, on-file cover holds) kept.
+  29e pins the eval gap: 1200 vs 750 through a silenced field profile
+  (900+300 herder vs 450+300), and vi evaluates the tier-1 pose
+  byte-identically to silenced field, so the donor knob gates with
+  the rest.
+- vfGeEKhy replayed through the new filter: across all 183 played
+  Black moves exactly ONE verdict changes — 24...Bb7, VETOED. The
+  move-40 rook loss stays allowed (the count floor's designed
+  fourth-piece boundary), the move-136 rook loss stays allowed (tier
+  0 by then; the guard is honestly inert once the floor is gone).
+  The R9tSLBLK acceptance pair is count-arm work and unchanged;
+  65.Qxh1 is unchanged (their queen is not executioner stock).
+- Full reference battery vs bf97462, both sides run fresh in the same
+  pypy3 image: case-2 seed-5, case-6/7/8 seeds 0-9, and motifs — all
+  32 stdouts byte-identical modulo wall-clock tokens ([Ns], build=Nms,
+  motifs' bare NNNms), with case-8 seed-0 replaying its pinned
+  reference (stalemate@51, releases=2, renewal-captures=1). Identity
+  is by construction (the donor knob zero-defaults, the filter change
+  sits behind donation_guard) and now by measurement.
+
+Of the finding's three directions this takes the first two: stock-
+quality weighting is the tiered eval, and the free-donation arm is
+the tier veto (the recapture scan already reached Bxb7; only the
+predicate was blind). Donor-range tapering — gradient WITHIN tier 1
+as donors dwindle, advance, or stand blocked — is deliberately NOT
+taken: the tier fix removes the estate-bet that made the c4 train
+fatal, the boundary where a donor family dies outright was always
+priced at the adversarial leaf, and a finer donor-count gradient
+needs corpus evidence before it earns a knob. It moves to the watch
+list below.
+
+The field-frontier list now reads (supersedes the vfGeEKhy list):
+
+1. **Pin a field baseline battery**: the field profile now diverges
+   from vi by design (the guard filters, the floor prices), so the
+   drills need field-profile reference numbers of their own, plus a
+   field-vs-Zach arena A/B to measure what the floor costs against
+   the opponent that never punishes. Do this BEFORE the next tuning
+   round touches a field knob — today the selftest poses are the only
+   pinned field behavior.
+2. **The sloppy-human opponent model** (strip/midgame scope only; vi
+   herding stays Zach-scoped — the frozen-statics premise breaks
+   under capturing kernels).
+3. **Corpus protocol continues**: every game in
+   `lichess/game_records/` gets its replay-through-the-filter read
+   and lands here. Watch items for the next accepting human: does the
+   tier hold the right family under pressure; does donor-range
+   tapering earn its knob (a tier-1 game that dies to a donor train
+   the way vfGeEKhy did); and the standing one — a human who keeps
+   their b/g pawns, because the corner construction has still never
+   posed against a live opponent.
