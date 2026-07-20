@@ -2742,3 +2742,90 @@ The field-frontier list now reads (supersedes the vfGeEKhy list):
    the way vfGeEKhy did); and the standing one — a human who keeps
    their b/g pawns, because the corner construction has still never
    posed against a live opponent.
+
+### IYQd0RBC: the tier's first live game — the right toolkit held, and the corner finally spoke (2026-07-20)
+
+Timeline: tier-aware images built 08:50:45Z, game started 08:54:56Z —
+this one genuinely ran the family-selection build. Rapid 10+0, the
+human (White) played a normal game into the anti-losebot corner
+shuffle; fifty-move draw at move 128 (the counter runs exactly from
+78.Kxh6).
+
+The material story is vfGeEKhy inverted — the tier did its job:
+
+- 6...Bxc3 spent the DARK bishop on a knight strip at tier 2, and
+  7.bxc3 pulled their b2 pawn off its file in the same exchange: the
+  b-kit traded for b-stock plus a piece while the g-family stayed
+  whole. 36...Rh1+ spent the fourth piece at the count floor's
+  designed boundary; free pegged at exactly 3 from move 37 to the
+  end. Both promoted queens and the rook died to role pieces free of
+  recapture (60...Bxd7, 61...Nxb7, 73...Bxf1).
+- The promotion train came unprompted: the a-donor and the on-file
+  b-pawn both ran out of the capture window and promoted (53.b7,
+  56.a8=Q, 57.b8=Q+) — the b-family evaporated by THEIR quiet pushes
+  exactly as the tier doctrine describes, and the bot anchored on g
+  and kept the light bishop. Replay: ZERO played-move vetoes, tier 2
+  from move 1 to move 128 without a break.
+- Final 50 moves: White K + g6 pawn vs our R + light B + N — the
+  FIRST live arrival at the corner scenario in project history. Their
+  king squatting h6-h8, our knight frozen on g7, our king chained to
+  f6-f8. No mate net ever posed.
+
+The probe findings (offline, bridge-identical params, plus the
+replay): this was NOT blindness. Templates emit at every late pose —
+best = g6/kh, arrival g7, checked h8, king_steps=1, def_steps=0 (the
+human's corner squat does the herding half for free) — a cold bot
+commits the plan instantly, and the live shuffle moves (Bf5, Rf8,
+Re8, Be6...) are the plan-follower's own choices. The stall is square
+contention:
+
+- Their Kh7/Kh8 attack BOTH g8 (the cage square) and g7 (the
+  arrival); Kh6 attacks g7. The 48-move h6-h7 shuffle denied the
+  arrival 100% of the time and the cage half of it — and a cage
+  landing on an h6-ply hangs to the next Kh7, which the donation
+  guard correctly vetoes (the per-pose donation_vetoes are exactly
+  those hangs). The construction's placements were Zach-immune by
+  assumption; the guard now enforces what a capturing human makes
+  true, so the old build order cannot run while the king patrols.
+- Our knight sits ON the arrival (79...Ng7+ froze the pawn
+  expediently): arr_blocked on every template. It freezes the
+  executioner (good), blocks the king-hold (fatal), and shields h7
+  from rank-7 rook rakes (a gift to the shuffler). The guard chains
+  the king to its defense — Ke7/Ke6/Kf5/Ke5 all vetoed (abandoning
+  g7 hands over the closer), Bxg6 vetoed (the executioner is not
+  food) — the floor working exactly as built, protecting a toolkit
+  the choreography cannot cash.
+- The drills never produced this shape: they freeze with pawn
+  statics and park the closer on c8/f8-class squares.
+  Freeze-by-closer-on-the-arrival has no handoff move — the knight
+  must leave g7 exactly one ply before the king arrives, and the gap
+  donates the g7-push promotion unless the knight's exit CHECKS
+  (the Nf5+ tempo class no chore filter encodes).
+
+The finding, named: **corner choreography vs corner-squatting
+humans**. A mate-avoidant human squats the construction zone itself
+— def_steps=0 for free, but the cage and arrival squares are denied.
+The validated build order (cage, closer, march, vacate) assumes an
+enterable zone; the missing phase is EVICTION-THEN-READMISSION —
+herd their king OUT of the pocket first (R+B+N vs a bare king is
+overwhelming rake force), place the furniture, then re-admit him to
+the defense post he wants anyway — an inverse-herding goal no drill
+has posed, plus the arrival handoff once the zone is clear.
+
+The field-frontier list reorders (supersedes the list above):
+
+1. **Corner choreography vs corner-squatting humans**: the eviction
+   goal (their king OUT of the pocket while the furniture lands),
+   the closer-on-arrival handoff (check-tempo exit), and a drill
+   that starts from IYQd0RBC's final shape — White Kh8+Pg6 vs
+   R+light-B+N, knight on g7. Acceptance: from that start, the
+   construction poses and g7# lands against the h6-h8 shuffle
+   kernel.
+2. **Pin a field baseline battery** before the next field-knob
+   change (unchanged; the selftest poses are still the only pinned
+   field behavior).
+3. **The sloppy-human opponent model** (strip/midgame scope only).
+4. **Corpus protocol continues.** The standing acceptance test has
+   EVOLVED: "a human who keeps their b/g pawns" has now happened —
+   the new standing test is the corner POSING and the mate LANDING
+   against a live opponent.
