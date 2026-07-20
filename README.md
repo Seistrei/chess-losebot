@@ -80,6 +80,47 @@ docker run --rm losebot pypy3 -m losebot motifs
 docker run --rm losebot pypy3 -m losebot motifs --case 3 --conversion-ms 120000
 ```
 
+## Play against it on lichess
+
+The bot runs as a lichess BOT account through the
+[lichess-bot](https://github.com/lichess-bot-devs/lichess-bot) bridge
+(pinned in `Dockerfile.lichess`; the wrapper is `lichess/homemade.py`).
+It accepts casual standard challenges at rapid (10+0) and slower — a bot
+that plays to lose has no business in rated pools or bullet.
+
+One-time setup: create an OAuth token with the `bot:play` scope on the
+(already upgraded) BOT account, then
+
+```powershell
+copy lichess\lichess.env.example lichess\lichess.env
+# paste the token into lichess\lichess.env (gitignored — never commit it)
+```
+
+Build and run (the bridge image builds on the engine image and smoke-tests
+the wrapper offline during the build):
+
+```powershell
+docker build -t losebot .
+docker build -f Dockerfile.lichess -t losebot-lichess .
+
+docker run --rm --env-file lichess/lichess.env `
+  -v "D:\ChessLosebot\lichess\game_records:/opt/lichess-bot/game_records" `
+  losebot-lichess
+```
+
+The account is challengeable while that container runs; Ctrl-C finishes
+running games first. Every game is archived as PGN in
+`lichess/game_records/` — real mate-avoidant opponents are tuning data the
+Zach clone cannot generate.
+
+Engine selection on lichess defaults to the generalist: `current` profile,
+no opponent model, so forced-selfmate probes prove against ANY reply. The
+Zach-tuned machinery stays available deliberately
+(`LOSEBOT_PROFILE=vi LOSEBOT_MODEL=zach` in `lichess/lichess.env`), but
+remember its certificates assume the Zach kernel — humans are off-model.
+A small governor in the wrapper clamps probe/build budgets as the clock
+shrinks; the engine itself has no movetime concept.
+
 ## How LoseBot works
 
 1. **Never** delivers mate or stalemate if any alternative exists.
@@ -171,4 +212,5 @@ herd, and audited-race machinery finishes the game.
 
 - v1: add Fairy-Stockfish with a `[misere:chess] checkmateValue = win` variant
   as a deep tactical oracle for forced selfmate nets.
-- Lichess BOT bridge (lichess-bot) — there is currently no misère bot there.
+- ~~Lichess BOT bridge (lichess-bot)~~ — done; see *Play against it on
+  lichess*. Still the only misère bot there, as far as we know.

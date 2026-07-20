@@ -1,2 +1,6 @@
 __pycache__/
 *.py[cod]
+
+# The lichess OAuth token and downloaded game records stay out of git.
+lichess/lichess.env
+lichess/game_records/

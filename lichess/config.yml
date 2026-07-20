@@ -1,0 +1,145 @@
+# lichess-bot configuration for ChessLosebot.
+#
+# The real OAuth token is NEVER written here: lichess-bot reads the
+# LICHESS_BOT_TOKEN environment variable, which overrides this field.
+# Put the token in lichess/lichess.env (gitignored) and pass it with
+# `docker run --env-file lichess/lichess.env ...`.
+token: "xxxxxxxxxxxxxxxxxxxxxx"
+url: "https://lichess.org/"
+
+engine:
+  dir: "./engines/"
+  name: "LoseBotEngine"            # Class name in homemade.py.
+  protocol: "homemade"
+  debug: False
+  working_dir: ""
+  ponder: false                    # LoseBot does not think on opponent time.
+
+  polyglot:
+    enabled: false                 # An opening book would only help it win.
+    book:
+      standard:
+        - engines/book1.bin
+
+  draw_or_resign:
+    resign_enabled: false          # Resigning is losing the boring way; the
+    resign_score: -1000            # bot wants to be CHECKMATED, so it never
+    resign_moves: 3                # resigns and never touches draws.
+    resign_for_egtb_minus_two: false
+    offer_draw_enabled: false      # A draw denies the loss. Never offer,
+    offer_draw_score: 0            # never accept.
+    offer_draw_moves: 10
+    offer_draw_for_egtb_zero: false
+    offer_draw_pieces: 10
+
+  online_moves:
+    max_out_of_book_moves: 10
+    max_retries: 2
+    chessdb_book:
+      enabled: false
+      min_time: 20
+      max_time: 10800
+      move_quality: "good"
+      min_depth: 20
+    lichess_cloud_analysis:
+      enabled: false
+      min_time: 20
+      max_time: 10800
+      move_quality: "best"
+      max_score_difference: 50
+      min_depth: 20
+      min_knodes: 0
+    lichess_opening_explorer:
+      enabled: false
+      min_time: 20
+      max_time: 10800
+      source: "masters"
+      player_name: ""
+      sort: "winrate"
+      min_games: 10
+    online_egtb:
+      enabled: false
+      min_time: 20
+      max_time: 10800
+      max_pieces: 8
+      source: "lichess"
+      move_quality: "best"
+
+  lichess_bot_tbs:
+    syzygy:
+      enabled: false
+      paths:
+        - "engines/syzygy"
+      max_pieces: 7
+      move_quality: "best"
+    gaviota:
+      enabled: false
+      paths:
+        - "engines/gaviota"
+      max_pieces: 5
+      min_dtm_to_consider_as_wdl_1: 120
+      move_quality: "best"
+
+  homemade_options:
+
+  silence_stderr: false
+
+abort_time: 30
+fake_think_time: false
+rate_limiting_delay: 0
+move_overhead: 5000                # Generous: homemade engine spikes (probe
+                                   # bursts, VI builds) plus network.
+max_takebacks_accepted: 0
+quit_after_all_games_finish: true  # Ctrl-C finishes running games first.
+
+correspondence:
+  move_time: 60
+  checkin_period: 300
+  disconnect_time: 150
+  ponder: false
+
+challenge:
+  concurrency: 1                   # One game at a time: probe bursts and VI
+  games_reserved_for_humans: 0     # builds want the whole CPU.
+  sort_by: "best"
+  preference: "none"
+  accept_bot: true                 # Bot-vs-bot misère games are content too.
+  only_bot: false
+  max_increment: 180
+  min_increment: 0
+  max_base: 10800
+  min_base: 600                    # 10+0 rapid and slower: the engine has no
+                                   # movetime concept, only spike caps, so
+                                   # fast time controls would be all governor
+                                   # and no chess.
+  max_days: 14
+  min_days: 1
+  variants:
+    - standard                     # Misère is a GOAL, not a variant: the bot
+                                   # plays standard chess and steers it into
+                                   # its own checkmate.
+  time_controls:
+    - rapid
+    - classical
+    - correspondence
+  modes:
+    - casual                       # Casual ONLY. A bot that plays to lose
+                                   # rated games is sandbagging; per the
+                                   # lichess-bot docs, rated requires an
+                                   # engine that tries to win.
+  bullet_requires_increment: false
+  max_simultaneous_games_per_user: 5
+
+greeting:
+  hello: "Hi, I'm {me} — a misère bot. I am trying to LOSE this game: my goal is to force you to checkmate me. Beating me is easy. The real challenge: try to make me WIN."
+  goodbye: "gg! Check the final position — did I earn my checkmate, or did you out-stubborn me?"
+  hello_spectators: "Hi, I'm {me} — a misère bot: I play standard chess but my goal is to get myself checkmated. Watch me try to force my own demise."
+  goodbye_spectators: "Thanks for watching my pursuit of defeat!"
+
+pgn_directory: "game_records"      # Every lichess game lands here as PGN —
+pgn_file_grouping: "game"          # real mate-avoidant humans are tuning data
+                                   # the Zach clone cannot generate.
+
+matchmaking:
+  allow_matchmaking: false         # Never seeks games on its own; it waits to
+                                   # be challenged.

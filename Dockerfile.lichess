@@ -1,0 +1,37 @@
+# The lichess BOT bridge image. Build the engine base image first:
+#
+#   docker build -t losebot .
+#   docker build -f Dockerfile.lichess -t losebot-lichess .
+#
+# Run (the OAuth token lives in lichess/lichess.env, never in git):
+#
+#   docker run --rm --env-file lichess/lichess.env `
+#     -v "D:\ChessLosebot\lichess\game_records:/opt/lichess-bot/game_records" `
+#     losebot-lichess
+FROM losebot
+
+# Pinned lichess-bot commit (https://github.com/lichess-bot-devs/lichess-bot).
+# The project stopped tagging releases years ago (the newest tag, 1.1.3, pins
+# python-chess 0.24 — installing it would clobber the modern `chess` package
+# the engine needs), so the pin is a master commit SHA. Bump deliberately.
+ARG LICHESS_BOT_REF=36ba4575b3299646956c911b11487b1c348f4b0c
+ADD https://github.com/lichess-bot-devs/lichess-bot/archive/${LICHESS_BOT_REF}.tar.gz /tmp/lichess-bot.tar.gz
+RUN tar -xzf /tmp/lichess-bot.tar.gz -C /opt \
+ && mv /opt/lichess-bot-${LICHESS_BOT_REF} /opt/lichess-bot \
+ && rm /tmp/lichess-bot.tar.gz \
+ && pypy3 -m pip install --no-cache-dir -r /opt/lichess-bot/requirements.txt \
+ && mkdir -p /opt/lichess-bot/engines /opt/lichess-bot/game_records
+
+WORKDIR /opt/lichess-bot
+
+# The losebot package lives in /app (base image); make it importable here.
+ENV PYTHONPATH=/app
+
+COPY lichess/config.yml ./config.yml
+COPY lichess/homemade.py ./homemade.py
+COPY lichess/smoke_test.py ./smoke_test.py
+
+# Fail the build if the bridge cannot drive the engine offline.
+RUN pypy3 smoke_test.py
+
+CMD ["pypy3", "lichess-bot.py"]
