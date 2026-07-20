@@ -23,6 +23,47 @@ class ZachBot:
         return self.rng.choice(pool)
 
 
+class CornerSquatBot:
+    """The anti-losebot corner shuffle as a kernel (IYQd0RBC's human).
+
+    Mate-avoidant and capture-averse like Zach (same support pool), but
+    where Zach shuffles uniformly, this one hugs a home corner: among
+    the pool's king moves it plays only those landing nearest the
+    corner, and it touches a pawn only when the pool offers nothing
+    else — the executioner is its hostage, not its weapon. The 48-move
+    h6-h7 squat, deterministic enough to drill against: eviction must
+    pry it out by force, and readmission is free because walking back
+    into the pocket is exactly its policy — the zugzwang's defense post
+    is the square it wants anyway.
+    """
+
+    def __init__(self, corner: chess.Square, seed: int = 0,
+                 name: str = "squat"):
+        self.corner = corner
+        self.rng = random.Random(seed)
+        self.name = name
+
+    def choose_move(self, board: chess.Board) -> chess.Move:
+        pool = support_zach(board)
+        if not pool:
+            return self.rng.choice(list(board.legal_moves))  # forced mate
+        king_moves = [
+            move for move in pool
+            if board.piece_type_at(move.from_square) == chess.KING
+        ]
+        if king_moves:
+            best = min(
+                chess.square_distance(move.to_square, self.corner)
+                for move in king_moves
+            )
+            pool = [
+                move for move in king_moves
+                if chess.square_distance(move.to_square, self.corner)
+                == best
+            ]
+        return self.rng.choice(pool)
+
+
 class RandomBot:
     def __init__(self, seed: int = 0, name: str = "random"):
         self.rng = random.Random(seed)

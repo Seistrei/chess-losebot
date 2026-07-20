@@ -17,6 +17,7 @@ from .herding_vi import (
     score_release_moves,
 )
 from .planning import (
+    eviction_pressure_move,
     herding_move,
     modeled_herding_move,
     walk_pressure_cost,
@@ -39,6 +40,7 @@ from .templates import (
     best_pawn_mate_template,
     free_piece_count,
     kh_bishop_distance,
+    kh_construction_denied,
     kh_floor_tier,
     kh_onfile_files,
     kh_supported_files,
@@ -56,6 +58,56 @@ def _closer_park_hop(board: chess.Board, us: chess.Color,
     return min(
         chess.square_knight_distance(square, park) for square in knights
     )
+
+
+def _cage_ready_steps(board: chess.Board, us: chess.Color,
+                      cage: chess.Square) -> int:
+    """How far the cage bishop is from landing, in real bishop moves.
+
+    0: some bishop of ours attacks the cage square — the landing is one
+    move away the moment the square and the seal guard allow it. 1: some
+    bishop can reach, in one move, an empty square on the cage's
+    diagonals with a clear path to it. 2: farther; 3: no bishop at all.
+    Chebyshev misprices this badly — e1 is "two squares" from g1 but can
+    never attack it (same rank), while a7 is six away and lands in one —
+    and, decisively, the metric sees BLOCKERS: with our own king on e3
+    the whole a7-g1 lane reads unready, so the chore that consumes this
+    knows the king must step off the diagonal before any park helps
+    (seed 0's opening Be1, twice).
+    """
+    bishops = board.pieces(chess.BISHOP, us)
+    if not bishops:
+        return 3
+    if any(cage in board.attacks(square) for square in bishops):
+        return 0
+    their_pawns = int(board.pieces(chess.PAWN, not us))
+    ready: list[chess.Square] = []
+    for step in (9, 7, -7, -9):
+        square = cage
+        while True:
+            next_square = square + step
+            if not 0 <= next_square < 64 or abs(
+                chess.square_file(next_square) - chess.square_file(square)
+            ) != 1:
+                break
+            if board.piece_at(next_square) is not None:
+                break
+            # A pawn-attacked park is bait, not readiness: the guard
+            # vetoes the landing (gxf2 walks their executioner off its
+            # file — the whole family dies for a bishop), so a bishop
+            # "one move" from such a square is stuck, not ready. Without
+            # this the metric parked the bishop on e1 forever, one
+            # guard-dead move from f2.
+            if not chess.BB_PAWN_ATTACKS[us][next_square] & their_pawns:
+                ready.append(next_square)
+            square = next_square
+    if any(
+        landing in board.attacks(square)
+        for square in bishops
+        for landing in ready
+    ):
+        return 1
+    return 2
 
 
 def _kh_race_debt(board: chess.Board, us: chess.Color,
@@ -217,6 +269,14 @@ class LoseBot:
         self.vi_closer_parks = 0
         self.vi_wait_funnel_guards = 0
         self.vi_walk_pressure_moves = 0
+        # Corner choreography vs corner-squatting humans (field-only):
+        # eviction plies chosen by the squat arm, chore commitments the
+        # squat filter restricted to (lane/ready/lift/park), and cage
+        # landings the seal guard refused while their king stood on the
+        # checked or escape square (the sealed-box stalemate trap).
+        self.vi_eviction_moves = 0
+        self.vi_squat_chores = 0
+        self.vi_seal_guards = 0
         self.vi_flip_value: float | None = None
         self.vi_king_marches = 0
         self.vi_capture_guards = 0
@@ -360,7 +420,15 @@ class LoseBot:
         )
         park_distance = (
             _closer_park_hop(board, us, current.kh_closer_park_square)
-            if current.king_holder and current.pawn_walk > 0
+            if current.king_holder
+            and (
+                current.pawn_walk > 0
+                or (
+                    self.profile.squat_eviction
+                    and not current.hold_established
+                    and kh_construction_denied(board, us, current)
+                )
+            )
             else None
         )
         stable: list[chess.Move] = []
@@ -770,6 +838,213 @@ class LoseBot:
             return clearing
         return moves
 
+    def _filter_seal_guard(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        current: PawnMateTemplate | None,
+    ) -> list[chess.Move]:
+        """No landing on the cage square while their king holds the box.
+
+        The cage square attacks the escape square by geometry (they are
+        diagonal neighbors), so a landing while their king sits on the
+        escape CHECKS the squatter into the corner — and with the cage
+        down and the arrival held or plugged, the corner is a sealed
+        box: their king has no moves, the pawn is frozen, and every
+        box-keeping move of ours is a stalemate the safe filter strips,
+        leaving the arrival's abandonment as the forced menu (seed 0's
+        6.Bg1+ Kh1 trap, 2026-07-20 — the forced lift donated the
+        expiry push and the family died). Landed with their king one
+        square farther out, the same cage closes the escape forever and
+        the box can never seal — so this strips exactly the landings
+        onto a king on the checked or escape square, nothing else.
+
+        Note what this filter deliberately does NOT do: hold a knight
+        plug on the arrival. Against the shuffle kernel (and the live
+        human it models — 48 plies without a push) the pawn only ever
+        pushes under zugzwang, so a quiet lift is free whenever their
+        king keeps a move, the freed knight is the eviction piece the
+        material needs (Nf2+ covers the light squares the cage-shade
+        bishop never can), and the open-arrival push risk against Zach
+        is the same ~1/pool the case-6 build order already accepts. A
+        plug-hold was tried and built a fortress: the pinned knight
+        blocked every lane, every handoff-ready king square was
+        structurally poisoned, and the shuttle never broke.
+        """
+        if not self.profile.vi_herding or not self.profile.squat_eviction:
+            return moves
+        if (
+            current is None
+            or not current.king_holder
+            or current.pawn_walk > 0
+        ):
+            return moves
+        their_king = board.king(not board.turn)
+        if their_king is None or their_king not in (
+            current.checked_square,
+            current.kh_escape_square,
+        ):
+            return moves
+        cage_square = current.kh_cage_square
+        open_box = [
+            move for move in moves if move.to_square != cage_square
+        ]
+        if open_box and len(open_box) < len(moves):
+            self.vi_seal_guards += len(moves) - len(open_box)
+            return open_box
+        return moves
+
+    def _filter_squat_chores(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        current: PawnMateTemplate | None,
+    ) -> list[chess.Move]:
+        """Sequence the squat build: lane, bishop-ready, lift, park.
+
+        The squat construction is a blocking DAG the one-ply eviction
+        potential provably cannot order (seed 0, three times over): the
+        rook must pin the shuttle off the corner lane before anything
+        else matters, the king must clear the landing diagonal before
+        any bishop park can attack the cage, the plug must lift only
+        when their reply pool keeps a king move (a pool of nothing but
+        the expiry push is the family's death, and covering the
+        shuttle's last flight square manufactures exactly that), and the
+        freed knight must park out of the pocket so the eventual landing
+        leaves a flight square open instead of stalemating. Commitment
+        filters are this codebase's tool for exactly this — the march,
+        the cage, and the walk chores upstream are the precedent — so
+        each chore restricts the menu while its predicate is unmet and
+        falls through once satisfied (or unachievable). The landing
+        itself stays with the cage-build filter downstream, gated by the
+        seal guard; the march stays with the march filter; the arm's
+        potential ranks within whatever chore is active.
+        """
+        if not self.profile.vi_herding or not self.profile.squat_eviction:
+            return moves
+        if (
+            current is None
+            or not current.king_holder
+            or current.pawn_walk > 0
+            or current.hold_established
+        ):
+            return moves
+        if not kh_construction_denied(board, board.turn, current):
+            return moves
+        us = board.turn
+        cage = current.kh_cage_square
+        corner = current.checked_square
+        cage_piece = board.piece_at(cage)
+        caged = (
+            cage_piece is not None
+            and cage_piece.color == us
+            and cage_piece.piece_type == chess.BISHOP
+        )
+
+        def lane_ok(position: chess.Board) -> bool:
+            for square in position.pieces(chess.ROOK, us):
+                attacked = position.attacks(square)
+                if corner in attacked and cage in attacked:
+                    return True
+            return False
+
+        if not caged and not lane_ok(board):
+            # Chore 1: the corner lane. A rook covering the corner and
+            # the cage at once (e2-e1 in the drill) pins the shuttle off
+            # both, which is what makes the escape square the squat's
+            # only deep post — and the landing closes that forever.
+            lane_moves = []
+            for move in moves:
+                board.push(move)
+                achieves = lane_ok(board)
+                board.pop()
+                if achieves:
+                    lane_moves.append(move)
+            if lane_moves:
+                self.vi_squat_chores += 1
+                return lane_moves
+        if not caged:
+            steps = _cage_ready_steps(board, us, cage)
+            if steps > 0:
+                # Chore 2: bishop ready. Real reachability, so a king on
+                # the landing diagonal shows up as the blocker it is and
+                # the unblocking king step counts as progress.
+                readying = []
+                for move in moves:
+                    board.push(move)
+                    after = _cage_ready_steps(board, us, cage)
+                    board.pop()
+                    if after < steps:
+                        readying.append(move)
+                if readying:
+                    self.vi_squat_chores += 1
+                    return readying
+        occupant = board.piece_at(current.arrival_square)
+        if (
+            occupant is not None
+            and occupant.color == us
+            and occupant.piece_type == chess.KNIGHT
+        ):
+            # Chore 3: the lift. Free against a mate-avoider whenever
+            # their pool keeps a king move (the pawn only pushes under
+            # zugzwang — the live human held it 48 plies), so the exit
+            # must not manufacture the push-only pool: not immediately
+            # (the reply-pool check) and not one ply out — an exit
+            # covering the escape or the entry square takes the
+            # shuttle's oxygen while the lift opens the push, and the
+            # very next pool is the family-killing forced push (Nf4
+            # covers h3; the check looks safe, the continuation is not).
+            # It must also not undo chore 2 by landing on the bishop's
+            # lane. Exit-square safety is the guard's job upstream.
+            base_steps = _cage_ready_steps(board, us, cage)
+            shuttle = (
+                current.kh_escape_square,
+                current.kh_entry_square,
+            )
+            lifts = []
+            for move in moves:
+                if move.from_square != current.arrival_square:
+                    continue
+                exit_hits = chess.SquareSet(
+                    chess.BB_KNIGHT_ATTACKS[move.to_square]
+                )
+                if any(square in exit_hits for square in shuttle):
+                    continue
+                board.push(move)
+                king_reply = any(
+                    board.piece_type_at(reply.from_square) == chess.KING
+                    for reply in support_zach(board)
+                )
+                after = _cage_ready_steps(board, us, cage)
+                board.pop()
+                if king_reply and after <= base_steps:
+                    lifts.append(move)
+            if lifts:
+                self.vi_squat_chores += 1
+                return lifts
+            return moves
+        park = current.kh_closer_park_square
+        hop = _closer_park_hop(board, us, park)
+        if hop is not None and hop > 0:
+            # Chore 4: park the freed knight on the template's park
+            # square, out of every lane and off the pocket — which also
+            # reopens the flight square its plug duty covered, and THAT
+            # is what turns the cage landing from a stalemate into the
+            # forced step out (h4 in the drill).
+            parking = []
+            for move in moves:
+                if board.piece_type_at(move.from_square) != chess.KNIGHT:
+                    continue
+                board.push(move)
+                after = _closer_park_hop(board, us, park)
+                board.pop()
+                if after is not None and after < hop:
+                    parking.append(move)
+            if parking:
+                self.vi_squat_chores += 1
+                return parking
+        return moves
+
     def _filter_king_march(
         self,
         board: chess.Board,
@@ -852,6 +1127,14 @@ class LoseBot:
         if current.king_holder:
             if current.cage_occupancy >= current.required_cage:
                 return moves
+            # While a squat denies the zone, approach belongs to the
+            # squat chore chain, whose readiness metric sees blockers
+            # and pawn-baited parks; the Chebyshev routing here would
+            # fight it (it forced Be1 over the chores' king-unblock
+            # steps). Landings stay committed here either way.
+            squatted = self.profile.squat_eviction and (
+                kh_construction_denied(board, us, current)
+            )
             baseline = kh_bishop_distance(board, us, current)
             completing = []
             routing = []
@@ -862,7 +1145,8 @@ class LoseBot:
                     if future.cage_occupancy > current.cage_occupancy:
                         completing.append(move)
                     elif (
-                        future.cage_occupancy == 0
+                        not squatted
+                        and future.cage_occupancy == 0
                         and kh_bishop_distance(board, us, future) < baseline
                     ):
                         routing.append(move)
@@ -2310,6 +2594,8 @@ class LoseBot:
         safe = self._filter_wait_funnels(board, safe, planned_now)
         safe = self._filter_forced_captures(board, safe, planned_now)
         safe = self._filter_walk_clear(board, safe, planned_now)
+        safe = self._filter_seal_guard(board, safe, planned_now)
+        safe = self._filter_squat_chores(board, safe, planned_now)
         safe = self._filter_king_march(board, safe, planned_now)
         safe = self._filter_cage_build(board, safe, planned_now)
         safe = self._filter_closer_park(board, safe, planned_now)
@@ -2421,6 +2707,7 @@ class LoseBot:
             safe = self._filter_refused_resets(safe)
 
         pressure_now = False
+        evict_now = False
         if (
             self.profile.walk_pressure
             and planned_now is not None
@@ -2460,6 +2747,29 @@ class LoseBot:
                 # never certifies a side negative, so its references
                 # cannot shift.
                 pressure_now = True
+            elif (
+                self.profile.squat_eviction
+                and (
+                    planned_now.our_king_steps > 0
+                    or planned_now.cage_occupancy
+                    < planned_now.required_cage
+                )
+                and kh_construction_denied(board, board.turn, planned_now)
+            ):
+                # The eviction arm: their king squats the construction
+                # zone itself and the build cannot start — every cage or
+                # arrival placement hangs to him and the guard rightly
+                # vetoes it, while _vi_choice waits for a pose that can
+                # never come and the plain negamax shuffles (IYQd0RBC's
+                # 48-move h6-h7 stall). Herding him OUT of the pocket is
+                # the only construction move there is; the potential's
+                # readiness terms bring the king and the cage bishop up
+                # behind the rakes, and the arm disengages the ply the
+                # zone comes clear. Mutually exclusive with the stall arm
+                # by construction: this one requires the pose incomplete.
+                # A fully posed construction excludes their king from the
+                # zone geometrically, so no posed state re-enters here.
+                evict_now = True
         if pressure_now:
             pressure = walk_pressure_move(
                 board, planned_now, board.turn, safe, self.opponent_model
@@ -2467,6 +2777,13 @@ class LoseBot:
             if pressure is not None:
                 self.vi_walk_pressure_moves += 1
                 return pressure
+        elif evict_now:
+            eviction = eviction_pressure_move(
+                board, planned_now, board.turn, safe, self.opponent_model
+            )
+            if eviction is not None:
+                self.vi_eviction_moves += 1
+                return eviction
 
         if (
             self.plan is not None

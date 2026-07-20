@@ -2898,3 +2898,155 @@ push never outranks killing the queen, since a living queen forecloses
 every conversion anyway. bot.py docstring, the floor_donor_bonus
 comment, and 29g's title now carry the qualifier; no behavior change,
 selftest 99/99.
+
+## Corner choreography vs corner-squatting humans: the fortress falls to a chore chain (2026-07-20)
+
+The frontier item, taken. The drill is IYQd0RBC's final shape mirrored
+to the harness orientation (case 9, `8/8/8/8/8/2B1K1p1/4R1N1/7k w`,
+fresh clock): their Kh1 + g3 executioner against our R + dark-B + N,
+the knight plugging the arrival g2 — the live 79...Ng7+ freeze — and a
+new sparring kernel, CornerSquatBot (`--opponent squat`): Zach's
+support pool, but among king moves only the nearest-to-home-corner
+survive, and a pawn moves only when the pool offers nothing else. That
+is the h6-h8 shuffle as a policy, and it makes the readmission free by
+construction: walking back into the pocket is what the kernel WANTS.
+
+The baseline repro came out WORSE than the live stall: in every seed
+the bot lifted its own plug (Nh4/Ne3 with their king on h1), the
+kernel pushed g2 the next ply, promoted, and the family died to an
+insufficient-material flail. The mechanism is the eval, measured
+exactly: at the plug pose the standing value carries
+frozen_pawns_penalty (-3000) because the plan's own freeze reads as
+"no pawn can ever move again — dead draw," and at the played depth the
+promotion continuations ESCAPE that charge while quiet plies keep
+paying it — relief-off at depth 3 the lift prices -400 against the
+best quiet -1770 and wins; at depth 1 it loses by a thousand. The
+squat feature's first piece is therefore the held-freeze relief
+(heuristics): when the all-frozen state is a king-holder plan's own
+arrival hold — our man on the resolved target's arrival square — the
+freeze is releasable at will and is not charged. Relief-on, the same
+probe reads quiet +1230 over lift -2767/-400 at every depth.
+
+Second discovery, the sealed box: with the relief in, the machinery
+drove the king beautifully (Ra1 lane, a discovered check off the
+bishop) and then played 6.Bg1+ with their king on h2 — the cage square
+attacks the escape square by geometry (diagonal neighbors), so the
+landing CHECKED the squatter into the corner, and Kh1 completed a box
+in which their king has no moves, the pawn is plug-frozen, and every
+box-keeping move of ours is a stalemate the safe filter strips. The
+never-empty convention then hands back exactly the plug lifts, and the
+forced lift donates the expiry push: family dead again. The seal guard
+(bot filter) now refuses any landing on the cage square while their
+king sits on the checked or escape square — landed one square farther
+out, the same cage closes the escape forever and the box can never
+seal — and the eviction cost prices the box shape at _PRESSURE_DRAW so
+the arm never steers toward what the filter would refuse.
+
+Third, the fortress theorem, derived by hand and then measured: WITH
+the plug held, the h1 construction cannot pose against a perfect
+hugger. The plug pins the knight on the one square that blocks the
+g-file and rank two and covers h4; the dark bishop can never touch the
+light squares h1/h3; the g3 pawn shields f2 and h2's diagonal and
+forbids Kf2; every handoff-ready king square is structurally poisoned
+(f1 blocks the rook's own rank-one lane to h1, f3 covers the landing's
+only flight square and turns the cage into stalemate); and the duty
+pins chain — the king is welded to plug defense, the rook to e2, and
+the shuttle h2-h3 never breaks. The plug-hold doctrine I first built
+CREATED this fortress. The inversion that dissolves it: every observed
+gap push in every seed was BOX-FORCED — the kernel (like the live
+human, who held the pawn for 48 plies) never pushes while a king move
+exists — and the open-arrival push risk against Zach is the same
+~1/pool the case-6 build order already accepts by design. So the plug
+LIFTS, deliberately and early, and the freed knight becomes the
+eviction piece the material was missing. What survives of the handoff
+idea is the safety calculus, not the hold.
+
+Fourth, the chore chain (_filter_squat_chores), because the squat
+build is a blocking DAG a one-ply expectation provably cannot order —
+three shuffling seeds proved it, and commitment filters are this
+codebase's own tool for exactly that (the march, the cage, the walk
+chores). While the squat denies the zone and the construction is
+incomplete, in order: LANE — a rook covering corner and cage at once
+(Re1), which pins the shuttle off both; note the duty relay the guard
+enforces here: Kf3 must take over plug defense first or Re1 hangs the
+knight to Kxg2 and dies upstream, and the chain finds that order by
+itself because the lane chore has no achiever until the king move
+unblocks it. READY — walk the cage bishop to a REAL landing, by a
+reachability metric (_cage_ready_steps) instead of Chebyshev:
+attack-based (e1 is "two squares" from g1 but can never attack it; a7
+lands in one), blocker-aware (our own king on e3 reads the whole
+a7-g1 lane unready, so the unblocking king step counts as the progress
+it is), and pawn-bait-aware (a park attacked by their pawn is a
+guard-dead landing — gxf2 walks the executioner off its file — so f2
+and h2 never count as ready squares). LIFT — exits from the arrival
+that keep their reply pool alive: not the immediate push-only pool,
+not the one-ply-out trap (an exit covering the escape or entry square
+takes the shuttle's oxygen while opening the push — Nf4+ checks
+safely and forces the push next ply), and not a landing back onto the
+bishop's lane (Ne3). PARK — the freed knight walks to the template's
+own park square (f8 mirror), out of every lane, which is also what
+reopens h4 and turns the eventual landing from a stalemate into the
+forced step out. The cage-build filter's Chebyshev routing arm defers
+to the chore chain while the squat holds (it fought the chores and
+forced Be1 twice); the landing commitment itself stays with
+cage-build, gated by the seal guard; and the plan-regression filter's
+parked-closer-stays arm now also covers the squat phase, so the
+parked knight stops touring.
+
+Seed 0 then plays the whole derivation, move for move: 1.Kf3 (defend
+the plug, unblock the diagonal) 2.Bd4+ (ready) 3.Re1+ (lane) 4-6.
+Nh4/Ng6/Nf8 (lift and park) 7.Bg1 (the landing on an h3 ply — Kh4
+forced, no stalemate because the park reopened h4) 8.Kg2 (the march —
+hold posed), a readmission wait, 41.Kh1 (the scored vacate, accepted
+on the near-cliff relaxed standard) 41...Kh3 — the corner-hugger
+walks into the entry square voluntarily — 42.Rf4, and the rank-four
+cut leaves g2# as the only legal move. CONVERTED, 84 plies, the
+project's first corner mate against a squatting opponent.
+
+Acceptance battery (field profile, squat kernel, seeds 0-9): 10/10
+CONVERTED, every seed in exactly 84 plies — the choreography is
+deterministic against the kernel (its tie-break RNG never diverges the
+script), and the mate is the same g2# zugzwang each time. The log's
+acceptance clause — "from that start, the construction poses and g7#
+lands against the h6-h8 shuffle kernel" — is met in its mirrored
+coordinates, ten times out of ten.
+
+Scope honesty: the drill is kernel-scoped by the acceptance spec. The
+same start against plain Zach does not convert (0/3 spot-checked) —
+the uniform kernel realizes the 1/pool gap push during eviction, and
+from this start (king already on the corner, knight plugged, no cage)
+that race is simply lost; case-6's own 1/2 ceiling is the same
+arithmetic from a far better start. Against pawn-DUMPING humans — who
+would push the gap open deliberately — the lift doctrine is a known
+exposure, and that belongs to the sloppy-human opponent model, the
+next frontier item, not to this kernel's choreography.
+
+Verification: selftest 99 -> 107 (30a squat predicate, 30b
+held-freeze relief, 30c sealed-box pricing, 30d chore-chain pins
+lane/unblock/lift, 30e march-lands-the-king, 30f eviction arm
+engagement + off-knob darkness, 30f2 seal guard, 30g kernel policy),
+all green. Every new mechanism is gated on the new squat_eviction
+knob (FIELD only, all other profiles default False), so the vi
+batteries are byte-identical by construction; spot references replayed
+against the bf97462-chain control confirm it empirically —
+case6-seed0, case8-seed0, and motifs all identical modulo wall-clock
+tokens. Watch list: the post-pose VI builds blow the 200k state cap at
+this material (1.2M states; the stall arm's walk-pressure waits plus
+the relaxed release carried the conversion — a case-9-sized
+vi_state_cap or a smaller herder set would let the policy own the
+readmission); and the pre-vacate wait still burns ~30 plies of knight
+noise the repetition filter tolerates (cosmetic against the kernel,
+clock-relevant against slower shapes).
+
+The field-frontier list (supersedes the one above):
+
+1. **Pin a field baseline battery** before the next field-knob change
+   — the field surface now carries real machinery (guard, tiers,
+   squat choreography) and its only pins are selftest poses.
+2. **The sloppy-human opponent model** (strip/midgame scope, and now
+   also the pawn-dumping counter to the lift doctrine).
+3. **Corpus protocol continues.** The standing acceptance test is
+   unchanged: the corner POSING and the mate LANDING against a live
+   opponent — the drill now proves the choreography against the
+   kernel that models the observed human; a live game is the next
+   witness.

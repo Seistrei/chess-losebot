@@ -788,6 +788,35 @@ def kh_onfile_files(board: chess.Board, us: chess.Color) -> tuple:
     return tuple(files)
 
 
+def kh_construction_denied(board: chess.Board, us: chess.Color,
+                           target: PawnMateTemplate) -> bool:
+    """Their king holds the construction zone of a king-holder template.
+
+    The zone is the three squares the build must take and keep — the
+    checked corner, the cage, and the arrival — and a king DENIES a
+    square by attack as much as by occupancy: a cage bishop landing next
+    to it hangs (the donation guard vetoes what a capturing human makes
+    true), and the arrival hold cannot step adjacent at all (kings may
+    not touch). IYQd0RBC named the shape: Kh7/Kh8 attack both g8 and g7,
+    Kh6 attacks g7, and the 48-move h6-h7 shuffle denied the arrival
+    100% of the time. One Chebyshev test per square is exact for a king.
+    While this holds and the construction is incomplete, herding their
+    king OUT of the pocket is the only construction move there is.
+    """
+    them = not us
+    their_king = board.king(them)
+    if their_king is None:
+        return False
+    return any(
+        chess.square_distance(their_king, square) <= 1
+        for square in (
+            target.checked_square,
+            target.kh_cage_square,
+            target.arrival_square,
+        )
+    )
+
+
 def kh_floor_tier(board: chess.Board, us: chess.Color) -> int:
     """The construction floor's stock class: 2 on-file, 1 donor-only, 0 none.
 

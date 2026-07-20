@@ -151,6 +151,28 @@ class EngineProfile:
     floor_donor_bonus: float = 0.0
     floor_family_bonus: float = 0.0
     floor_herder_bonus: float = 0.0
+    # Corner choreography vs corner-squatting humans (2026-07-20,
+    # IYQd0RBC): a mate-avoidant human squats the construction zone
+    # itself — his king on or next to the checked corner, the cage, and
+    # the arrival denies every placement (they hang to a capturing
+    # human, and the guard rightly vetoes them) — and no existing phase
+    # moves him: the sub-MDP needs a posed construction, the walk arm a
+    # walking pawn, and the plain negamax shuffles until the fifty-move
+    # cliff. Worse, the eval's frozen_pawns_penalty reads the plan's own
+    # arrival hold as a dead draw, and at depth the fallback lifts its
+    # own plug to escape the charge (every squat-drill seed donated the
+    # expiry push). squat_eviction arms the missing machinery: the
+    # held-freeze relief (the plan's own hold is not a dead draw), the
+    # seal guard (no cage landing onto a king on the checked or escape
+    # square — the sealed-box stalemate trap), the squat chore chain
+    # (lane, bishop-ready, safe lift, park — the build order the corner
+    # fortress forces, with the knight UNPLUGGED deliberately: against
+    # a mate-avoider the pawn only pushes under zugzwang, and the freed
+    # knight covers the light squares the cage-shade bishop never can),
+    # and the eviction pressure arm for the waits between chores. Zach
+    # never squats (uniform shuffle wanders), so this stays out of vi
+    # and every battery reference is byte-identical by construction.
+    squat_eviction: bool = False
 
 
 CURRENT = EngineProfile(
@@ -364,6 +386,12 @@ FIELD = replace(
     # any typical menu swing; the hard filter is the guarantee, this is
     # the gradient that steers before the boundary is reached.
     floor_herder_bonus=300.0,
+    # The corner-squatter choreography: the held-freeze relief, the
+    # seal guard, the squat chore chain, and the eviction pressure arm.
+    # Human-frontier machinery for the anti-losebot corner shuffle
+    # (IYQd0RBC); Zach's uniform kernel never poses the shape, so vi
+    # and the batteries stay untouched.
+    squat_eviction=True,
 )
 
 

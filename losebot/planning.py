@@ -19,6 +19,7 @@ from .templates import (
     ConstructionPlan,
     PawnMateTemplate,
     herding_metrics,
+    kh_bishop_distance,
 )
 
 
@@ -434,6 +435,161 @@ def walk_pressure_move(board: chess.Board, target: PawnMateTemplate,
                     total += _PRESSURE_DRAW
                 else:
                     total += walk_pressure_cost(board, target, us)
+                board.pop()
+            cost = total / len(pool)
+        board.pop()
+        if (
+            best_move is None
+            or cost < best_cost
+            or (cost == best_cost and move.uci() < best_move.uci())
+        ):
+            best_move, best_cost = move, cost
+    return best_move
+
+
+# Eviction-phase funnel weights — structural relations, not tunables (the
+# same stance as the walk weights above): a square of distance pried
+# between their king and the corner outranks all fence bookkeeping, an
+# open homeward door outranks readiness chores, and the light readiness
+# terms only break ties among equally evicting waits — the SEQUENCED
+# construction chores (lane, bishop-ready, lift, park) are the squat
+# chore filter's commitments, not this potential's; a one-ply
+# expectation cannot order a blocking DAG and was never asked to again
+# after seed 0's shuffles proved it. The seal charge prices the
+# sealed-box stalemate trap as the certain draw it is, so the arm never
+# steers toward what the seal guard would have to refuse. Race-square
+# debt is charged flat like the walk cost's. The proximity charge is
+# capped at _EVICT_RADIUS because eviction's job ends at the pocket
+# boundary — the arm itself disengages once the zone is clear.
+_EVICT_PROX = 10.0
+_EVICT_DOOR = 6.0
+_EVICT_RACE = 25.0
+_EVICT_KING = 3.0
+_EVICT_BISHOP = 2.0
+_EVICT_RADIUS = 5
+
+
+def eviction_pressure_cost(board: chess.Board, target: PawnMateTemplate,
+                           us: chess.Color) -> float:
+    """Inverse-herding potential of one squat position, lower is better.
+
+    IYQd0RBC told the story: a mate-avoidant human squats the
+    construction zone itself, the cage and arrival placements hang to
+    his king (the guard rightly vetoes them), and no existing phase
+    moves him — the sub-MDP needs a posed construction, the walk arm
+    needs a walking pawn, and the plain negamax shuffles. This
+    potential prices, for THEIR king: closeness to the checked corner
+    (the eviction gradient — checks that pry him off the corner pay
+    here); his open corner-ward neighbor squares (doors home a fence
+    should close — occupancy or our attack closes one); our men
+    squatting the fixed race squares; and two light readiness terms so
+    that among equal evictions the chooser prefers the ply that also
+    walks our king toward the arrival or the cage bishop toward its
+    corner. The mirror of walk_pressure_cost: same ratchet, opposite
+    sign on the king.
+    """
+    them = not us
+    king = board.king(them)
+    if king is None:
+        return 0.0
+    corner = target.checked_square
+    distance = chess.square_distance(king, corner)
+    cost = _EVICT_PROX * max(0, _EVICT_RADIUS - distance)
+    for square in chess.SquareSet(chess.BB_KING_ATTACKS[king]):
+        if chess.square_distance(square, corner) >= distance:
+            continue
+        if board.piece_at(square) is None and not board.is_attacked_by(
+            us, square
+        ):
+            cost += _EVICT_DOOR
+    if board.piece_at(target.checked_square) is not None:
+        cost += _EVICT_RACE
+    if board.piece_at(target.kh_escape_square) is not None:
+        cost += _EVICT_RACE
+    entry = board.piece_at(target.kh_entry_square)
+    if entry is not None and entry.color == us:
+        cost += _EVICT_RACE
+    far = board.piece_at(target.kh_far_capture_square)
+    if far is not None and far.color == us:
+        cost += _EVICT_RACE
+    for food in target.kh_rear_food_squares:
+        squatter = board.piece_at(food)
+        if squatter is not None and squatter.color == us:
+            cost += _EVICT_RACE
+    our_king = board.king(us)
+    if our_king is not None:
+        cost += _EVICT_KING * chess.square_distance(
+            our_king, target.arrival_square
+        )
+    cage = target.kh_cage_square
+    if king in (target.checked_square, target.kh_escape_square) and (
+        board.piece_at(cage) is not None
+    ):
+        # The sealed box (or the ply that seals it): their king inside
+        # the corner pocket with the cage square occupied is the
+        # stalemate trap the handoff filter's seal guard refuses — a
+        # certain draw, priced like one so the arm never steers toward
+        # what the filter would have to veto.
+        cost += _PRESSURE_DRAW
+    if not any(
+        cage in board.attacks(square)
+        for square in board.pieces(chess.BISHOP, us)
+    ):
+        # Bishop readiness is attack-based, not Chebyshev: a bishop
+        # attacking the cage square lands it in one move once the square
+        # is clear (attacks are same-shade by geometry, so no shade test
+        # is needed), while Chebyshev pulled the bishop to same-rank
+        # squares like e1 that never reach the cage at all (seed 0's
+        # opening Be1). A relay squatter on the square is the
+        # CAGE_SQUAT charge's business, not this term's.
+        cost += _EVICT_BISHOP * min(
+            8, kh_bishop_distance(board, us, target)
+        )
+    return cost
+
+
+def eviction_pressure_move(board: chess.Board, target: PawnMateTemplate,
+                           us: chess.Color, moves: list[chess.Move],
+                           model: str | None) -> chess.Move | None:
+    """Choose the squat-phase move with the lowest expected eviction
+    potential.
+
+    The same one-ply expectation over his complete modeled pool as
+    walk_pressure_move, for the same reason: the squat is long, the
+    fence is built one rake at a time, and every ply re-runs the
+    gradient. Checks are priced by the expectation, not special-cased —
+    a check that pries the king off the corner empties his hugging
+    replies from the pool and the proximity term pays it back; a check
+    that merely rearranges the squat does not survive the argmin. The
+    caller's guards already vetoed the hanging rakes and the plug
+    lifts; terminal landings are skipped and adjudicated replies priced
+    as terminal zeros, exactly as the walk chooser does. Ties break
+    toward the lexically smallest UCI so replays are exact.
+    """
+    best_move: chess.Move | None = None
+    best_cost = 0.0
+    for move in moves:
+        board.push(move)
+        if board.is_checkmate() or board.is_stalemate() or _draw(board):
+            board.pop()
+            continue
+        pool = (
+            support_zach(board)
+            if model == "zach"
+            else list(board.legal_moves)
+        )
+        if not pool:
+            cost = _PRESSURE_JACKPOT
+        else:
+            total = 0.0
+            for reply in pool:
+                board.push(reply)
+                if board.is_checkmate():
+                    total += _PRESSURE_JACKPOT
+                elif _draw(board):
+                    total += _PRESSURE_DRAW
+                else:
+                    total += eviction_pressure_cost(board, target, us)
                 board.pop()
             cost = total / len(pool)
         board.pop()

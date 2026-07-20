@@ -7,9 +7,10 @@ import chess
 
 from .arena import run_match
 from .bot import LoseBot
-from .opponents import RandomBot, WorstfishBot, ZachBot
+from .opponents import CornerSquatBot, RandomBot, WorstfishBot, ZachBot
 from .planning import (
     _pressure_walk,
+    eviction_pressure_move,
     modeled_herding_move,
     walk_pressure_cost,
     walk_pressure_move,
@@ -3204,6 +3205,7 @@ def selftest() -> int:
     # the strip exemption, and the zero-knob gates are all pinned here.
     from .templates import (
         free_piece_count as _free_count,
+        kh_construction_denied as _denied,
         kh_floor_tier as _floor_tier,
         kh_onfile_files as _onfile_files,
         kh_supported_files as _supported_files,
@@ -3549,6 +3551,216 @@ def selftest() -> int:
         f" (want Bc1 alone: Bxd4 exd4 would leave tier 0)",
     )
 
+    # 30a. The squat predicate (corner choreography, 2026-07-20): their
+    # king denies the construction zone by occupancy or attack — the
+    # checked corner, the cage, and the arrival, one Chebyshev test
+    # each. The drill start (Kh1 on the corner itself), both shuffle
+    # squares, and the cage squat all deny; one square past the entry
+    # the zone is clear and the eviction arm disengages.
+    squat_drill = chess.Board(SQUAT_DRILL_FEN)
+    squat_target = best_pawn_mate_template(squat_drill, chess.WHITE)
+
+    def _king_at(square: chess.Square) -> chess.Board:
+        pose = squat_drill.copy()
+        pose.set_piece_at(chess.H1, None)
+        pose.set_piece_at(square, chess.Piece(chess.KING, chess.BLACK))
+        return pose
+
+    denied_at = {
+        name: _denied(_king_at(square), chess.WHITE, squat_target)
+        for name, square in (
+            ("h2", chess.H2), ("h3", chess.H3), ("g1", chess.G1),
+            ("h4", chess.H4), ("g4", chess.G4),
+        )
+    }
+    check(
+        "squat predicate: h1/h2/h3 and the cage deny; h4/g4 are clear",
+        squat_target is not None
+        and squat_target.king_holder
+        and _denied(squat_drill, chess.WHITE, squat_target)
+        and denied_at["h2"] and denied_at["h3"] and denied_at["g1"]
+        and not denied_at["h4"] and not denied_at["g4"],
+        f"target={'none' if squat_target is None else squat_target.uci};"
+        f" h1={_denied(squat_drill, chess.WHITE, squat_target)};"
+        f" {denied_at} (want h2/h3/g1 True, h4/g4 False)",
+    )
+
+    # 30b. The held-freeze relief: the plan's own arrival hold is not a
+    # dead draw. At the plugged drill pose the squat-armed field eval
+    # forgives frozen_pawns_penalty exactly; with no plan there is no
+    # hold to credit, and with the plug lifted nothing is frozen — both
+    # twins agree to the point.
+    squat_plan = ConstructionPlan(
+        pawn_file=6, checked_side=1, created_ply=0, holder_mode="king"
+    )
+    no_squat_field = _replace(field_profile, squat_eviction=False)
+    relief_delta = _evaluate(
+        squat_drill, chess.WHITE, "zach", field_profile, squat_plan
+    ) - _evaluate(
+        squat_drill, chess.WHITE, "zach", no_squat_field, squat_plan
+    )
+    planless_delta = _evaluate(
+        squat_drill, chess.WHITE, "zach", field_profile
+    ) - _evaluate(squat_drill, chess.WHITE, "zach", no_squat_field)
+    unplugged = squat_drill.copy()
+    unplugged.set_piece_at(chess.G2, None)
+    unplugged.set_piece_at(chess.B1, chess.Piece(chess.KNIGHT, chess.WHITE))
+    unplugged_delta = _evaluate(
+        unplugged, chess.WHITE, "zach", field_profile, squat_plan
+    ) - _evaluate(
+        unplugged, chess.WHITE, "zach", no_squat_field, squat_plan
+    )
+    check(
+        "held-freeze relief: the plug is not a dead draw (3000 forgiven)",
+        relief_delta == field_profile.frozen_pawns_penalty
+        and planless_delta == 0.0
+        and unplugged_delta == 0.0,
+        f"relief={relief_delta} (want {field_profile.frozen_pawns_penalty});"
+        f" planless={planless_delta} (want 0);"
+        f" unplugged={unplugged_delta} (want 0)",
+    )
+
+    # 30c. The sealed box is priced like the draw it is: with their
+    # king on the corner and the cage square occupied, the eviction
+    # potential charges _PRESSURE_DRAW-class cost, so the arm never
+    # steers toward the trap the seal guard would have to refuse. The
+    # same pose with the cage square open prices as an ordinary squat.
+    from .planning import eviction_pressure_cost as _evict_cost
+
+    box_pose = chess.Board("8/8/8/8/8/5Kp1/6N1/R5Bk w - - 0 1")
+    box_target = best_pawn_mate_template(box_pose, chess.WHITE)
+    open_pose = chess.Board("8/8/8/8/8/2B2Kp1/6N1/R6k w - - 0 1")
+    open_target = best_pawn_mate_template(open_pose, chess.WHITE)
+    box_cost = _evict_cost(box_pose, box_target, chess.WHITE)
+    open_cost = _evict_cost(open_pose, open_target, chess.WHITE)
+    check(
+        "the sealed box prices as a certain draw in the eviction arm",
+        box_cost - open_cost >= 9_000.0,
+        f"box={box_cost:.0f} open={open_cost:.0f}"
+        f" delta={box_cost - open_cost:.0f} (want >= 9000)",
+    )
+
+    # 30d. The squat chore chain, pinned ply by ply on the drill's own
+    # opening: chore 1 commits the corner lane (Re1 — the one rook move
+    # covering corner and cage at once, checking the squatter off h1);
+    # chore 2 walks the bishop toward a real landing (the ready metric
+    # sees our king blocking the a7-g1 diagonal, so the unblocking king
+    # step counts as progress while a same-rank park like e1 never
+    # does); and the lift chore refuses exits that leave their pool
+    # push-only (Nf4 covers the shuttle's last flight square when the
+    # cage is down — the family-killing forced push) or re-block the
+    # landing lane (Ne3).
+    chores_before = field_bot.vi_squat_chores
+    lane_kept = field_bot._filter_squat_chores(
+        squat_drill, list(squat_drill.legal_moves), squat_target
+    )
+    ready_pose = chess.Board("8/8/8/8/8/2B1K1pk/6N1/4R3 w - - 2 2")
+    ready_target = best_pawn_mate_template(ready_pose, chess.WHITE)
+    ready_kept = field_bot._filter_squat_chores(
+        ready_pose, list(ready_pose.legal_moves), ready_target
+    )
+    lift_pose = chess.Board("8/8/8/8/3B4/5Kpk/6N1/4R3 w - - 6 4")
+    lift_target = best_pawn_mate_template(lift_pose, chess.WHITE)
+    lift_kept = field_bot._filter_squat_chores(
+        lift_pose, list(lift_pose.legal_moves), lift_target
+    )
+    check(
+        "squat chores: the lane commits, the king unblocks, the lift"
+        " keeps their pool alive",
+        [m.uci() for m in lane_kept] == ["e2e1"]
+        and field_bot.vi_squat_chores - chores_before == 3
+        and all(m.uci() != "c3d4" for m in ready_kept)
+        and any(
+            board_move.from_square == chess.E3 for board_move in ready_kept
+        )
+        and lift_kept == [chess.Move.from_uci("g2h4")],
+        f"lane={[m.uci() for m in lane_kept]} (want e2e1 alone);"
+        f" ready={sorted(ready_pose.san(m) for m in ready_kept)}"
+        f" (want king-unblock steps, no blocked Bd4);"
+        f" lift={[lift_pose.san(m) for m in lift_kept]} (want Nh4 alone);"
+        f" chores+={field_bot.vi_squat_chores - chores_before}",
+    )
+
+    # 30e. After a check-tempo lift (the Nf4+ class) the arrival is
+    # empty, the cage gate is satisfied, and the march lands the king
+    # with no waiver — the arrival never has a second open ply. The
+    # march resolves its futures through the committed plan, so the
+    # bot carries it here.
+    handed_off = chess.Board("8/8/8/8/5N1k/5Kp1/8/4R1B1 w - - 2 2")
+    field_bot.plan = squat_plan
+    handed_target = field_bot.planned_target(handed_off, chess.WHITE)
+    marched = field_bot._filter_king_march(
+        handed_off, list(handed_off.legal_moves), handed_target
+    )
+    check(
+        "handoff ply two: the march lands the king on the arrival",
+        [m.uci() for m in marched] == ["f3g2"],
+        f"marched={[handed_off.san(m) for m in marched]} (want Kg2)",
+    )
+
+    # 30f. The eviction arm engages at the squat: a fresh field bot's
+    # first drill move comes from the arm (counter, not coincidence),
+    # the plug stays put, and the off-knob twin never wakes the arm.
+    squat_bot = LoseBot(
+        depth=2, opponent_model="zach", profile="field",
+        probe_cap=0, max_probe_n=1, vi_state_cap=2000,
+    )
+    evict_move = squat_bot.choose_move(chess.Board(SQUAT_DRILL_FEN))
+    dark_bot = LoseBot(
+        depth=2, opponent_model="zach", profile="field",
+        probe_cap=0, max_probe_n=1, vi_state_cap=2000,
+    )
+    dark_bot.profile = no_squat_field
+    dark_bot.choose_move(chess.Board(SQUAT_DRILL_FEN))
+    check(
+        "eviction arm: engages at the drill start, plug intact",
+        squat_bot.vi_eviction_moves == 1
+        and evict_move.from_square != chess.G2
+        and dark_bot.vi_eviction_moves == 0,
+        f"chose {chess.Board(SQUAT_DRILL_FEN).san(evict_move)};"
+        f" evictions={squat_bot.vi_eviction_moves} (want 1);"
+        f" off-knob evictions={dark_bot.vi_eviction_moves} (want 0)",
+    )
+
+    # 30f2. The seal guard: with their king on the escape square the
+    # cage landing is refused — it would check the squatter into the
+    # corner and seal the stalemate box whose only exit is the plug
+    # lift (seed 0's 6.Bg1+ Kh1 trap) — and one square farther out the
+    # same landing is the fence that closes the escape forever.
+    seal_pose = chess.Board("8/8/8/8/8/5Kp1/5BNk/R7 w - - 0 1")
+    seal_target = best_pawn_mate_template(seal_pose, chess.WHITE)
+    seal_menu = [chess.Move.from_uci("f2g1"), chess.Move.from_uci("a1b1")]
+    guards_before = field_bot.vi_seal_guards
+    seal_kept = field_bot._filter_seal_guard(
+        seal_pose, list(seal_menu), seal_target
+    )
+    clear_pose = chess.Board("8/8/8/8/8/5Kpk/5BN1/R7 w - - 0 1")
+    clear_target = best_pawn_mate_template(clear_pose, chess.WHITE)
+    clear_kept = field_bot._filter_seal_guard(
+        clear_pose, list(seal_menu), clear_target
+    )
+    check(
+        "seal guard: no cage landing onto a king on the escape square",
+        [m.uci() for m in seal_kept] == ["a1b1"]
+        and field_bot.vi_seal_guards - guards_before == 1
+        and [m.uci() for m in clear_kept] == ["f2g1", "a1b1"],
+        f"escape-squat kept={[m.uci() for m in seal_kept]} (want a1b1);"
+        f" guards+={field_bot.vi_seal_guards - guards_before};"
+        f" clear kept={[m.uci() for m in clear_kept]} (want both)",
+    )
+
+    # 30g. The kernel: mate-avoidant, capture-averse, corner-glued —
+    # among quiet king moves only the nearest-to-home survives, and a
+    # pawn moves only when the pool offers nothing else.
+    squat_kernel = CornerSquatBot(chess.H1, seed=0)
+    kernel_pose = chess.Board("8/8/8/8/8/4K1pk/6N1/4R3 b - - 0 1")
+    kernel_move = squat_kernel.choose_move(kernel_pose)
+    check(
+        "corner-squat kernel: the shuffle hugs home (h3 -> h2)",
+        kernel_move == chess.Move.from_uci("h3h2"),
+        f"chose {kernel_pose.san(kernel_move)} (want Kh2)",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -3620,6 +3832,22 @@ ADOPTION_DRILL_FEN = "8/8/1p1k4/RR6/K1P5/1NPB4/8/8 w - - 0 1"
 # 2026-07-19); one mobile herder + statics is the shape.
 STACK_DRILL_FEN = "2N5/8/2k5/3N1B2/1pP5/1p6/8/2K4R w - - 0 1"
 
+# Corner-squat drill (case 9): IYQd0RBC's final shape mirrored to the
+# harness orientation (us=White, corner h1) with a fresh fifty-move
+# clock — their Kh1 + g3 executioner vs our R+B+N, the knight plugging
+# the arrival g2 (the live game's expedient 79...Ng7+ freeze). Against
+# Zach the squat dissolves by accident (the uniform kernel wanders off
+# the corner); against the corner-squat kernel (--opponent squat) this
+# is the whole choreography problem: evict the squatter off the zone
+# with the plug held, land the cage under the rook's rank-one cover
+# (Bg1 defended by Re1 — an undefended landing hangs and the guard
+# vetoes it), hand the arrival from knight to king on a check-tempo
+# exit (Nf4+ class), and readmit him to the defense post he wants
+# anyway — the corner-hugger walks into the delivery zugzwang
+# voluntarily. Acceptance (tuning log, 2026-07-20): from this start
+# the construction poses and g2# lands against the h1-h3 shuffle.
+SQUAT_DRILL_FEN = "8/8/8/8/8/2B1K1p1/4R1N1/7k w - - 0 1"
+
 # Conversion drills: Zach is already stripped to king+pawns; can LoseBot
 # force him to deliver mate? This is the phase where full games stall.
 ENDGAME_FENS = [
@@ -3631,7 +3859,25 @@ ENDGAME_FENS = [
     KING_HOLDER_DRILL_FEN,
     ADOPTION_DRILL_FEN,
     STACK_DRILL_FEN,
+    SQUAT_DRILL_FEN,
 ]
+
+
+def _squat_corner(board: chess.Board) -> chess.Square:
+    """The corner a squat kernel defends: the drill's own king-holder
+    checked square (the mate-delivery post a corner-squatter guards),
+    falling back to their king's nearest corner when no template poses.
+    """
+    target = best_pawn_mate_template(board, chess.WHITE)
+    if target is not None and target.king_holder:
+        return target.checked_square
+    king = board.king(chess.BLACK)
+    if king is None:
+        return chess.H1
+    return min(
+        (chess.A1, chess.H1, chess.A8, chess.H8),
+        key=lambda corner: chess.square_distance(king, corner),
+    )
 
 
 def endgames(args) -> int:
@@ -3655,18 +3901,24 @@ def endgames(args) -> int:
             vi_state_cap=args.vi_state_cap,
             release_audit=args.release_audit,
         )
-        zach = ZachBot(seed=args.seed + i)
         start_board = chess.Board(fen)
+        if getattr(args, "opponent", "zach") == "squat":
+            opponent = CornerSquatBot(
+                _squat_corner(start_board), seed=args.seed + i
+            )
+        else:
+            opponent = ZachBot(seed=args.seed + i)
         start_target = best_pawn_mate_template(start_board, chess.WHITE)
         t0 = time.monotonic()
-        board, reason, mated = play_game(bot, zach, max_plies=args.max_plies,
+        board, reason, mated = play_game(bot, opponent,
+                                         max_plies=args.max_plies,
                                          start_fen=fen)
         dt = time.monotonic() - t0
         won = mated == chess.WHITE
         converted += won
         if args.pgn_dir:
             save_pgn(
-                board, bot, zach, reason, mated,
+                board, bot, opponent, reason, mated,
                 Path(args.pgn_dir), i,
             )
         end_target = best_pawn_mate_template(board, chess.WHITE)
@@ -3786,6 +4038,20 @@ def endgames(args) -> int:
             # stdout is untouched by construction.
             print(
                 f"  donation-guard: vetoes={bot.donation_vetoes}",
+                flush=True,
+            )
+        if (
+            bot.vi_eviction_moves
+            or bot.vi_squat_chores
+            or bot.vi_seal_guards
+        ):
+            # Zero for every squat-off profile (and for any game whose
+            # shape never poses the squat), so reference battery stdout
+            # is untouched by the choreography.
+            print(
+                f"  squat: evictions={bot.vi_eviction_moves};"
+                f" chores={bot.vi_squat_chores};"
+                f" seal-guards={bot.vi_seal_guards}",
                 flush=True,
             )
         if args.release_audit:
@@ -3909,6 +4175,11 @@ def main() -> int:
     eg.add_argument("--release-audit", action="store_true",
                     help="log every release-scan decision: candidate "
                          "verdicts, audited goal odds, clean-board twin")
+    eg.add_argument("--opponent", choices=["zach", "squat"],
+                    default="zach",
+                    help="sparring kernel: zach shuffles uniformly; "
+                         "squat hugs the drill's checked corner (the "
+                         "IYQd0RBC anti-losebot shuffle)")
     eg.add_argument("--show-fen", action="store_true")
     eg.add_argument("--pgn-dir", default=None)
 

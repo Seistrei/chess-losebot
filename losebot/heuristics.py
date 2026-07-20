@@ -137,7 +137,9 @@ def evaluate(board: chess.Board, root_color: chess.Color,
                 v += _executioner_term(board, us, them, profile)
         if their_pieces == 0:
             v += profile.king_and_pawns_bonus
-            if not _any_pawn_can_move(board, them, us):
+            if not _any_pawn_can_move(board, them, us) and not (
+                profile.squat_eviction and _held_freeze(board, us, plan)
+            ):
                 v -= profile.frozen_pawns_penalty
 
     # Their menu of options. When it is small, what matters is WHICH moves
@@ -346,6 +348,32 @@ def _executioner_term(board: chess.Board, us: chess.Color,
         if blocked:
             v -= profile.exec_blocked_penalty
     return v
+
+
+def _held_freeze(board: chess.Board, us: chess.Color,
+                 plan: ConstructionPlan | None) -> bool:
+    """The all-frozen state is a king-holder plan's own arrival hold.
+
+    frozen_pawns_penalty exists for the dead draw: their pawns can never
+    move again, so no mate can ever be delivered. A king-holder hold is
+    the opposite of that state wearing its clothes — OUR man stands on
+    the resolved target's arrival square (the parked king, or the
+    knight that plugged the square expediently — IYQd0RBC's 79...Ng7+),
+    and the release unfreezes the executioner at a time of our
+    choosing; the freeze IS the construction working. Charging it made
+    the fallback search lift its own plug: at depth the promotion
+    continuations escape the 3000-point charge, so in the squat drill
+    every seed played the knight off the arrival and donated the expiry
+    push (2026-07-20). Gated on squat_eviction at the caller so every
+    pre-field profile prices byte-identically.
+    """
+    if plan is None or plan.holder_mode != "king":
+        return False
+    target = plan.resolve(board, us)
+    if target is None or target.pawn_walk > 0:
+        return False
+    occupant = board.piece_at(target.arrival_square)
+    return occupant is not None and occupant.color == us
 
 
 def _any_pawn_can_move(board: chess.Board, owner: chess.Color,
