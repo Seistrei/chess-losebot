@@ -5,6 +5,7 @@ Per move: (1) never deliver mate or stalemate if any alternative exists,
 (3) otherwise fall back to heuristic misère negamax."""
 
 import time
+import weakref
 
 import chess
 
@@ -98,7 +99,12 @@ class LoseBot:
         self.release_audit = release_audit
         self.release_audit_events: list[dict] = []
         self.release_audit_tables: list[dict] = []
-        self._release_audit_seen: set[int] = set()
+        # Once-per-policy table ledger, held weakly (review P2): id() is
+        # reusable the moment a discarded policy is collected, so an
+        # id-keyed ledger can silently suppress a REBUILT policy's table
+        # behind a dead one's ghost. Weak identity gives exact
+        # once-per-instance dumps without retaining dead graphs.
+        self._release_audit_seen: weakref.WeakSet = weakref.WeakSet()
         self.forced_selfmates_found = 0
         self.probe_nodes = 0
         self.probe_budget_exhaustions = 0
@@ -818,8 +824,8 @@ class LoseBot:
             and policy.arrival == target.arrival_square
             and policy.report.ok
         ):
-            if id(policy) not in self._release_audit_seen:
-                self._release_audit_seen.add(id(policy))
+            if policy not in self._release_audit_seen:
+                self._release_audit_seen.add(policy)
                 report = policy.report
                 self.release_audit_tables.append({
                     "ply": board.ply(),

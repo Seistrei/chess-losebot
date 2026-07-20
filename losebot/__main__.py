@@ -2918,6 +2918,52 @@ def selftest() -> int:
         table_detail,
     )
 
+    # 26d. The table ledger holds its policies weakly (review P2): id()
+    # is reusable the moment a discarded policy is collected, so an
+    # id-keyed ledger could suppress a REBUILT policy's table behind a
+    # dead one's ghost. Weak identity keeps once-per-instance dumps for
+    # the same live policy (two scans, one table), retains no dead
+    # graphs, and a drained ledger cannot suppress any successor —
+    # whatever id the allocator hands out next.
+    ledger_ok = False
+    ledger_detail = "26c fixture unavailable"
+    if table_ok:
+        import gc
+
+        ledger_bot = LoseBot(
+            depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+            release_audit=True,
+        )
+        ledger_bot._vi_policy = table_policy
+        for _ in range(2):
+            ledger_bot._record_release_audit(
+                vacate_board, herd_target, 76, None, [], None, None,
+            )
+        tables_once = len(ledger_bot.release_audit_tables)
+        events_both = len(ledger_bot.release_audit_events)
+        live_before = len(ledger_bot._release_audit_seen)
+        ledger_bot._vi_policy = None
+        del table_policy
+        for _ in range(3):
+            gc.collect()
+        ledger_ok = (
+            tables_once == 1
+            and events_both == 2
+            and live_before == 1
+            and len(ledger_bot._release_audit_seen) == 0
+            and len(ledger_bot.release_audit_tables) == 1
+        )
+        ledger_detail = (
+            f"tables={tables_once}; events={events_both}; "
+            f"ledger live={live_before}"
+            f"->{len(ledger_bot._release_audit_seen)}"
+        )
+    check(
+        "the table ledger drops dead policies instead of squatting their ids",
+        ledger_ok,
+        ledger_detail,
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(

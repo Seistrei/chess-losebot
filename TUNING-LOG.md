@@ -2065,6 +2065,23 @@ whole audit surface: the a4/Rd5 row at exactly 0.5, state_view
 mapping the delivered board onto that row and refusing an off-graph
 king, audit_board reconstructing the audited placement.
 
+Same-day review round, one P2 taken: the once-per-policy table
+ledger keyed on id(policy), and id() is reusable the moment a
+discarded policy is collected — a teardown/rebuild-heavy run showed
+hundreds of distinct policies sharing a couple of ids, each REBUILT
+policy's table silently suppressed behind a dead one's ghost while
+its events kept recording. The ledger is now a WeakSet of the policy
+objects themselves: weak identity keeps exact once-per-instance
+dumps for a live policy, retains no dead graphs (the reviewer's
+constraint — strong refs would pin every superseded sub-MDP for the
+game's lifetime), and a ledger that drains on collection can never
+suppress a successor whatever id the allocator hands out next.
+Suite 80 -> 81: 26d pins the mechanism deterministically — two scans
+of one live policy dump one table, and after the policy's last
+strong ref drops the ledger reads empty while the dumped table
+stays. Instrumented seed 1 replayed identical (game, gauges, and
+audit lines) — the fix only changes who remembers the dump.
+
 Next, in expected-value order:
 
 1. Multi-pawn stacking + executioner selection at strip time —
