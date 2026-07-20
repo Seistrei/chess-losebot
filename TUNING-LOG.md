@@ -2553,3 +2553,27 @@ donated 120 moves earlier. Three follow-ups, in value order:
    (44.c5) is stock about to evaporate; viability could discount or
    the eval could taper it, so the search sees the promotion train
    coming.
+
+With the guard live, the CONSOLIDATED next list for the field
+frontier, in expected-value order (supersedes the list above the
+addenda):
+
+1. **Family selection** — the three follow-ups just listed, as one
+   feature: the floor must keep the toolkit whose executioner stock
+   actually survives, not whichever one the first donation happened
+   to spare. Acceptance: at vfGeEKhy move 24, Bb7 must price (or
+   veto) as donating the live g-family's cage.
+2. **Pin a field baseline battery** (case-6/7/8 + case-2 seed-5 +
+   motifs under `--profile field`): the guard can veto fence hugs
+   the Zach-world policies use freely, so field's drill numbers are
+   ITS reference, not vi's — plus a field-vs-Zach arena A/B for what
+   the floor costs against the opponent that never punishes.
+3. **The sloppy-human opponent model** (opponents.py: Zach's
+   mate-avoidance, parameterized capture probability; strip/midgame
+   scope only — the herding sub-MDP's frozen-statics premise breaks
+   under capturing kernels, so vi herding stays Zach-scoped).
+4. **Corpus protocol continues**: every game in
+   `lichess/game_records/` gets its replay-through-the-filter read
+   and lands here. The guard's remaining acceptance test is a human
+   who keeps their b/g pawns — the corner construction has still
+   never posed against a live opponent.
