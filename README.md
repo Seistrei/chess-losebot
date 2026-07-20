@@ -114,13 +114,18 @@ running games first. Every game is archived as PGN in
 `lichess/game_records/` — real mate-avoidant opponents are tuning data the
 Zach clone cannot generate.
 
-Engine selection on lichess defaults to the generalist: `current` profile,
-no opponent model, so forced-selfmate probes prove against ANY reply. The
-Zach-tuned machinery stays available deliberately
-(`LOSEBOT_PROFILE=vi LOSEBOT_MODEL=zach` in `lichess/lichess.env`), but
-remember its certificates assume the Zach kernel — humans are off-model.
-A small governor in the wrapper clamps probe/build budgets as the clock
-shrinks; the engine itself has no movetime concept.
+Engine selection on lichess defaults to the full machinery:
+`LOSEBOT_PROFILE=vi LOSEBOT_MODEL=zach`. The first live game settled the
+default: the model-free generalist stripped a mate-avoidant human to
+king-and-pawn, squeezed him to mobility 1, and then — having no
+construction plan — shuffled checks and promoted two of its own queens
+until he resigned. The vi machinery's certificates assume the Zach reply
+kernel and real humans are off-model (they capture; Zach never does), but
+mate-avoidant challengers are the closest thing to Zach on the internet,
+and every mismatch lands in `game_records/` as data. Set
+`LOSEBOT_PROFILE=current LOSEBOT_MODEL=` in `lichess/lichess.env` for the
+model-free fallback. A small governor in the wrapper clamps probe/build
+budgets as the clock shrinks; the engine itself has no movetime concept.
 
 ## How LoseBot works
 

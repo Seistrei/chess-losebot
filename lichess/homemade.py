@@ -11,14 +11,21 @@ per-move time target.
 Engine selection is config.yml (`engine.name: "LoseBotEngine"`). Tuning is
 environment variables, so experimenting never needs an image rebuild:
 
-  LOSEBOT_PROFILE  engine profile (default "current" — the generalist.
-                   The planner/vi machinery assumes the Zach reply kernel
-                   and is off-model against humans; set LOSEBOT_PROFILE=vi
-                   LOSEBOT_MODEL=zach deliberately if you want to watch it
-                   try anyway.)
-  LOSEBOT_MODEL    opponent model for probes/herding. Empty = adversarial:
-                   forced-selfmate proofs are then valid against ANY
-                   opponent, which is the sound setting for humans.
+  LOSEBOT_PROFILE  engine profile (default "vi" — the full construction/
+                   herding machinery). The first live game proved the
+                   "safe" generalist pointless: `current` strips
+                   perfectly, then has no conversion plan — it squeezed a
+                   human to mobility 1, manufactured its own executioner
+                   pawn, promoted TWO queens to survive the fifty-move
+                   clock, and won. The bot's real audience plays
+                   mate-avoidant (the greeting dares them to), which is
+                   as close to the Zach kernel as any human gets.
+  LOSEBOT_MODEL    opponent model for probes/herding (default "zach").
+                   A human deviating from the kernel TOWARD mating us
+                   serves the goal; deviations away just cost a rebuild.
+                   Set LOSEBOT_PROFILE=current LOSEBOT_MODEL= for the
+                   model-free generalist (adversarial probes: selfmate
+                   proofs valid against any opponent).
   LOSEBOT_DEPTH    misère negamax depth (default 2).
 """
 
@@ -94,8 +101,8 @@ class LoseBotEngine(MinimalEngine):
         # ply-rewind check is insurance against instance reuse and
         # takebacks (a fresh LoseBot simply replans — always correct).
         if self._bot is None or board.ply() < self._last_ply:
-            profile = _env("LOSEBOT_PROFILE", "current")
-            model = _env("LOSEBOT_MODEL", "") or None
+            profile = _env("LOSEBOT_PROFILE", "vi")
+            model = _env("LOSEBOT_MODEL", "zach") or None
             depth = int(_env("LOSEBOT_DEPTH", "2"))
             self._bot = LoseBot(
                 depth=depth, opponent_model=model, profile=profile
