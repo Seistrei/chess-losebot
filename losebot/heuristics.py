@@ -104,15 +104,22 @@ def evaluate(board: chess.Board, root_color: chess.Color,
             v += profile.pawn_base + profile.pawn_value * min(
                 their_pawns, profile.pawn_cap
             )
-            if their_pieces and profile.exec_file_bonus:
+            if their_pieces and (
+                profile.exec_file_bonus
+                or profile.exec_stack_bonus
+                or profile.exec_blocked_penalty
+            ):
                 # Executioner selection at strip time: their pawns are not
-                # equal. Only b/g-file pawns have a corner template, a
-                # same-file rear behind one renews the audited vacate race
-                # (1/2 -> 3/4), and our own pawn below a walkable
+                # equal. Only b/g-file pawns still at or behind the
+                # pre-corner square have a corner template, a same-file
+                # rear behind the usable front renews the audited vacate
+                # race (1/2 -> 3/4), and our own pawn below a walkable
                 # their-pawn is the walk veto in waiting. Strip-phase only
                 # (their_pieces > 0): once they are king+pawns, the plan
                 # machinery owns pawn preferences, and the endgame
-                # references stay untouched by construction.
+                # references stay untouched by construction. Gated on ANY
+                # knob, not just the file bonus, so the three stay
+                # independently tunable.
                 v += _executioner_term(board, us, them, profile)
         if their_pieces == 0:
             v += profile.king_and_pawns_bonus
@@ -280,27 +287,39 @@ def _executioner_term(board: chess.Board, us: chess.Color,
     """Which of their pawns the strip should leave alive.
 
     Scores each corner-capable file (b and g — the only files whose
-    king-holder template exists) that still carries one of their pawns:
-    the front pawn is corner material, every same-file pawn behind it is
-    an audited race renewal, and our own pawn between the front pawn and
-    its arrival square is the emission veto (pawns cannot leave the file,
-    so the walk stays blocked until ours dies or captures away).
+    king-holder template exists) that still carries a USABLE their-pawn:
+    one at or behind the pre-corner rank (kh_viable_files' same-file
+    predicate — a pawn past it can never pose the corner mate again, so
+    it is the spent executioner of the renewal window, not corner
+    material, and no template is ever emitted for it). The most advanced
+    usable pawn is the executioner, every same-file pawn behind IT is an
+    audited race renewal, and our own pawn between the executioner and
+    its arrival square is the emission veto (pawns cannot leave the
+    file, so the walk stays blocked until ours dies or captures away).
     """
     v = 0.0
+    pre_rank = 2 if them == chess.BLACK else 5
     for file in (1, 6):
-        column = [
-            square
+        ranks = [
+            chess.square_rank(square)
             for square in board.pieces(chess.PAWN, them)
             if chess.square_file(square) == file
         ]
-        if not column:
+        usable = [
+            rank
+            for rank in ranks
+            if (rank >= pre_rank if them == chess.BLACK else rank <= pre_rank)
+        ]
+        if not usable:
             continue
-        front = (min if them == chess.BLACK else max)(
-            column, key=chess.square_rank
+        front_rank = (min if them == chess.BLACK else max)(usable)
+        rears = sum(
+            1
+            for rank in ranks
+            if (rank > front_rank if them == chess.BLACK else rank < front_rank)
         )
         v += profile.exec_file_bonus
-        v += profile.exec_stack_bonus * min(len(column) - 1, 2)
-        front_rank = chess.square_rank(front)
+        v += profile.exec_stack_bonus * min(rears, 2)
         blocked = any(
             chess.square_file(square) == file
             and (

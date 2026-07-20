@@ -2577,3 +2577,56 @@ addenda):
    and lands here. The guard's remaining acceptance test is a human
    who keeps their b/g pawns — the corner construction has still
    never posed against a live opponent.
+
+## Review follow-up on the stack feature: realizable executioners only (2026-07-20)
+
+The multi-pawn-stacking review landed four fixes, all verified against
+the geometry rather than taken on faith:
+
+1. **`_executioner_term` now prices only realizable corner material**
+   (review P2, accepted). The old term keyed on the most advanced b/g
+   pawn even past the pre-corner square and counted every same-file
+   companion as renewal equity: a black b2+b4 column priced +100 while
+   the template layer correctly emits b4 with stack_rears=0 (b2 is the
+   spent executioner of the renewal window — no template is ever
+   emitted for a pawn past pre-corner, and kh_viable_files already
+   excludes it), and a lone b2 priced +40 with no king-holder target
+   in existence. The term now selects the most advanced pawn at or
+   behind the pre-corner rank (the same predicate kh_viable_files
+   applies), counts rears strictly behind THAT candidate, and keys the
+   our-pawn block veto on it too — which also repairs the veto in the
+   mixed case (b2+b4 with our pawn on b3: the old front=b2 scan looked
+   below rank 1 and saw nothing). Spent-past-pre-corner columns price
+   as zero. Battery 27d pins the three shapes: b2+b4=40, b2-alone=0,
+   b3+b2 renewal window=40.
+
+2. **The renewal filter is exercised for real** (review P2, accepted).
+   Battery 27b previously hand-pushed Kxb2, so _filter_renewal_capture
+   could rot undetected. The check now builds a vi LoseBot, installs
+   the committed king-holder plan, resolves it across the renewal
+   window (arrival_blocked pose), and runs the ACTUAL
+   _plan_filtered_moves chain at the in-check ply: a1b2 must be the
+   sole survivor on both filter outputs and vi_renewal_captures must
+   read 1; the chain then continues from the filter's own move.
+
+3. **The exec knobs gate independently** (review P3, accepted). The
+   term fired only when exec_file_bonus was nonzero, so zeroing the
+   file bonus silently killed exec_stack_bonus and
+   exec_blocked_penalty too. evaluate() now gates on any of the three.
+   No live profile is affected (the chain inherits all three from
+   CURRENT as a block; v03 zeroes all three), so every reference is
+   byte-identical — this is future-tuning hygiene only.
+
+4. **The stack-drill comment recommends one herder again** (review
+   P3, accepted). The case-8 fixture comment said "Run with
+   --vi-herders 2", contradicting this log and the README: the
+   two-herder experiment was measured and dropped (510-716k-state
+   graphs), and one mobile herder + statics is the shape.
+
+Verification: selftest 92/92 (27b now shows filter=['a1b2']
+renewals=1; 27d shows the three new spent-pawn prices), and case-8
+seed-0 replays its exact reference — stalemate@51, releases=2,
+renewal-captures=1. The endgame drills cannot see the eval change
+(their_pieces > 0 gate; the drills start at king+pawns), so only
+strip-phase play on positions with a spent b/g pawn moves — the leak
+the fix exists to close.

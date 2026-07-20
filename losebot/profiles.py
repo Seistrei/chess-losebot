@@ -111,9 +111,11 @@ class EngineProfile:
     # Off by default: profiles predating the walk stay reproducible.
     walk_pressure: bool = False
     # Executioner selection at strip time (2026-07-19): their b/g pawns
-    # are corner material, a same-file rear behind one is audited renewal
-    # equity (the doubled-stack vacate race lifts 1/2 -> 3/4), and our own
-    # pawn below a walkable their-pawn is the emission veto in waiting.
+    # still at or behind the pre-corner square are corner material (one
+    # past it is spent and prices as nothing), a same-file rear behind
+    # the usable front is audited renewal equity (the doubled-stack
+    # vacate race lifts 1/2 -> 3/4), and our own pawn below a walkable
+    # their-pawn is the emission veto in waiting.
     # Applied only while their_pieces > 0 — the strip is where capture
     # choices happen; endgame pawn preferences belong to the plan
     # machinery, so every king+pawns reference is untouched by

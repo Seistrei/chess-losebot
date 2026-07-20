@@ -3010,12 +3010,18 @@ def selftest() -> int:
     )
 
     # 27b. The renewal chain end to end (the adjudicated 1/2 -> 3/4 lift):
-    # race 1 scores the audited coin at the stacked pose; the LOSING branch
-    # (early push, Kxb2) leaves the rear pawn as Zach's whole quiet pool;
-    # the committed plan resolves the mid-walk template (walk 1, blockers
-    # 0) across the executioner's death; and one forced push later race 2
-    # scores the same coin again with its win branch probe-PROVEN — the
-    # second coin no bare-executioner pose has.
+    # race 1 scores the audited coin at the stacked pose; the LOSING
+    # branch (early push, check from the arrival square) runs through a
+    # committed bot's ACTUAL plan-filter chain, which must resolve the
+    # plan across the renewal window (their spent pawn on the arrival),
+    # funnel the evasions to the renewal capture alone, and fire the
+    # counter — pushing a hand-written Kxb2 here would leave
+    # _filter_renewal_capture free to rot (review P2). The capture
+    # leaves the rear pawn as Zach's whole quiet pool; the committed
+    # plan resolves the mid-walk template (walk 1, blockers 0) across
+    # the executioner's death; and one forced push later race 2 scores
+    # the same coin again with its win branch probe-PROVEN — the second
+    # coin no bare-executioner pose has.
     from .herding_vi import score_release_moves as _stack_score
     from .search import support_zach as _support_zach
 
@@ -3025,11 +3031,20 @@ def selftest() -> int:
     )
     renewal_board.push_uci("b2a1")
     renewal_board.push_uci("b3b2")
-    renewal_board.push_uci("a1b2")
-    renewal_pool = [m.uci() for m in _support_zach(renewal_board)]
     stack_plan = ConstructionPlan(
         pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king",
     )
+    renewal_bot = LoseBot(
+        depth=1, opponent_model="zach", profile="vi", vi_herders=1,
+    )
+    renewal_bot.plan = stack_plan
+    checked_target = renewal_bot.planned_target(renewal_board, chess.WHITE)
+    filtered, filtered_vi = renewal_bot._plan_filtered_moves(
+        renewal_board, list(renewal_board.legal_moves), checked_target,
+    )
+    renewal_choice = [m.uci() for m in filtered]
+    renewal_board.push_uci("a1b2")
+    renewal_pool = [m.uci() for m in _support_zach(renewal_board)]
     mid_walk = stack_plan.resolve(renewal_board, chess.WHITE)
     renewal_board.push_uci("b4b3")
     race2_target = stack_plan.resolve(renewal_board, chess.WHITE)
@@ -3043,6 +3058,11 @@ def selftest() -> int:
         race1 is not None
         and (race1.move.uci(), race1.winning, race1.losing, race1.pool)
         == ("b2a1", 1, 1, 2)
+        and checked_target is not None
+        and checked_target.arrival_blocked
+        and renewal_choice == ["a1b2"]
+        and filtered_vi == filtered
+        and renewal_bot.vi_renewal_captures == 1
         and renewal_pool == ["b4b3"]
         and mid_walk is not None
         and mid_walk.pawn_walk == 1
@@ -3052,6 +3072,8 @@ def selftest() -> int:
         and (race2.move.uci(), race2.winning, race2.losing, race2.pool)
         == ("b2a1", 1, 1, 2),
         f"race1={'refused' if race1 is None else f'{race1.move.uci()} {race1.winning}W/{race1.losing}L/{race1.pool}P'};"
+        f" filter={renewal_choice}"
+        f" renewals={renewal_bot.vi_renewal_captures};"
         f" renewal-pool={renewal_pool};"
         f" mid-walk={'none' if mid_walk is None else f'walk{mid_walk.pawn_walk}/blk{mid_walk.walk_blockers}'};"
         f" race2={'refused' if race2 is None else f'{race2.move.uci()} {race2.winning}W/{race2.losing}L/{race2.pool}P'}",
@@ -3099,9 +3121,15 @@ def selftest() -> int:
     )
 
     # 27d. Executioner selection at strip time: the term prices b/g files
-    # only — front pawn, capped same-file rears, our own blocking pawn —
-    # and evaluate() applies it exclusively while they still have pieces,
-    # so every king+pawns reference position is untouched by construction.
+    # only — the most advanced still-USABLE pawn (at or behind the
+    # pre-corner rank), capped same-file rears behind it, our own
+    # blocking pawn — and evaluate() applies it exclusively while they
+    # still have pieces, so every king+pawns reference position is
+    # untouched by construction. A pawn past the pre-corner square is
+    # the spent executioner: it earns nothing alone, and in a b2+b4
+    # column the walker b4 is the executioner with NO rear (the template
+    # emits b4 with stack_rears=0), exactly like the posed renewal
+    # window b3+b2 (review P2).
     from dataclasses import replace as _replace
 
     from .heuristics import _executioner_term, evaluate as _evaluate
@@ -3122,11 +3150,29 @@ def selftest() -> int:
     kp_delta = _evaluate(
         kp_board, chess.WHITE, "zach", _CURRENT_PROFILE
     ) - _evaluate(kp_board, chess.WHITE, "zach", silent_profile)
+    spent_pair_term = _executioner_term(
+        chess.Board("6kr/8/8/8/1p6/8/1p6/6K1 w - - 0 1"),
+        chess.WHITE, chess.BLACK, _CURRENT_PROFILE,
+    )
+    spent_lone_term = _executioner_term(
+        chess.Board("6kr/8/8/8/8/8/1p6/6K1 w - - 0 1"),
+        chess.WHITE, chess.BLACK, _CURRENT_PROFILE,
+    )
+    window_term = _executioner_term(
+        chess.Board("6kr/8/8/8/8/1p6/1p6/6K1 w - - 0 1"),
+        chess.WHITE, chess.BLACK, _CURRENT_PROFILE,
+    )
     check(
         "strip-time executioner selection prices b/g files and gates off",
-        term == 110.0 and strip_delta == 110.0 and kp_delta == 0.0,
+        term == 110.0 and strip_delta == 110.0 and kp_delta == 0.0
+        and spent_pair_term == 40.0
+        and spent_lone_term == 0.0
+        and window_term == 40.0,
         f"term={term} (want 40 b-file + 60 stack - 30 blocked + 40 g-file);"
-        f" strip-delta={strip_delta}; kp-delta={kp_delta}",
+        f" strip-delta={strip_delta}; kp-delta={kp_delta};"
+        f" b2+b4={spent_pair_term} (want 40: b4 walks, b2 is spent);"
+        f" b2-alone={spent_lone_term} (want 0: no corner target);"
+        f" b3+b2={window_term} (want 40: posed through the window, no rear)",
     )
 
     # 27e. The rear-food square is billed everywhere race debt is read:
@@ -3384,11 +3430,14 @@ ADOPTION_DRILL_FEN = "8/8/1p1k4/RR6/K1P5/1NPB4/8/8 w - - 0 1"
 # pool, it re-freezes against the re-holding king, and the race re-poses one
 # pawn shorter (audited EV 1/2 -> 3/4 — the first number past the structural
 # cap). Furniture: Kc1 one step off the arrival, Bf5 one move off the cage,
-# Nc8 pre-parked closer (case-6 convention), Nd5 + Rh1 the two herders (the
+# Nc8 pre-parked closer (case-6 convention), Nd5 + Rh1 the herder pool (the
 # knight doubles as the race-2 b4 wall the rebuild must discover — rook
 # walls fail there: rank-4 posts check the goal king, b-file posts refute
 # the mate at delivery, an occupying rook is force-captured at the
-# zugzwang), c4 pawn the rear-safe b5 wall. Run with --vi-herders 2.
+# zugzwang), c4 pawn the rear-safe b5 wall. Run with --vi-herders 1: the
+# two-herder experiment was measured and dropped (510-716k-state graphs,
+# 24s builds under a 700k cap and the game wandered anyway — tuning log,
+# 2026-07-19); one mobile herder + statics is the shape.
 STACK_DRILL_FEN = "2N5/8/2k5/3N1B2/1pP5/1p6/8/2K4R w - - 0 1"
 
 # Conversion drills: Zach is already stripped to king+pawns; can LoseBot
