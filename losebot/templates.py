@@ -756,13 +756,21 @@ def kh_supported_files(board: chess.Board, us: chess.Color,
 def kh_onfile_files(board: chess.Board, us: chess.Color) -> tuple:
     """The corner files whose executioner already stands ON the file.
 
-    kh_viable_files' same-file arm alone, without the donor arm. The
-    distinction is who controls the family's future: an on-file pawn
-    can only leave its file by capturing one of OUR men (a donation we
-    choose), while a donor pawn exits the window by a quiet push of
-    THEIR own — vfGeEKhy's c4 ran c5-c8=Q out of donor range in three
+    kh_viable_files' same-file arm alone, without the donor arm. What
+    makes on-file stock the stronger class is NOT immunity to quiet
+    pushes — an unfrozen pawn on the pre-corner rank exits the window
+    in one, exactly like a donor (2026-07-20 review) — it is three
+    asymmetries no donor has: the pawn leaves its FILE only by
+    capturing one of our men (a donation we choose); its window is one
+    rank deeper and its expiry push is the DELIVERY square itself, so
+    with the corner built in time the "expiry" move is the mate; and
+    the arrival-hold freezes its clock indefinitely, which is the
+    construction's whole plan. A donor that exits the window mates
+    nobody, ever — vfGeEKhy's c4 ran c5-c8=Q out of range in three
     unanswerable tempi after our own 27...Rxa3+ ate its twin. On-file
-    stock is a family we hold; donor-only stock is a family they lend.
+    stock is a family we can hold; donor-only stock is a family they
+    lend. Tempo risk (the premature-push race) is priced by the
+    construction machinery, not this material-class predicate.
     """
     them = not us
     pawns = board.pieces(chess.PAWN, them)
@@ -784,10 +792,12 @@ def kh_floor_tier(board: chess.Board, us: chess.Color) -> int:
     """The construction floor's stock class: 2 on-file, 1 donor-only, 0 none.
 
     Tier 2: some supported family's executioner stands on its file —
-    the family survives every quiet move they make. Tier 1: every
-    supported family rests on donor pawns alone — one quiet push of
-    theirs per donor and the family is gone. Tier 0: no supported
-    family at all. The donation guard's type floor forbids our moves
+    holdable stock whose expiry push is the delivery square (see
+    kh_onfile_files for the honest durability story; this is a
+    material-class floor, not a tempo guarantee). Tier 1: every
+    supported family rests on donor pawns alone — revocable lends
+    whose window exit mates nobody. Tier 0: no supported family at
+    all. The donation guard's type floor forbids our moves
     (and the replies they invite) from DROPPING the tier: vfGeEKhy's
     24...Bb7 gave up the light bishop — the on-file g-family's cage —
     because the donor-only b-family still counted as support, and the

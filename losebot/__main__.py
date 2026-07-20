@@ -3509,6 +3509,45 @@ def selftest() -> int:
         f" vi==silent-field {vi_matches_tier1}",
     )
 
+    # 29f. The tier veto is value-aware on strip captures (2026-07-20
+    # review): their queen at strip scale (810) outbids the 2 -> 1 gap
+    # (450), so Bxd4 survives its own exd4 recapture and reaches the
+    # eval — a living queen is infinite shuffle fuel, no corner ever
+    # converts against it — while the quiet Nc3, which leaves the
+    # g-cage to Qxe3, still dies. The minor-prize counterpart is
+    # already pinned by 28c: Nxd4 (288 < 450) stays vetoed.
+    value_aware = chess.Board("7k/8/8/4p3/p2q2p1/4B3/8/RN1B2K1 w - - 0 1")
+    vetoes_before_va = field_bot.donation_vetoes
+    value_kept = field_bot._filter_donation_guard(
+        value_aware,
+        [chess.Move.from_uci("e3d4"), chess.Move.from_uci("b1c3")],
+    )
+    check(
+        "tier veto is value-aware: the queen strip outbids the 2->1 gap",
+        value_kept == [chess.Move.from_uci("e3d4")]
+        and field_bot.donation_vetoes - vetoes_before_va == 1,
+        f"kept={[value_aware.san(m) for m in value_kept]}"
+        f" (want Bxd4 alone: 810 prize > 450 gap; Nc3 leaves Qxe3);"
+        f" vetoes+={field_bot.donation_vetoes - vetoes_before_va}",
+    )
+
+    # 29g. Nothing outbids the LAST family: same shape without the
+    # light bishop, so the dark bishop is the whole toolkit and the
+    # 2 -> 0 gap is 900 > 810 — the queen strip is refused and the
+    # bishop-saving retreat survives instead. The strip finishes some
+    # other way or the eval carries it; the floor never sells out.
+    last_family = chess.Board("7k/8/8/4p3/p2q2p1/4B3/8/RN4KN w - - 0 1")
+    last_kept = field_bot._filter_donation_guard(
+        last_family,
+        [chess.Move.from_uci("e3d4"), chess.Move.from_uci("e3c1")],
+    )
+    check(
+        "tier veto: no prize buys the last family (gap 900 > queen 810)",
+        last_kept == [chess.Move.from_uci("e3c1")],
+        f"kept={[last_family.san(m) for m in last_kept]}"
+        f" (want Bc1 alone: Bxd4 exd4 would leave tier 0)",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(

@@ -2829,3 +2829,63 @@ The field-frontier list reorders (supersedes the list above):
    EVOLVED: "a human who keeps their b/g pawns" has now happened —
    the new standing test is the corner POSING and the mate LANDING
    against a live opponent.
+
+## Review round on family selection: the queen buys the gap, the docstring stops overclaiming (2026-07-20)
+
+Two findings on the tier feature, both verified against the geometry
+before disposition:
+
+1. **[P1] The unconditional tier veto pre-empted the eval on big
+   strip prizes — TAKEN, value-aware** (the reviewer's own example
+   does not reproduce, but the phenomenon is real). In their FEN the
+   guard does NOT "keep only Ba3": the untouched gxh3 reply kills the
+   light bishop AND walks the g4 stock off-file (tier 0), so Ba3 is
+   vetoed too and the never-empty convention returns both moves. On a
+   clean pose the leak is real: at
+   `7k/8/8/4p3/p2q2p1/4B3/8/RN1B2K1 w`, Bxd4 wins their queen and
+   exd4 recaptures the g-cage bishop (tier 2 -> 1) — the old veto
+   killed it before the eval could price 810 against the 450 gap,
+   contradicting the profile comment's own arithmetic ("their queen
+   still does"). The fix: the reply-recheck exempts a strip capture
+   whose prize at strip scale exceeds the tier gap, gap read from the
+   profile's own tier bonuses (supported/donor/0) — the eval owns
+   queen-vs-gap, the floor owns junk-vs-gap. The self-break arm needs
+   no exemption by construction: a strip capture removes one of THEIR
+   pieces, and their pieces are not viability material, so our own
+   strip can never drop the tier. Consequences pinned: 29f (Bxd4
+   survives its recapture, 810 > 450, while quiet Nc3 leaving the
+   cage to Qxe3 still dies), 29g (nothing buys the LAST family — the
+   same strip at tier 2 -> 0 stays vetoed, 900 > 810), and 28c's
+   Nxd4 keeps its veto (288 < 450) exactly as before. The
+   floor_donor_bonus profile comment now states the value-aware rule
+   it previously only implied.
+
+2. **[P2] "Tier 2 survives every quiet move they make" was an
+   overclaim — DOCS TAKEN, behavior DECLINED.** Confirmed: in
+   `7k/8/8/8/2p5/1p6/2B5/N5K1 b`, the quiet b3-b2 push drops
+   kh_floor_tier from 2 to 1 — an unfrozen pawn on the pre-corner
+   rank exits the window in one push, exactly like a donor. The
+   docstrings now tell the honest durability story: what makes
+   on-file stock the stronger class is three asymmetries, not push
+   immunity — it leaves its FILE only by capturing one of our men (a
+   donation we choose), its window is one rank deeper and its expiry
+   push is the DELIVERY square itself (with the corner built in time
+   the "expiry" move is the mate), and the arrival-hold freezes its
+   clock indefinitely, which is the construction's whole plan. The
+   suggested reclassification (weaker class at immediate expiry) is
+   declined on three grounds: counter_59's b3 IS an unfrozen
+   pre-corner pawn, so the change would flip 28d's pinned 1200
+   boundary and soften the very Qxb3 veto the guard was built for; a
+   pre-corner pawn is the POSED executioner — one push from
+   mate-or-gone is what posed means, and protecting it hardest is the
+   point; and tempo risk is the construction machinery's ledger (the
+   premature-push race has been priced there since the case-6
+   drills), not the material-class floor's.
+
+Verification: selftest 99/99 (was 97; 29f/29g added). The change is
+donation_guard-gated (28f pins the identity-return for every battery
+profile) plus docstrings, and the spot references replay their exact
+pins vs the bf97462 control from this morning's full 32-file run:
+case-8 seed-0 byte-identical (stalemate@51, releases=2,
+renewal-captures=1), motifs byte-identical, both modulo wall-clock
+tokens.

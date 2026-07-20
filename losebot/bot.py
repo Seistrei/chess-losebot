@@ -32,6 +32,7 @@ from .search import (
     selfmate_status,
     support_zach,
 )
+from .heuristics import PIECE_VALS
 from .templates import (
     ConstructionPlan,
     PawnMateTemplate,
@@ -613,7 +614,13 @@ class LoseBot:
           spent the final closer on a strip the queen could have made
           later; vfGeEKhy's 24...Bb7 Bxb7 spent the on-file g-family's
           cage bishop because the donor-only b-family still counted —
-          two donors our own strip then ate and outran).
+          two donors our own strip then ate and outran). The tier veto
+          is VALUE-AWARE on strip captures (2026-07-20 review): a
+          prize above the tier gap at strip scale reaches the eval
+          instead of dying here — their queen (810) buys a 2 -> 1
+          drop (gap 450) because a living queen is infinite shuffle
+          fuel and no corner ever converts against it, while no minor
+          (288/297) does, and nothing buys the LAST family (gap 900).
         - COUNT: at or below three free pieces — cage + closer + herder,
           the minimum ANY family needs — never a non-strip move that
           lets a reply eat one (45.Rb5+ Kxb5, 48.Bb2+ Kxb2). Captures of
@@ -642,11 +649,21 @@ class LoseBot:
             2 if any(file in onfile for file in typed)
             else 1 if typed else 0
         )
+        tier_bonus = (
+            0.0,
+            self.profile.floor_donor_bonus,
+            self.profile.floor_supported_bonus,
+        )
         free = free_piece_count(board, us)
         kept: list[chess.Move] = []
         for move in moves:
             victim = board.piece_type_at(move.to_square)
             strip_capture = victim is not None and victim != chess.PAWN
+            prize = (
+                self.profile.their_piece_scale * PIECE_VALS[victim]
+                if strip_capture
+                else 0.0
+            )
             free_now = free + (1 if move.promotion is not None else 0)
             count_guard = (
                 not strip_capture
@@ -689,9 +706,15 @@ class LoseBot:
                         # the position their reply actually leaves.
                         # 24...Bb7 Bxb7 fails here now — the donor-only
                         # b-family that survives it is tier 1 against
-                        # the on-file g-family's tier 2.
+                        # the on-file g-family's tier 2. A strip prize
+                        # above the tier gap is exempt: the eval owns
+                        # queen-vs-gap, this floor owns junk-vs-gap.
                         board.push(reply)
-                        if kh_floor_tier(board, us) < tier:
+                        after = kh_floor_tier(board, us)
+                        if (
+                            after < tier
+                            and prize <= tier_bonus[tier] - tier_bonus[after]
+                        ):
                             ok = False
                         board.pop()
                     if not ok:
