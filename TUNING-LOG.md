@@ -2095,3 +2095,162 @@ Next, in expected-value order:
 2. Multi-move repairs (seed 4: rook AND knight both misplaced; the
    one-move relocation horizon cannot compose them; unchanged).
 3. Deeper funnel pricing (two-ply funnels; unchanged).
+
+## Multi-pawn stacking: the renewable race, plus executioner selection at strip time (2026-07-19)
+
+The last entry's design question — a corner variant whose walls admit a
+second their-pawn GUARDING the arrival square — has a theorem-shaped
+answer, and it is no. A guard must attack b2 from a3 or c3; a3 is the
+entry square, and a c3 guard checks the king-holder on b2, so no herd
+can even run. Parking the guard one rank up (c4) requires freezing it
+with one of our men on c3, and every freezer type fails its own way:
+our pawn locks the guard out of c3 forever (it never guards, and the
+lost race still ends all-pawns-frozen dead — adjudicated 0.500-no-gain
+on `2N5/8/8/7R/k1p5/1pP5/1K6/1B6 w`); a knight on c3 attacks a4, the
+goal square itself; a rook on c3 PINS the executioner at delivery (the
+b3 push opens rank 3 onto the king that just stepped to a3, so b2# is
+illegal exactly when it matters); a dark bishop on c3 refutes the mate
+with Bxb2. The realizable second their-pawn is not a guard at all — it
+is the SAME-FILE REAR PAWN, and its mechanism is renewal, not defense.
+
+The doubled-executioner stack (their b3+b4): the rear pawn is frozen by
+its own front pawn — their-pawn statics already satisfy the solver's
+freeze rule, so no solver change at all — and it is inert through the
+whole race (both its capture squares stay empty by template). Race 1 is
+the audited coin unchanged. The LOSING branch stops being terminal:
+after the early push, Kxb2 eats the spent executioner, the rear pawn is
+Zach's entire quiet pool (his king is boxed by the same walls that made
+the pose a goal), it walks down one square, re-freezes against the
+re-holding king, and the identical corner race re-poses one pawn
+shorter. Both the capture and the push reset the fifty-move clock; the
+renewal costs ~4 plies. Adjudicated end to end with the release scorer
+on `2N5/8/2N5/8/kpP5/1p6/1K6/1B6 w` (and the kingside mirror): race 1
+scores 1W/1L/2P, the renewal pool is exactly [b4b3], the mid-walk
+template resolves (walk 1, blockers 0) across the executioner's death,
+race 2 scores 1W/1L/2P with its win branch probe-PROVEN via Nb6. The
+race EV lifts 1/2 -> 3/4 (7/8 at depth 3) — the first number past the
+structural cap. A VI-level stacked pose (`1NN5/8/N7/8/kpP5/1p6/1K6/1B5R
+w`, rook herder h1, roam pocket {a4,a5}) builds with ZERO pool
+mismatches and audits 7/7 goal-vacate terminals at the coin, complete.
+All three are permanent motif fixtures (kh-stack-a/-h/-a-herd);
+verdicts of the seven originals byte-identical.
+
+Two wall facts the adjudication forced, both now encoded:
+
+1. **Rear food.** The far-capture rule climbs the stack: at the
+   delivery zugzwang every non-mating move outranks the mate in Zach's
+   pool, so any of OUR men on a rear pawn's far-side capture square is
+   an escape valve exactly when the net closes — with our c3 pawn under
+   a b3+b4 stack, the audit refuses every retreat (bxc3 leaks the
+   zugzwang; that pawn was the baseline fixture's b4 WALL, which is why
+   the first stacked fixture attempt scored NEGATIVE). Encoded as
+   `kh_rear_food_squares` (the far-file ladder above far-capture:
+   c3, then c4 at depth 3), folded into race_clear, `_kh_race_debt`
+   (counted, so the pawn-veto exception stays sound: c2-c3 is a debt
+   swap and stays vetoed; c3-c4 clears at depth 2), and the
+   walk-pressure race billing.
+2. **The race-2 b4 wall must be knight-class.** Once the rear walks
+   down, b4 opens, and every rook wall fails its own way: rank-4 posts
+   check the goal king through the vacated square, b-file posts
+   re-attack the arrival at delivery (the audit's 0.000-row geometry),
+   and an occupying rook is force-captured at the zugzwang (a capture
+   is Zach's preferred non-mating move; defense is irrelevant — the
+   mate evaporates either way). A knight on the c6/d5/a6 family walls
+   b4 while touching nothing critical; c4-pawn-defended d5 is even
+   king-proof. The solver needs no telling — herder-inclusive goal
+   classification already routes a knight herder to walling posts —
+   but the drill must SUPPLY the knight.
+
+Template/plan machinery: `stack_rears` on every king-holder template
+(loose-column scan capped at 2 — gaps compact under the same uniform
+pushes that walk the front pawn); a stacked file outranks a bare one
+BEFORE distance in both `best_pawn_mate_template` and the adoption
+chooser (no setup-step count buys EV like a second coin); walking
+templates now tolerate THEIR pawn on the arrival square (the spent
+executioner mid-renewal, emitted as arrival_blocked) so the committed
+plan keeps resolving through the renewal window instead of being
+replaced by a piece plan at the worst ply. And the drill's first wreck
+became a commitment filter: at the renewal check, adversarial negamax
+refuses Kx(arrival) whenever a herder hangs in the continuation and
+resolves the check by EATING A COLUMN PAWN WITH A PIECE instead (the
+Rxb3 wreck — rook seal posts live on the renewal file by construction).
+`_filter_renewal_capture`: in check under a king-holder plan with their
+pawn on the arrival square, a legal king retake of the arrival IS the
+move — it eats the spent pawn, re-holds the freeze square, and resets
+the clock in one tempo. It runs after the stalemate-strip, so the
+bare-executioner references (where Kx instantly stalemates and the old
+games already avoided or were forced into it) are untouched by
+construction.
+
+Executioner selection at strip time (the feature's other half,
+`_executioner_term`): their pawns are not equal, and the strip is where
+capture choices happen. Gated on their_pieces > 0 — once they are
+king+pawns the plan machinery owns pawn preferences, so every endgame
+reference is untouched by construction. Per corner-capable file (b/g
+only): +40 for a surviving their-pawn (corner material), +60 per
+same-file rear behind it (audited renewal equity, capped 2), -30 when
+OUR pawn sits below their front pawn (the emission veto in waiting —
+pawns cannot leave files, so the file stays dead until ours does).
+Knobs zero-defaulted (v03 and all pre-stack profiles byte-identical),
+set in CURRENT and inherited by the template/planner/vi chain.
+Ordering, not precision: rear > front > generic pawn, everything far
+below piece values so the strip itself is never distorted.
+
+New STACK DRILL (endgames case 8, `2N5/8/2k5/3N1B2/1pP5/1p6/8/2K4R w`,
+`--profile vi --vi-herders 1`): the doubled pair at the pre-corner,
+king one step off the arrival, bishop one move off the cage, closer
+pre-parked c8 (case-6 convention), Nd5+Rh1 the herder pool (the knight
+doubles as the race-2 b4 wall — c4-defended, so his king can never
+eat it even when forced), c4 the rear-safe b5 wall. A --vi-herders 2
+experiment was measured and dropped: two-herder graphs at this open
+pose run 510-716k states (the state-cap failures at 200k left the
+renewal ply policyless — 20.Ba2 wrecked the pose from the fallback;
+with --vi-state-cap 700000, now a CLI override on endgames AND arena,
+builds succeed but cost 24s each and the game wandered to max-plies
+anyway). One herder + statics is the shape: seed 0's race 2 shows the
+policy relocating the rook OFF the renewal file to c5 and firing the
+vacate behind the Nd5 wall — the adjudicated geometry, discovered by
+the solver in-game.
+
+Results, 10 seeds: **3 CONVERTED (26/48/42 plies — seed 3's 26 is the
+fastest conversion ever recorded, beating relocation's 40)**, and the
+renewal pipeline is live end to end: 10 vacate races offered across 8
+seeds, 3 won; seeds 0/2/7 lost race 1, renewed through Kxb2 + the
+forced rear walk, and were offered race 2 in-game (all three lost the
+second coin too — stalemate@51, max-plies wander, stalemate@47 — the
+1/8 tail realized, n=3); seeds 1/3/4/9 had the premature push land
+DURING construction and the renewal capture ate it on the spot, the
+rear inheriting the template (seed 3 then converted — the stack as
+construction insurance, unplanned but exactly the audited mechanism).
+Losses: 3 double-lost coins, 2 repetitions (28/58 plies — rook two-ply
+shuttles, the known deeper-funnel-pricing family, now with a 28-ply
+repro), 1 herd clock death (fifty@100), 1 single coin lost after the
+construction heal (@29). renewal-captures fired in 7 of 10 seeds.
+
+Reference batteries, all verified against a base-commit (675e069)
+control worktree at outcome-and-ply level: case-6 7/10 at the exact
+reference plies (48/52/34/64/42/38/34; fifty@100; stalemates 61/51 =
+control), case-7 4/10 exact (0@56/2@40/3@106/5@72; losses
+57/108/31/71/111/152 = control for every seed), case-2 seed-5
+fifty@225 with identical build/flip/goal gauges and renewal-captures=0,
+motif verdicts byte-identical. The new paths are unreachable without a
+second same-file their-pawn, and no reference position has one.
+Selftest suite 81 -> 86: the posed stack template (rears, food square,
+race_clear flip, baseline-zero), the renewal chain end to end, the
+stacked herd build+audit (7/7, zero mismatches), the strip term's
+arithmetic AND its their_pieces gate, rear-food billed as race debt.
+
+Next, in expected-value order:
+
+1. Deeper funnel pricing — now owns four battery losses (case-8 seeds
+   1/4 with a 28-ply repro, case-7 residual family) and is the largest
+   remaining draw engine. The principled fix is still a solved
+   wait-phase MDP or burning generalized off-policy.
+2. Full-game stacking validation: the strip terms are live in CURRENT;
+   measure whether real strips now deliver b/g pawns (and pairs) into
+   the endgame, and whether the adoption/stack machinery fires from
+   organic positions (arena vs Zach, the real conversion metric).
+3. Multi-move repairs (case-7 seed 4; unchanged).
+4. Stack donation engineering (forcing cxb recaptures to CREATE
+   doubled files against a never-capturing opponent) — speculative,
+   only the strip terms' organic stacks come free today.

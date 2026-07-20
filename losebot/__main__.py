@@ -41,6 +41,7 @@ def make_bot(kind: str, args, color_tag: str):
             probe_cap=args.probe_cap,
             max_probe_n=args.probe_depth,
             vi_herders=getattr(args, "vi_herders", None),
+            vi_state_cap=getattr(args, "vi_state_cap", None),
         )
     if kind == "zach":
         return ZachBot(seed=args.seed)
@@ -2964,6 +2965,192 @@ def selftest() -> int:
         ledger_detail,
     )
 
+    # 27a. The doubled-executioner stack in the template layer (2026-07-19):
+    # the posed b3 template carries its rear (stack_rears=1), names the
+    # rear-food square c3 (the far-capture rule one rank up), keeps
+    # race_clear while c3 is empty, and loses it the moment one of OUR men
+    # parks there — the bxc3 delivery leak the adjudication refused. The
+    # baseline fixture stays untouched (stack_rears=0, no food squares), so
+    # every pre-stack reference ranks and filters exactly as before.
+    stack_board = chess.Board("2N5/8/2N5/8/kpP5/1p6/1K6/1B6 w - - 0 1")
+    stack_target = next(
+        (t for t in pawn_mate_templates(stack_board, chess.WHITE)
+         if t.king_holder and t.pawn_square == chess.B3), None,
+    )
+    bare_board = chess.Board("2N5/8/8/7R/k1P5/1pP5/1K6/1B6 w - - 0 1")
+    bare_target = next(
+        (t for t in pawn_mate_templates(bare_board, chess.WHITE)
+         if t.king_holder and t.pawn_square == chess.B3), None,
+    )
+    poisoned_board = stack_board.copy(stack=False)
+    poisoned_board.set_piece_at(
+        chess.C3, chess.Piece(chess.PAWN, chess.WHITE)
+    )
+    poisoned_target = next(
+        (t for t in pawn_mate_templates(poisoned_board, chess.WHITE)
+         if t.king_holder and t.pawn_square == chess.B3), None,
+    )
+    check(
+        "the posed stack template counts its rear and names the food square",
+        stack_target is not None
+        and stack_target.stack_rears == 1
+        and stack_target.kh_rear_food_squares == (chess.C3,)
+        and stack_target.race_clear
+        and bare_target is not None
+        and bare_target.stack_rears == 0
+        and bare_target.kh_rear_food_squares == ()
+        and poisoned_target is not None
+        and poisoned_target.stack_rears == 1
+        and not poisoned_target.race_clear,
+        f"stack rears={None if stack_target is None else stack_target.stack_rears}"
+        f" foods={None if stack_target is None else tuple(chess.square_name(s) for s in stack_target.kh_rear_food_squares)}"
+        f" clear={None if stack_target is None else stack_target.race_clear};"
+        f" bare rears={None if bare_target is None else bare_target.stack_rears};"
+        f" poisoned clear={None if poisoned_target is None else poisoned_target.race_clear}",
+    )
+
+    # 27b. The renewal chain end to end (the adjudicated 1/2 -> 3/4 lift):
+    # race 1 scores the audited coin at the stacked pose; the LOSING branch
+    # (early push, Kxb2) leaves the rear pawn as Zach's whole quiet pool;
+    # the committed plan resolves the mid-walk template (walk 1, blockers
+    # 0) across the executioner's death; and one forced push later race 2
+    # scores the same coin again with its win branch probe-PROVEN — the
+    # second coin no bare-executioner pose has.
+    from .herding_vi import score_release_moves as _stack_score
+    from .search import support_zach as _support_zach
+
+    renewal_board = chess.Board("2N5/8/2N5/8/kpP5/1p6/1K6/1B6 w - - 0 1")
+    race1 = _stack_score(
+        renewal_board, stack_target, "zach", 1, probe_cap=50_000,
+    )
+    renewal_board.push_uci("b2a1")
+    renewal_board.push_uci("b3b2")
+    renewal_board.push_uci("a1b2")
+    renewal_pool = [m.uci() for m in _support_zach(renewal_board)]
+    stack_plan = ConstructionPlan(
+        pawn_file=1, checked_side=-1, created_ply=0, holder_mode="king",
+    )
+    mid_walk = stack_plan.resolve(renewal_board, chess.WHITE)
+    renewal_board.push_uci("b4b3")
+    race2_target = stack_plan.resolve(renewal_board, chess.WHITE)
+    race2 = (
+        None if race2_target is None else _stack_score(
+            renewal_board, race2_target, "zach", 1, probe_cap=50_000,
+        )
+    )
+    check(
+        "the lost stacked race renews into a second audited coin",
+        race1 is not None
+        and (race1.move.uci(), race1.winning, race1.losing, race1.pool)
+        == ("b2a1", 1, 1, 2)
+        and renewal_pool == ["b4b3"]
+        and mid_walk is not None
+        and mid_walk.pawn_walk == 1
+        and mid_walk.walk_blockers == 0
+        and mid_walk.stack_rears == 0
+        and race2 is not None
+        and (race2.move.uci(), race2.winning, race2.losing, race2.pool)
+        == ("b2a1", 1, 1, 2),
+        f"race1={'refused' if race1 is None else f'{race1.move.uci()} {race1.winning}W/{race1.losing}L/{race1.pool}P'};"
+        f" renewal-pool={renewal_pool};"
+        f" mid-walk={'none' if mid_walk is None else f'walk{mid_walk.pawn_walk}/blk{mid_walk.walk_blockers}'};"
+        f" race2={'refused' if race2 is None else f'{race2.move.uci()} {race2.winning}W/{race2.losing}L/{race2.pool}P'}",
+    )
+
+    # 27c. The stacked herd pose builds and audits through the standard
+    # pipeline: the rear pawn is frozen by its own front pawn (their-pawn
+    # statics satisfy the freeze rule — no solver change, which is itself
+    # the pin), the roam pocket solves with zero pool mismatches, and
+    # every reachable goal-vacate terminal converts at the audited half.
+    from .herding_vi import HerdingPolicy as _StackPolicy
+
+    herd_stack_board = chess.Board("1NN5/8/N7/8/kpP5/1p6/1K6/1B5R w - - 0 1")
+    herd_stack_target = next(
+        (t for t in pawn_mate_templates(herd_stack_board, chess.WHITE)
+         if t.king_holder and t.pawn_square == chess.B3), None,
+    )
+    stack_policy = None
+    if herd_stack_target is not None:
+        stack_policy = _StackPolicy.build(
+            herd_stack_board, herd_stack_target,
+            max_herders=1, state_cap=50_000, time_budget_ms=20_000,
+            gamma=0.99, herders=((chess.H1, chess.ROOK),),
+            validate_pools=True, conversion_ms=20_000,
+            race_max_losing=1, conversion_probe_cap=50_000,
+        )
+    stack_report = None if stack_policy is None else stack_policy.report
+    check(
+        "the stacked herd pose audits every goal at the coin",
+        stack_report is not None
+        and stack_report.ok
+        and stack_report.root_live
+        and stack_report.root_converts
+        and stack_report.conversion_complete
+        and stack_report.pool_mismatches == 0
+        and stack_report.goal_states == 7
+        and stack_report.converting_goals == 7
+        and herd_stack_target.stack_rears == 1,
+        "build failed" if stack_report is None or not stack_report.ok else (
+            f"goals={stack_report.converting_goals}/{stack_report.goal_states};"
+            f" converts={stack_report.root_converts};"
+            f" complete={stack_report.conversion_complete};"
+            f" mismatches={stack_report.pool_mismatches}"
+        ),
+    )
+
+    # 27d. Executioner selection at strip time: the term prices b/g files
+    # only — front pawn, capped same-file rears, our own blocking pawn —
+    # and evaluate() applies it exclusively while they still have pieces,
+    # so every king+pawns reference position is untouched by construction.
+    from dataclasses import replace as _replace
+
+    from .heuristics import _executioner_term, evaluate as _evaluate
+    from .profiles import CURRENT as _CURRENT_PROFILE
+
+    strip_board = chess.Board("6kr/8/1p4p1/1p6/3p4/8/1P6/2B3K1 w - - 0 1")
+    kp_board = chess.Board("6k1/8/1p4p1/1p6/3p4/8/1P6/2B3K1 w - - 0 1")
+    silent_profile = _replace(
+        _CURRENT_PROFILE, exec_file_bonus=0.0, exec_stack_bonus=0.0,
+        exec_blocked_penalty=0.0,
+    )
+    term = _executioner_term(
+        strip_board, chess.WHITE, chess.BLACK, _CURRENT_PROFILE
+    )
+    strip_delta = _evaluate(
+        strip_board, chess.WHITE, "zach", _CURRENT_PROFILE
+    ) - _evaluate(strip_board, chess.WHITE, "zach", silent_profile)
+    kp_delta = _evaluate(
+        kp_board, chess.WHITE, "zach", _CURRENT_PROFILE
+    ) - _evaluate(kp_board, chess.WHITE, "zach", silent_profile)
+    check(
+        "strip-time executioner selection prices b/g files and gates off",
+        term == 110.0 and strip_delta == 110.0 and kp_delta == 0.0,
+        f"term={term} (want 40 b-file + 60 stack - 30 blocked + 40 g-file);"
+        f" strip-delta={strip_delta}; kp-delta={kp_delta}",
+    )
+
+    # 27e. The rear-food square is billed everywhere race debt is read:
+    # the walk-pressure potential charges a squatter there like any fixed
+    # race square, and _kh_race_debt counts it (the counted form is what
+    # lets a clearing pawn push through the king-mode veto).
+    from .bot import _kh_race_debt as _race_debt
+    from .planning import _PRESSURE_RACE as _RACE_CHARGE
+
+    clean_cost = walk_pressure_cost(stack_board, stack_target, chess.WHITE)
+    clean_debt = _race_debt(stack_board, chess.WHITE, stack_target)
+    food_cost = walk_pressure_cost(
+        poisoned_board, stack_target, chess.WHITE
+    )
+    food_debt = _race_debt(poisoned_board, chess.WHITE, stack_target)
+    check(
+        "rear-food squatters are billed as race debt",
+        food_cost - clean_cost == _RACE_CHARGE
+        and clean_debt == 0
+        and food_debt == 1,
+        f"cost delta={food_cost - clean_cost} (want {_RACE_CHARGE});"
+        f" debt {clean_debt}->{food_debt}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -3016,6 +3203,22 @@ KING_HOLDER_DRILL_FEN = "R4N2/8/2k5/8/3B1P2/5Pp1/8/5K2 w - - 0 1"
 # — the drill-6 terminal mirrored to the queenside — and race the vacate.
 ADOPTION_DRILL_FEN = "8/8/1p1k4/RR6/K1P5/1NPB4/8/8 w - - 0 1"
 
+# STACKED construction drill (case 8): the doubled-executioner corner
+# pipeline. Black's b3+b4 pair is the audited renewal stack — the rear pawn
+# is frozen by its own front pawn (both its capture squares stay empty: no
+# white man may ever stand on c3, the rear-food square, or the delivery
+# zugzwang leaks through bxc3), so the same corner construction offers the
+# vacate race TWICE: a lost coin forces Kxb2, the rear pawn is Zach's whole
+# pool, it re-freezes against the re-holding king, and the race re-poses one
+# pawn shorter (audited EV 1/2 -> 3/4 — the first number past the structural
+# cap). Furniture: Kc1 one step off the arrival, Bf5 one move off the cage,
+# Nc8 pre-parked closer (case-6 convention), Nd5 + Rh1 the two herders (the
+# knight doubles as the race-2 b4 wall the rebuild must discover — rook
+# walls fail there: rank-4 posts check the goal king, b-file posts refute
+# the mate at delivery, an occupying rook is force-captured at the
+# zugzwang), c4 pawn the rear-safe b5 wall. Run with --vi-herders 2.
+STACK_DRILL_FEN = "2N5/8/2k5/3N1B2/1pP5/1p6/8/2K4R w - - 0 1"
+
 # Conversion drills: Zach is already stripped to king+pawns; can LoseBot
 # force him to deliver mate? This is the phase where full games stall.
 ENDGAME_FENS = [
@@ -3026,6 +3229,7 @@ ENDGAME_FENS = [
     "1k6/p1p5/8/8/5B2/2N5/PPP1QPPP/2KR4 w - - 0 1",
     KING_HOLDER_DRILL_FEN,
     ADOPTION_DRILL_FEN,
+    STACK_DRILL_FEN,
 ]
 
 
@@ -3047,6 +3251,7 @@ def endgames(args) -> int:
             probe_cap=args.probe_cap,
             max_probe_n=args.probe_depth,
             vi_herders=args.vi_herders,
+            vi_state_cap=args.vi_state_cap,
             release_audit=args.release_audit,
         )
         zach = ZachBot(seed=args.seed + i)
@@ -3147,6 +3352,7 @@ def endgames(args) -> int:
                 f" walk-pressure={bot.vi_walk_pressure_moves};"
                 f" cage-builds={bot.vi_cage_builds};"
                 f" capture-guards={bot.vi_capture_guards};"
+                f" renewal-captures={bot.vi_renewal_captures};"
                 f" funnel-guards={bot.vi_wait_funnel_guards};"
                 f" burn-updates={bot.vi_burn_updates}"
                 f" ({bot.vi_burned_states} burned at end);"
@@ -3287,6 +3493,11 @@ def main() -> int:
     eg.add_argument("--probe-depth", type=int, default=None)
     eg.add_argument("--vi-herders", type=int, default=None,
                     help="override the vi profile's mobile herder count")
+    eg.add_argument("--vi-state-cap", type=int, default=None,
+                    help="override the vi profile's sub-MDP state cap "
+                         "(two-herder rebuilds at open positions — the "
+                         "stacked drill — need more room than the arena "
+                         "default)")
     eg.add_argument("--release-audit", action="store_true",
                     help="log every release-scan decision: candidate "
                          "verdicts, audited goal odds, clean-board twin")
@@ -3337,6 +3548,8 @@ def main() -> int:
     arena.add_argument("--probe-depth", type=int, default=None)
     arena.add_argument("--vi-herders", type=int, default=None,
                        help="override the vi profile's mobile herder count")
+    arena.add_argument("--vi-state-cap", type=int, default=None,
+                       help="override the vi profile's sub-MDP state cap")
 
     args = parser.parse_args()
     if args.cmd == "selftest":

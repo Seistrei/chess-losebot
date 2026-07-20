@@ -375,6 +375,12 @@ def walk_pressure_cost(board: chess.Board, target: PawnMateTemplate,
     far = board.piece_at(target.kh_far_capture_square)
     if far is not None and far.color == us:
         cost += _PRESSURE_RACE
+    for food in target.kh_rear_food_squares:
+        # The far-capture rule once per stacked rear: our man there is the
+        # bxc3 escape valve at the delivery zugzwang (audit-refused).
+        squatter = board.piece_at(food)
+        if squatter is not None and squatter.color == us:
+            cost += _PRESSURE_RACE
     return cost
 
 

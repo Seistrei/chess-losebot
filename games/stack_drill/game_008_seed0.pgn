@@ -1,0 +1,12 @@
+[Event "Misere chess arena"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "losebot"]
+[Black "zach"]
+[Result "1/2-1/2"]
+[FEN "2N5/8/2k5/3N1B2/1pP5/1p6/8/2K4R w - - 0 1"]
+[SetUp "1"]
+[Termination "stalemate; misere winner: none"]
+
+1. Bb1 Kb7 2. Kb2 Kc6 3. Re1 Kb7 4. Re7+ Ka8 5. Ra7+ Kb8 6. Ra5 Kb7 7. Rc5 Kb8 8. Ra5 Kb7 9. Rc5 Kb8 10. Rc6 Ka8 11. Rd6 Kb7 12. Rd7+ Kb8 13. Rd6 Kb7 14. Rd7+ Ka6 15. Rb7 Ka5 16. Rb5+ Ka4 17. Ka1 b2+ 18. Kxb2 b3 19. Rb6 Ka5 20. Rb7 Ka6 21. Rc7 Ka5 22. Rc5+ Ka6 23. Rc7 Ka5 24. Rc5+ Ka4 25. Ka1 b2+ 26. Kxb2 1/2-1/2

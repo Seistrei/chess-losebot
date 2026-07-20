@@ -68,6 +68,12 @@ docker run --rm losebot pypy3 -m losebot endgames --profile vi `
 docker run --rm losebot pypy3 -m losebot endgames --profile vi `
   --case 7 --seed 1 --vi-herders 1 --max-plies 240 --release-audit
 
+# Stacked-executioner drill: case 8's doubled b-pawns renew the corner
+# vacate race after a lost coin (audited EV 1/2 -> 3/4); watch for
+# releases=2 and renewal-captures=1 in the vi gauges of a renewed seed
+docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+  --case 8 --seed 0 --vi-herders 1 --max-plies 240
+
 # Adjudicate conversion motifs (king-holder release, forced capture-mate)
 # with the conversion audit under research budgets
 docker run --rm losebot pypy3 -m losebot motifs

@@ -64,6 +64,35 @@ def _kh_squares(arrival: chess.Square, checked: chess.Square) -> tuple:
     )
 
 
+_STACK_REAR_CAP = 2
+
+
+def _stack_rears(board: chess.Board, them: chess.Color,
+                 pawn_square: chess.Square, step: int) -> int:
+    """Their same-file pawns queued behind the executioner (or walker).
+
+    Each rear pawn is a renewal: when the front pawn's vacate race is lost
+    (early push, our king recaptures on the arrival square), the rear pawn
+    is Zach's whole quiet pool, walks down one square, re-freezes against
+    the re-holding king, and the audited corner race re-poses one pawn
+    shorter — the adjudicated 1/2 -> 3/4 lift (tuning log, 2026-07-19).
+    Gaps in the column are counted: a loose rear compacts against the
+    front pawn by the same uniform pushes that walk the front one. Any
+    non-pawn occupant ends the column — a piece cannot become a b-file
+    pawn. Capped: the third renewal's equity is a sixteenth of a win.
+    """
+    rears = 0
+    square = pawn_square - step
+    while 0 <= square < 64 and rears < _STACK_REAR_CAP:
+        piece = board.piece_at(square)
+        if piece is not None:
+            if piece.color != them or piece.piece_type != chess.PAWN:
+                break
+            rears += 1
+        square -= step
+    return rears
+
+
 @dataclass(frozen=True)
 class PawnMateTemplate:
     pawn_square: chess.Square
@@ -91,6 +120,10 @@ class PawnMateTemplate:
     # freeze-release debt). Both are 0 on every posed template.
     pawn_walk: int = 0
     walk_blockers: int = 0
+    # Their same-file pawns queued behind the executioner: each is one
+    # renewal of the vacate race (audited 1/2 -> 3/4 for the first), so a
+    # stacked file outranks a bare one at the same distance.
+    stack_rears: int = 0
 
     @property
     def setup_distance(self) -> int:
@@ -177,6 +210,31 @@ class PawnMateTemplate:
     @property
     def kh_far_capture_square(self) -> chess.Square:
         return _kh_squares(self.arrival_square, self.checked_square)[4]
+
+    @property
+    def kh_rear_food_squares(self) -> tuple:
+        """Far-file squares diagonally ahead of each stacked rear pawn.
+
+        The far-capture rule one rank up, once per rear: at the delivery
+        zugzwang every non-mating move left in Zach's pool outranks the
+        mate, so any of OUR men on a rear pawn's capture square is an
+        escape valve exactly when the net closes (the bxc3 leak: with our
+        pawn on c3 under a b3+b4 stack, the audit refuses every retreat).
+        The corner-side diagonal needs no twin rule — it is the entry
+        square and the seal square, already constrained. Squares are the
+        POSE-time ones (rears compacted against the executioner), which is
+        where the delivery happens whatever the column looks like mid-walk.
+        """
+        a_file = chess.square_file(self.arrival_square)
+        a_rank = chess.square_rank(self.arrival_square)
+        c_file = chess.square_file(self.checked_square)
+        c_rank = chess.square_rank(self.checked_square)
+        rank_step = c_rank - a_rank
+        far_file = 2 * a_file - c_file
+        return tuple(
+            chess.square(far_file, a_rank - (i + 1) * rank_step)
+            for i in range(self.stack_rears)
+        )
 
     @property
     def kh_closer_park_square(self) -> chess.Square:
@@ -313,11 +371,22 @@ def _king_holder_template(
         piece = board.piece_at(square)
         return piece is not None and piece.color == us
 
+    them = not us
+    step = 8 if them == chess.WHITE else -8
+    rears = _stack_rears(board, them, pawn_square, step)
+    a_rank = chess.square_rank(arrival)
+    c_rank = chess.square_rank(checked_square)
+    far_file = chess.square_file(far_capture)
+    rear_foods = tuple(
+        chess.square(far_file, a_rank - (i + 1) * (c_rank - a_rank))
+        for i in range(rears)
+    )
     race_clear = (
         board.piece_at(checked_square) is None
         and board.piece_at(escape) is None
         and not ours_on(entry)
         and not ours_on(far_capture)
+        and not any(ours_on(food) for food in rear_foods)
     )
     return PawnMateTemplate(
         pawn_square=pawn_square,
@@ -336,6 +405,7 @@ def _king_holder_template(
         race_clear=race_clear,
         pawn_walk=pawn_walk,
         walk_blockers=walk_blockers,
+        stack_rears=rears,
     )
 
 
@@ -384,10 +454,15 @@ def _prospective_king_holder_template(
     checked_square = chess.square(corner_file, corner_rank)
 
     occupant = board.piece_at(arrival)
-    if occupant is not None and (
-        occupant.color != us or occupant.piece_type == chess.PAWN
-    ):
-        return None
+    if occupant is not None:
+        if occupant.color == us and occupant.piece_type == chess.PAWN:
+            return None  # our pawn can never leave the file
+        if occupant.color != us and occupant.piece_type != chess.PAWN:
+            return None  # their piece: this phase is over anyway
+        # THEIR pawn on the arrival square is the spent executioner of the
+        # renewal window (early push, not yet retaken): the committed plan
+        # must keep resolving through it so the renewal capture can retake
+        # the square — the shared constructor emits it as arrival_blocked.
     blockers = 0
     square = pawn_square + step
     while True:
@@ -522,11 +597,15 @@ def best_pawn_mate_template(board: chess.Board,
         return None
     # King-holder templates outrank piece holders whatever their distance:
     # the release theorem makes a completed piece-holder construction
-    # unconvertible, while the audited corner race converts at 1/2.
+    # unconvertible, while the audited corner race converts at 1/2. Among
+    # king holders, a stacked file outranks a bare one before distance is
+    # consulted — each rear pawn renews the race (1/2 -> 3/4 audited), and
+    # no setup-step count buys expected value like a second coin does.
     return min(
         templates,
         key=lambda target: (
             0 if target.king_holder else 1,
+            -target.stack_rears,
             target.setup_distance,
             -target.cage_occupancy,
             target.pawn_square,

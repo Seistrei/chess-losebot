@@ -71,6 +71,16 @@ def evaluate(board: chess.Board, root_color: chess.Color,
             v += profile.pawn_base + profile.pawn_value * min(
                 their_pawns, profile.pawn_cap
             )
+            if their_pieces and profile.exec_file_bonus:
+                # Executioner selection at strip time: their pawns are not
+                # equal. Only b/g-file pawns have a corner template, a
+                # same-file rear behind one renews the audited vacate race
+                # (1/2 -> 3/4), and our own pawn below a walkable
+                # their-pawn is the walk veto in waiting. Strip-phase only
+                # (their_pieces > 0): once they are king+pawns, the plan
+                # machinery owns pawn preferences, and the endgame
+                # references stay untouched by construction.
+                v += _executioner_term(board, us, them, profile)
         if their_pieces == 0:
             v += profile.king_and_pawns_bonus
             if not _any_pawn_can_move(board, them, us):
@@ -230,6 +240,46 @@ def _menu_term(board: chess.Board, model: str | None,
             + profile.mating_move_bonus * min(mating, profile.mating_move_cap)
         )
     return -profile.large_menu_penalty * len(legal)
+
+
+def _executioner_term(board: chess.Board, us: chess.Color,
+                      them: chess.Color, profile: EngineProfile) -> float:
+    """Which of their pawns the strip should leave alive.
+
+    Scores each corner-capable file (b and g — the only files whose
+    king-holder template exists) that still carries one of their pawns:
+    the front pawn is corner material, every same-file pawn behind it is
+    an audited race renewal, and our own pawn between the front pawn and
+    its arrival square is the emission veto (pawns cannot leave the file,
+    so the walk stays blocked until ours dies or captures away).
+    """
+    v = 0.0
+    for file in (1, 6):
+        column = [
+            square
+            for square in board.pieces(chess.PAWN, them)
+            if chess.square_file(square) == file
+        ]
+        if not column:
+            continue
+        front = (min if them == chess.BLACK else max)(
+            column, key=chess.square_rank
+        )
+        v += profile.exec_file_bonus
+        v += profile.exec_stack_bonus * min(len(column) - 1, 2)
+        front_rank = chess.square_rank(front)
+        blocked = any(
+            chess.square_file(square) == file
+            and (
+                chess.square_rank(square) < front_rank
+                if them == chess.BLACK
+                else chess.square_rank(square) > front_rank
+            )
+            for square in board.pieces(chess.PAWN, us)
+        )
+        if blocked:
+            v -= profile.exec_blocked_penalty
+    return v
 
 
 def _any_pawn_can_move(board: chess.Board, owner: chess.Color,

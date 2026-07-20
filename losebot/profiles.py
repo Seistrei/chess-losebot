@@ -110,6 +110,17 @@ class EngineProfile:
     # a two-square prison anywhere on the board, a certified-dead arrival.
     # Off by default: profiles predating the walk stay reproducible.
     walk_pressure: bool = False
+    # Executioner selection at strip time (2026-07-19): their b/g pawns
+    # are corner material, a same-file rear behind one is audited renewal
+    # equity (the doubled-stack vacate race lifts 1/2 -> 3/4), and our own
+    # pawn below a walkable their-pawn is the emission veto in waiting.
+    # Applied only while their_pieces > 0 — the strip is where capture
+    # choices happen; endgame pawn preferences belong to the plan
+    # machinery, so every king+pawns reference is untouched by
+    # construction. Zero-defaulted for byte-identical older profiles.
+    exec_file_bonus: float = 0.0
+    exec_stack_bonus: float = 0.0
+    exec_blocked_penalty: float = 0.0
 
 
 CURRENT = EngineProfile(
@@ -162,6 +173,12 @@ CURRENT = EngineProfile(
     modeled_herding_time_ms=0,
     modeled_herding_candidate_limit=None,
     modeled_herding_memoize=False,
+    # Ordering, not precision: a stack rear outranks a bare executioner
+    # outranks a generic pawn, and everything stays far below the piece
+    # values so the strip itself is never distorted.
+    exec_file_bonus=40,
+    exec_stack_bonus=60,
+    exec_blocked_penalty=30,
 )
 
 

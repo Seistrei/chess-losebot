@@ -58,17 +58,22 @@ def _kh_race_debt(board: chess.Board, us: chess.Color,
 
     Mirrors the template's race_clear conditions exactly: any occupant on
     the corner or the escape, OUR men on the entry and far-capture
-    squares. Counting instead of the boolean lets a pawn push that clears
-    ONE debt through the king-mode pawn veto even while another debt
-    remains (review P1: with pawns on both f2 and h2, neither clearing
-    push flipped the boolean, so both stayed vetoed forever).
+    squares — and on each stacked rear's food square, the far-capture rule
+    one rank up per rear. Counting instead of the boolean lets a pawn push
+    that clears ONE debt through the king-mode pawn veto even while
+    another debt remains (review P1: with pawns on both f2 and h2, neither
+    clearing push flipped the boolean, so both stayed vetoed forever).
     """
     debt = 0
     if board.piece_at(target.checked_square) is not None:
         debt += 1
     if board.piece_at(target.kh_escape_square) is not None:
         debt += 1
-    for square in (target.kh_entry_square, target.kh_far_capture_square):
+    for square in (
+        target.kh_entry_square,
+        target.kh_far_capture_square,
+        *target.kh_rear_food_squares,
+    ):
         piece = board.piece_at(square)
         if piece is not None and piece.color == us:
             debt += 1
@@ -81,6 +86,7 @@ class LoseBot:
                  probe_cap: int | None = None,
                  max_probe_n: int | None = None,
                  vi_herders: int | None = None,
+                 vi_state_cap: int | None = None,
                  release_audit: bool = False):
         self.depth = depth
         self.opponent_model = opponent_model
@@ -89,6 +95,15 @@ class LoseBot:
         self.probe_cap = probe_cap
         self.max_probe_n = max_probe_n
         self.vi_herders = vi_herders
+        # Effective sub-MDP state cap: the profile's, unless the caller
+        # overrides it (two-herder graphs at open positions — the stacked
+        # drill's post-renewal rebuilds — legitimately need more room than
+        # the arena default; references keep the profile value).
+        self.vi_state_cap = (
+            vi_state_cap
+            if vi_state_cap is not None
+            else self.profile.vi_state_cap
+        )
         # Release-audit instrumentation (opt-in, read-only): every
         # release-scan decision is recorded with its per-candidate
         # verdicts, the policy's view of the pose, and an audit-twin
@@ -198,6 +213,7 @@ class LoseBot:
         self.vi_flip_value: float | None = None
         self.vi_king_marches = 0
         self.vi_capture_guards = 0
+        self.vi_renewal_captures = 0
         self.vi_cage_builds = 0
         self.vi_last_failure = ""
         self.vi_dead_certificates = 0
@@ -486,6 +502,49 @@ class LoseBot:
         if fresh and len(fresh) < len(moves):
             self.vi_wait_funnel_guards += len(moves) - len(fresh)
             return fresh
+        return moves
+
+    def _filter_renewal_capture(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+        current: PawnMateTemplate | None,
+    ) -> list[chess.Move]:
+        """In check under a king-holder plan, retake the arrival square.
+
+        The early push spends the front executioner ON the arrival square
+        (always with check — the push attacks the vacated corner), and a
+        stacked rear's follow-up step checks again from the pre-corner
+        square. Both are the renewal window, and both are exactly where
+        the adversarial fallback wrecks the stack: negamax refuses
+        Kx(arrival) whenever a herder hangs in the continuation (the Rxb3
+        wreck — rook seal posts live on the renewal file by construction)
+        and resolves the check by eating a column pawn with a piece
+        instead, burning the equity the stack was preserved for. Whenever
+        the king can LEGALLY retake the arrival square while checked, that
+        is the move: it eats the spent pawn, re-holds the freeze square,
+        and resets the fifty-move clock in one tempo. King-holder only —
+        the release theorem's piece holders never want their king there.
+        """
+        if not self.profile.vi_herding or current is None:
+            return moves
+        if not current.king_holder or not board.is_check():
+            return moves
+        arrival = current.arrival_square
+        occupant = board.piece_at(arrival)
+        if (
+            occupant is None
+            or occupant.color == board.turn
+            or occupant.piece_type != chess.PAWN
+        ):
+            return moves
+        for move in moves:
+            if (
+                move.to_square == arrival
+                and board.piece_type_at(move.from_square) == chess.KING
+            ):
+                self.vi_renewal_captures += 1
+                return [move]
         return moves
 
     def _filter_forced_captures(
@@ -1364,7 +1423,7 @@ class LoseBot:
         if not subsets:
             # No candidates at all: build once for the diagnostic reason.
             policy = HerdingPolicy.build(
-                board, target, limit, self.profile.vi_state_cap,
+                board, target, limit, self.vi_state_cap,
                 self.profile.vi_build_ms, self.profile.vi_gamma,
                 **build_options,
             )
@@ -1390,7 +1449,7 @@ class LoseBot:
                 break
             fair_budget = remaining_ms >= self.profile.vi_build_ms / 2
             policy = HerdingPolicy.build(
-                board, target, limit, self.profile.vi_state_cap,
+                board, target, limit, self.vi_state_cap,
                 int(remaining_ms), self.profile.vi_gamma, herders=subset,
                 skip_fingerprints=self._vi_unbuildable,
                 **build_options,
@@ -1489,7 +1548,7 @@ class LoseBot:
                 board,
                 mirrored_target,
                 limit,
-                self.profile.vi_state_cap,
+                self.vi_state_cap,
                 self.profile.vi_build_ms,
                 self.profile.vi_gamma,
                 model=self.opponent_model,
@@ -1667,7 +1726,7 @@ class LoseBot:
             self.vi_clock_reset_builds += 1
             probe = HerdingPolicy.build(
                 hypothetical, resolved, limit,
-                self.profile.vi_state_cap, int(remaining_ms),
+                self.vi_state_cap, int(remaining_ms),
                 self.profile.vi_gamma, herders=forced,
                 model=self.opponent_model,
                 race_max_losing=self.profile.vi_race_max_losing,
@@ -1791,7 +1850,7 @@ class LoseBot:
             self.vi_relocation_builds += 1
             probe = HerdingPolicy.build(
                 hypothetical, resolved, limit,
-                self.profile.vi_state_cap, int(remaining_ms),
+                self.vi_state_cap, int(remaining_ms),
                 self.profile.vi_gamma, herders=forced,
                 model=self.opponent_model,
                 race_max_losing=self.profile.vi_race_max_losing,
@@ -1998,6 +2057,7 @@ class LoseBot:
         best = min(
             candidates,
             key=lambda target: (
+                -target.stack_rears,
                 target.setup_distance,
                 target.pawn_square,
                 target.checked_square,
@@ -2093,6 +2153,7 @@ class LoseBot:
             if keep_holding:
                 self.hold_moves_filtered += len(safe) - len(keep_holding)
                 safe = keep_holding
+        safe = self._filter_renewal_capture(board, safe, planned_now)
         safe = self._filter_plan_regressions(board, safe, planned_now)
         safe_for_vi = safe
         safe = self._filter_plan_repetitions(board, safe)

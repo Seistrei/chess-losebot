@@ -127,6 +127,43 @@ FIXTURES = [
              "cannot audit it; direct scoring must refuse every retreat "
              "(each re-attacks b5 along the vacated diagonal)",
     ),
+    MotifFixture(
+        name="kh-stack-a",
+        family="king-holder",
+        fen="2N5/8/2N5/8/kpP5/1p6/1K6/1B6 w - - 0 1",
+        arrival="b2",
+        checked="a1",
+        note="doubled-executioner stack (2026-07-19): Ka1! races 1W/1L/2P "
+             "with the b4 rear inert (frozen by its own front pawn, both "
+             "capture squares empty); the lost coin renews — Kxb2, then "
+             "b4-b3 is Zach's whole pool, and the re-posed race scores "
+             "1W/1L/2P again (EV 3/4). The c6 knight is the race-2 b4 "
+             "wall; our c4 pawn (b5 wall) is rear-safe, a c3 pawn would "
+             "be rear food (the bxc3 delivery leak refuses every retreat)",
+    ),
+    MotifFixture(
+        name="kh-stack-h",
+        family="king-holder",
+        fen="5N2/8/5N2/8/5Ppk/6p1/6K1/6B1 w - - 0 1",
+        arrival="g2",
+        checked="h1",
+        note="kingside mirror of kh-stack-a: Kh1! 1W/1L/2P, f6 knight "
+             "walls g4 for the renewed race, f4 pawn walls g5, no f3 pawn "
+             "(rear food)",
+    ),
+    MotifFixture(
+        name="kh-stack-a-herd",
+        family="king-holder",
+        fen="1NN5/8/N7/8/kpP5/1p6/1K6/1B5R w - - 0 1",
+        arrival="b2",
+        checked="a1",
+        herders=("h1",),
+        note="VI-level stacked pose: roam pocket {a4,a5} (c4 pawn walls "
+             "b5, a6 knight is the b8-defended race-2 b4 wall), rook "
+             "herder h1 seals a5 by the rank-5 rake at a5-parity, and "
+             "every goal-vacate terminal audits at race 1/2 with the "
+             "stack frozen behind the executioner",
+    ),
 ]
 
 
