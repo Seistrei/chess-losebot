@@ -2500,3 +2500,56 @@ The floor predicates tracked the whole arc correctly as Black (viable
 bg -> g at move 72 when the b-stock ran out, g -> none at 93; typed g
 while the light bishop lived). Next live game needs the image rebuilt
 from the guard commit — until then every game is a control.
+
+**Field notes — vfGeEKhy (2026-07-20), the guard's first live game.**
+Image rebuilt from the merge at 00:41, game started 00:43, bot as
+Black, same human. Result: **1/2-1/2 by repetition at move 183 —
+final halfmove clock 93, the bot still holding rook + knight + dark
+bishop.** The guard's headline numbers all landed:
+
+- **The count floor held the entire game**: free pieces 7 -> 3 and
+  then pegged at exactly three from move 41 to the end (the control
+  game hit ZERO by move 41). No donation checks of floor material
+  ever appeared; the only voluntary spends were the designed
+  allowances — 10...Qf3+ Kxf3 (the queen is not floor material; the
+  bot ran the human recipe's own queen dump), 136...Rf4+ Kxf4 at
+  free=4 (surplus spend that is ALSO a their-capture fifty-move
+  reset, the 115.Qc4 device played with a rook), and every strip
+  capture: their queen eaten free (5...Nxg4), both knights, both
+  rooks, the bishop by pawn recapture, and the fresh promotion
+  refused at Qd8 and eaten only when it hung for free (65...Rxf6 —
+  the model-consistency clause working as written).
+- **Replay through the filter: zero played moves vetoed** (the live
+  bot obeyed its own guard; 1026 candidate vetoes across the full
+  legal menus show how hard it was steering), and the draw is the
+  honest certified kind — no resignation win, no self-queen farce
+  (117...e1=R, a rook underpromotion, was its one promotion).
+
+**The new finding — family selection.** The type floor kept A
+toolkit, not THE toolkit. 24...Bb7 donated the light bishop to Rxb7
+for nothing — legal under the guard as a NARROWING (typed bg -> b),
+because the b-family still read viable through DONOR pawns (a2/c4)
+after white's own b-pawn traded off at 18-19. Then the bot's own
+27...Rxa3+ ate the a-donor, and 44.c5-45.c6 walked the c-donor OUT
+of donor range (rank > 4 cannot land at-or-above the pre-corner)
+straight to 47.c8=Q: typed collapsed to none at move 45 and the
+last 138 moves were certified-honest shuffling — knight, rook, and
+the WRONG-SHADE bishop in perfect attendance on a g5 executioner
+posed one square from pre-corner, needing exactly the light bishop
+donated 120 moves earlier. Three follow-ups, in value order:
+
+1. **Stock-quality weighting**: at move 24 the g-family had TWO
+   on-file pawns (g3/g4) and the b-family was donor-only — grade
+   floor_family_bonus (and the narrowing decision) by stock quality
+   the way the exec term already grades front/rear, so donating the
+   on-file family's bishop while keeping a donor-only family prices
+   as what it is.
+2. **Free-donation arm of the type veto**: a non-capture move that
+   hangs the last bishop of an ON-FILE-viable family's shade could
+   be vetoed even when a donor-only family survives (the count
+   tier's R9tSLBLK acceptance case keeps donor-inclusive viability —
+   this refinement touches only type-tier narrowing).
+3. **Donor-range dynamics**: a donor one push from leaving range
+   (44.c5) is stock about to evaporate; viability could discount or
+   the eval could taper it, so the search sees the promotion train
+   coming.
