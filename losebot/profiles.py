@@ -121,6 +121,27 @@ class EngineProfile:
     exec_file_bonus: float = 0.0
     exec_stack_bonus: float = 0.0
     exec_blocked_penalty: float = 0.0
+    # Donation guard / herder-material floor (2026-07-20): Zach never
+    # captures, so a donation was never once punished in the arena — the
+    # training opponent cannot express the failure mode — and R9tSLBLK's
+    # human accepted every gift until Q+K by move 48 (a lone queen is
+    # release-theorem-dead as a holder, and one free piece cannot be
+    # cage, closer, and herder at once). donation_guard arms the bot.py
+    # move filter: a TYPE floor (while some viable corner family exists,
+    # never lose the last knight closer or the last cage-shade bishop to
+    # our own capture of their executioner material or to any immediate
+    # recapture) and a COUNT floor (at or below three free pieces —
+    # cage + closer + herder, the minimum ANY family needs — never a
+    # non-strip move that lets a reply eat one; strip captures of their
+    # mobile pieces are exempt, so 65.Qxh1 stays model-consistent). The
+    # floor_* eval terms are the search-side gradient for the same
+    # facts, priced at the boundary only. All zero-defaulted: every
+    # existing profile, battery, and reference stays byte-identical;
+    # FIELD carries the live values.
+    donation_guard: bool = False
+    floor_supported_bonus: float = 0.0
+    floor_family_bonus: float = 0.0
+    floor_herder_bonus: float = 0.0
 
 
 CURRENT = EngineProfile(
@@ -302,9 +323,32 @@ VI = replace(
 )
 
 
+FIELD = replace(
+    VI,
+    name="field",
+    # The human frontier: everything vi knows, hardened for opponents
+    # who accept gifts. Kept out of vi itself so the arena remains the
+    # audited Zach-world control and every battery reference stays
+    # byte-identical; the lichess bridge defaults here.
+    donation_guard=True,
+    # No single strip prize buys the toolkit: their queen at strip
+    # scale is 0.90 * 900 = 810, so a leaf where the floor fell prices
+    # worse than any capture that spent it.
+    floor_supported_bonus=900.0,
+    # Narrowing to one supported family outbids a generic executioner
+    # file (40) but yields to a piece win (their minor at strip scale
+    # is 288): the light bishop may buy their knight, never their pawn.
+    floor_family_bonus=60.0,
+    # Losing the third free piece (the herder) must outbid a check plus
+    # any typical menu swing; the hard filter is the guarantee, this is
+    # the gradient that steers before the boundary is reached.
+    floor_herder_bonus=300.0,
+)
+
+
 PROFILES = {
     profile.name: profile
-    for profile in (CURRENT, HERDING, PLANNER, TEMPLATE, V03, VI)
+    for profile in (CURRENT, FIELD, HERDING, PLANNER, TEMPLATE, V03, VI)
 }
 
 

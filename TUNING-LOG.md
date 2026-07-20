@@ -2334,3 +2334,129 @@ list above remains valid for the drills):
    post-game read (`losebot.analyze` + eyeball) and its findings land
    in this log. Three games in, each one taught something the arena
    never could.
+
+## Donation guard / herder-material floor: the field profile (2026-07-20)
+
+Takes items 1 and 3 of the human-frontier list above. The structural
+discovery stands: Zach never captures, so no arena game ever priced a
+donation, and R9tSLBLK's human stripped the bot below construction
+minimum. The fix is a material floor derived from what templates.py
+already knows a conversion needs, wired in three layers and carried by
+a new profile so every audited Zach-world reference stays untouched.
+
+**The floor predicates (templates.py).** `kh_viable_files(board, us)`:
+the corner files (b/g) whose executioner material THEY still hold — a
+their-pawn on the file no further than the pre-corner square, or a
+their-pawn on an ADJACENT file that can still capture onto it at or
+above (donor-inclusive, validated by the exhibit game itself: the a6
+pawn became the b3 executioner via 57...axb4). Deliberately more
+permissive than emission — our men on the path are transient, their
+pieces are strip targets — because it prices what material can still
+be PROTECTED, not what can pose today. `kh_supported_files`: viable ∩
+emission's own material gates per file — a knight-class closer exists
+and a bishop of the cage square's shade exists, the cage square
+derived as square(file, corner rank), exactly `_kh_squares`' geometry,
+so the shade map cannot drift (b needs light, g needs dark, for a
+White bot; mirrored otherwise). `free_piece_count`: our non-king
+non-pawn men — any resolvable family needs THREE at once (frozen cage
++ parked closer + at least one mobile herder; `herder_subsets` returns
+nothing for a side with nothing left to move). One free piece cannot
+be cage, closer, and herder — the R9tSLBLK lone queen, restated as
+arithmetic.
+
+**The filter (bot.py `_filter_donation_guard`, gauge
+`donation_vetoes`).** Runs before every plan filter and fallback, so
+everything downstream draws from a menu that cannot spend the floor;
+only the exact selfmate probe outranks it by placement (a PROVEN net
+that spends a piece is a win), and the release scan never draws from a
+filtered menu. While kh_viable_files is nonempty, one reply deep and
+structural — LEGALITY is the opponent model here, deliberately, since
+a human eats what Zach never would:
+
+- TYPE floor: with a supported family in hand, veto any move that
+  leaves none — our own capture eating the last family's pawn stock
+  (the 59.Qxb3+ shape), or any immediate reply that recaptures the
+  last role piece (21.Nxd4 cxd4 spent the final closer on a strip the
+  queen could have made later; the scan also rechecks replies whose
+  capturer is a pawn, because a pawn capture changes THEIR files).
+- COUNT floor: at or below three free pieces, veto any non-strip move
+  that lets a reply eat one (45.Rb5+ Kxb5, 48.Bb2+ Kxb2 — the log's
+  own acceptance pair). Captures of their mobile pieces are exempt:
+  finishing the strip outranks the count floor (their promoted queen
+  must die — 65.Qxh1 stays model-consistent, pinned by selftest), and
+  the type floor still polices WHICH piece pays.
+
+Never empties: when every candidate donates, the unfiltered menu
+stands and the eval terms carry the gradient. A live subtlety the
+suite pinned: the guard is also a DEFENSE gradient — on the move-21
+board it keeps exactly the knight-saving moves (Nh4/Ne1), because
+ignoring a standing threat to the last closer fails the same one-reply
+scan that refuses spending it.
+
+**The eval floor (heuristics.py).** Bonuses, not penalties — killing
+the geometry must never read as a cure for missing material, which is
+precisely how 59.Qxb3+ slipped past no_template_penalty (the d-pawn's
+release-theorem-dead PIECE templates kept a target alive while the
+real family died). `floor_supported_bonus` when some family is
+supported, `floor_family_bonus` per spare family, `floor_herder_bonus`
+while the three-piece reserve stands and viability survives; both
+phases, constant while the floor holds so only the boundary carries
+gradient. Negamax's deliberately adversarial opponent nodes make the
+boundary visible at depth 2: the leaf after their recapture shows the
+floor fallen — the donation was never invisible to search, it was
+UNDERPRICED (our_man_value 25 vs their minor at strip scale 288, so
+shedding the last knight always looked profitable).
+
+**The field profile + bridge default.** `field` = vi + donation_guard
++ floor terms (900/60/300: no single strip prize buys the toolkit —
+their queen at strip scale is 810; narrowing to one family outbids a
+generic executioner file (40) but yields to a piece win (288); losing
+the herder outbids a check plus a typical menu swing). The lichess
+bridge default flips to `LOSEBOT_PROFILE=field`; `vi` remains the
+audited arena-exact control, selectable by env. Zero-defaulted knobs
+everywhere else: current/v03/template/planner/herding/vi are
+byte-identical dataclasses, and the endgames gauge line prints only
+when vetoes fired, so reference stdout is untouched by construction.
+
+**Secondary finding 1 resolved by design, not by reweighting.** The
+"check_bonus (40) outbid exec_file_bonus (40)" framing dissolved under
+reconstruction: at move 59 their_pieces == 0, so the exec term was
+gated off entirely — there was no 40-vs-40 auction, there was NO
+k+p-phase term pricing the executioner at all, and the menu-shrink of
+a check is what actually outbid nothing. The floor terms are that
+missing k+p analog (the eval delta at the 59 boundary is 1200, not
+40), and CURRENT's audited strip weights stay exactly as pinned.
+
+**Acceptance + references.** Selftest 86 -> 92: the floor predicates
+(donor-inclusive viability, per-file shades), the acceptance pair
+(field chooses Qc5+ — a pawn-defended check, the guard tells sound
+checks from donations structurally — over 45.Rb5+, and Qc6 over
+48.Bb2+), the move-21 closer save, the counterfactual Qxb3 veto plus
+the 1200/1260 eval boundary and vi == silenced-field equality, the
+strip exemption with the never-empty contract, and the knob gate
+returning the untouched list object under vi. Full reference battery
+(case-6 seeds 0-9, case-7 seeds 0-9, case-8 seeds 0-9, case-2 seed-5,
+motifs) run against a base-commit (c770c38) control worktree in the
+same pypy3 image, both sides fresh: all 31 endgame stdouts
+byte-identical once the wall-clock tokens are stripped (the [Ns] game
+timer and the vi build-ms gauge — the raw diffs contain those lines
+and nothing else), every outcome, ply count, and vi gauge equal;
+per-case PGNs byte-identical raw where the per-case filename is
+stable (case-2's single seed and each drill case's final seed — the
+endgames writer overwrites game_00N seed to seed); motif verdicts,
+state/edge counts, and terminal tallies byte-identical (four bare
+build-ms tokens aside).
+
+Next for the field frontier:
+
+1. **Pin a field baseline battery**: the drills under `--profile
+   field` (the guard can veto fence hugs the Zach-world policies use
+   freely, so field's drill numbers are ITS reference, not vi's) and a
+   full-game field-vs-Zach arena A/B to measure what the floor costs
+   against the opponent that never punishes.
+2. **The sloppy-human model** (unchanged from the list above) — the
+   guard is structural insurance; a capture-probable kernel is the
+   principled complement.
+3. **Corpus protocol continues**: the next accepting human should die
+   with the toolkit intact — that game is the guard's real acceptance
+   test.

@@ -3151,6 +3151,178 @@ def selftest() -> int:
         f" debt {clean_debt}->{food_debt}",
     )
 
+    # 28. Donation guard / herder-material floor. Zach never captures, so
+    # a donation was never punished in the arena; R9tSLBLK's human took
+    # every gift (45.Rb5+ Kxb5, 48.Bb2+ Kxb2 -> Q+K holding an
+    # unconvertible side). The floor predicates, the filter's two tiers,
+    # the strip exemption, and the zero-knob gates are all pinned here.
+    from .templates import (
+        free_piece_count as _free_count,
+        kh_supported_files as _supported_files,
+        kh_viable_files as _viable_files,
+    )
+
+    # 28a. Viability is donor-inclusive (the a6 pawn that became the b3
+    # executioner via 57...axb4) and spent-exclusive (h2 helps nobody);
+    # support applies template emission's own shade map per corner file.
+    donation_45 = chess.Board("8/8/pk6/R2p4/1P1P4/2Q5/1BPK3p/8 w - - 1 45")
+    donation_48 = chess.Board("8/8/p7/2Qp4/1P1P4/k1B5/2PK3p/8 w - - 4 48")
+    dead_59 = chess.Board("8/8/8/3p4/3P4/1p3Q2/k1PK3p/8 w - - 0 59")
+    light_shade_board = chess.Board("6k1/1p4p1/8/8/8/8/8/N2B2K1 w - - 0 1")
+    dark_shade_board = chess.Board("6k1/1p4p1/8/8/8/8/8/N1B3K1 w - - 0 1")
+    check(
+        "floor predicates: donor-inclusive viability and per-file shades",
+        _viable_files(donation_45, chess.WHITE) == (1,)
+        and _supported_files(donation_45, chess.WHITE) == ()
+        and _free_count(donation_45, chess.WHITE) == 3
+        and _viable_files(dead_59, chess.WHITE) == (1,)
+        and _supported_files(light_shade_board, chess.WHITE) == (1,)
+        and _supported_files(dark_shade_board, chess.WHITE) == (6,),
+        f"viable45={_viable_files(donation_45, chess.WHITE)};"
+        f" supported45={_supported_files(donation_45, chess.WHITE)};"
+        f" free45={_free_count(donation_45, chess.WHITE)};"
+        f" light={_supported_files(light_shade_board, chess.WHITE)}"
+        f" (want b: cage b1 is light);"
+        f" dark={_supported_files(dark_shade_board, chess.WHITE)}"
+        f" (want g: cage g1 is dark)",
+    )
+
+    # 28b. The log's own acceptance test: 45.Rb5+ and 48.Bb2+ must not
+    # both pass. Count floor: at/below three free pieces (cage + closer
+    # + herder), no non-strip move may hand a reply one of them.
+    field_bot = LoseBot(
+        depth=1,
+        opponent_model="zach",
+        profile="field",
+        probe_cap=0,
+        max_probe_n=1,
+        vi_state_cap=2000,
+    )
+    move_45 = field_bot.choose_move(donation_45)
+    vetoes_45 = field_bot.donation_vetoes
+    move_48 = field_bot.choose_move(donation_48)
+    check(
+        "field refuses the R9tSLBLK donation checks (45.Rb5+, 48.Bb2+)",
+        move_45 != chess.Move.from_uci("a5b5")
+        and move_48 != chess.Move.from_uci("c3b2")
+        and vetoes_45 > 0
+        and field_bot.donation_vetoes > vetoes_45,
+        f"chose {donation_45.san(move_45)} then {donation_48.san(move_48)};"
+        f" vetoes {vetoes_45} -> {field_bot.donation_vetoes}",
+    )
+
+    # 28c. Type floor in the strip: the last closer is never spent on a
+    # recapturable strip (21.Nxd4 cxd4), a move that ignores a standing
+    # threat to it is no better (Rg1 leaves Nxf3+, and g1 hangs to the
+    # g8 rook), and the knight-saving move is what survives.
+    strip_21 = chess.Board(
+        "5br1/pp6/3k1p1p/2pp1P1P/3n4/P2P1N2/1PPKP3/R1BQ3R w - - 2 21"
+    )
+    survivors = field_bot._filter_donation_guard(
+        strip_21,
+        [
+            chess.Move.from_uci("f3d4"),
+            chess.Move.from_uci("h1g1"),
+            chess.Move.from_uci("f3h4"),
+        ],
+    )
+    check(
+        "type floor: the last closer is saved, not spent (21.Nxd4 shape)",
+        survivors == [chess.Move.from_uci("f3h4")],
+        f"survivors={[strip_21.san(m) for m in survivors]} (want Nh4)",
+    )
+
+    # 28d. The 59.Qxb3+ shape: eating the posed executioner is a
+    # self-inflicted type-floor break once the toolkit is back in hand
+    # (in the real game the floor was already gone and the guard is
+    # honestly inert). The eval floor prices the same boundary, and the
+    # zero-knob profiles evaluate byte-identically to a silenced field.
+    counter_59 = chess.Board("8/8/8/3p4/3P3N/1p3Q2/k1PK3p/5B2 w - - 0 59")
+    survivors_59 = field_bot._filter_donation_guard(
+        counter_59,
+        [chess.Move.from_uci("f3b3"), chess.Move.from_uci("f3e3")],
+    )
+    field_profile = PROFILES["field"]
+    silent_field = _replace(
+        field_profile,
+        floor_supported_bonus=0.0,
+        floor_family_bonus=0.0,
+        floor_herder_bonus=0.0,
+    )
+    floor_delta = _evaluate(
+        counter_59, chess.WHITE, "zach", field_profile
+    ) - _evaluate(counter_59, chess.WHITE, "zach", silent_field)
+    two_family_board = chess.Board("6k1/1p4p1/8/8/8/8/8/N1BB2K1 w - - 0 1")
+    two_family_delta = _evaluate(
+        two_family_board, chess.WHITE, "zach", field_profile
+    ) - _evaluate(two_family_board, chess.WHITE, "zach", silent_field)
+    vi_matches_silent = _evaluate(
+        counter_59, chess.WHITE, "zach", PROFILES["vi"]
+    ) == _evaluate(counter_59, chess.WHITE, "zach", silent_field)
+    check(
+        "the posed executioner is not food, and the eval floor prices it",
+        survivors_59 == [chess.Move.from_uci("f3e3")]
+        and floor_delta == 1200.0
+        and two_family_delta == 1260.0
+        and vi_matches_silent,
+        f"survivors={[counter_59.san(m) for m in survivors_59]}"
+        f" (want Qe3); delta={floor_delta} (want 900+300);"
+        f" two-family={two_family_delta} (want 900+60+300);"
+        f" vi==silent-field {vi_matches_silent}",
+    )
+
+    # 28e. The strip exemption: at the count floor, capturing their
+    # mobile piece into a recapture is still allowed (the strip must
+    # finish; 65.Qxh1 stays model-consistent), while the identical
+    # capture of a mere pawn is a donation — and when every candidate
+    # donates, the menu stands (never empty a move list).
+    strip_rook_board = chess.Board(
+        "4k3/1p2p3/3r4/8/3Q4/8/8/NB4K1 w - - 0 1"
+    )
+    strip_pawn_board = chess.Board(
+        "4k3/1p2p3/3p4/8/3Q4/8/8/NB4K1 w - - 0 1"
+    )
+    qxd6 = chess.Move.from_uci("d4d6")
+    qe4 = chess.Move.from_uci("d4e4")
+    rook_kept = field_bot._filter_donation_guard(
+        strip_rook_board, [qxd6, qe4]
+    )
+    pawn_kept = field_bot._filter_donation_guard(
+        strip_pawn_board, [qxd6, qe4]
+    )
+    all_vetoed = field_bot._filter_donation_guard(strip_pawn_board, [qxd6])
+    check(
+        "count floor exempts strip captures and never empties the menu",
+        rook_kept == [qxd6, qe4]
+        and pawn_kept == [qe4]
+        and all_vetoed == [qxd6],
+        f"rook-board kept={[strip_rook_board.san(m) for m in rook_kept]}"
+        f" (want both); pawn-board"
+        f" kept={[strip_pawn_board.san(m) for m in pawn_kept]}"
+        f" (want Qe4); sole candidate"
+        f" kept={[strip_pawn_board.san(m) for m in all_vetoed]}",
+    )
+
+    # 28f. The knob gate is the battery contract: with donation_guard
+    # off the filter returns the untouched list object and counts
+    # nothing, so every vi/current reference line is unreachable by
+    # construction.
+    gate_bot = LoseBot(
+        depth=1,
+        opponent_model="zach",
+        profile="vi",
+        probe_cap=0,
+        max_probe_n=1,
+    )
+    gate_moves = [chess.Move.from_uci("f3d4"), chess.Move.from_uci("h1g1")]
+    gate_result = gate_bot._filter_donation_guard(strip_21, gate_moves)
+    check(
+        "donation guard is knob-gated off for every battery profile",
+        gate_result is gate_moves and gate_bot.donation_vetoes == 0,
+        f"identity={gate_result is gate_moves};"
+        f" vetoes={gate_bot.donation_vetoes}",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -3378,6 +3550,13 @@ def endgames(args) -> int:
                 f" ({bot.vi_clock_reset_vetoes} fallback vetoes);"
                 f" relocations={bot.vi_relocations}"
                 f"/{bot.vi_relocation_builds} builds",
+                flush=True,
+            )
+        if bot.donation_vetoes:
+            # Zero for every guard-off profile, so reference battery
+            # stdout is untouched by construction.
+            print(
+                f"  donation-guard: vetoes={bot.donation_vetoes}",
                 flush=True,
             )
         if args.release_audit:

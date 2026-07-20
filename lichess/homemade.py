@@ -11,15 +11,20 @@ per-move time target.
 Engine selection is config.yml (`engine.name: "LoseBotEngine"`). Tuning is
 environment variables, so experimenting never needs an image rebuild:
 
-  LOSEBOT_PROFILE  engine profile (default "vi" — the full construction/
-                   herding machinery). The first live game proved the
-                   "safe" generalist pointless: `current` strips
-                   perfectly, then has no conversion plan — it squeezed a
-                   human to mobility 1, manufactured its own executioner
-                   pawn, promoted TWO queens to survive the fifty-move
-                   clock, and won. The bot's real audience plays
-                   mate-avoidant (the greeting dares them to), which is
-                   as close to the Zach kernel as any human gets.
+  LOSEBOT_PROFILE  engine profile (default "field" — everything vi
+                   knows plus the donation guard / herder-material
+                   floor). The first live games taught both halves: the
+                   "safe" generalist is pointless (`current` strips
+                   perfectly, then has no conversion plan — it squeezed
+                   a human to mobility 1, promoted TWO queens to
+                   survive the fifty-move clock, and won), and plain
+                   `vi` donates: Zach never captures, so nothing in the
+                   arena ever punished a gift, and R9tSLBLK's human took
+                   rook and bishop off donation checks until Q+K held an
+                   unconvertible side. `field` keeps the toolkit (closer
+                   + cage bishop + herder) alive against opponents who
+                   accept. Set LOSEBOT_PROFILE=vi for the audited
+                   arena-exact control.
   LOSEBOT_MODEL    opponent model for probes/herding (default "zach").
                    A human deviating from the kernel TOWARD mating us
                    serves the goal; deviations away just cost a rebuild.
@@ -101,7 +106,7 @@ class LoseBotEngine(MinimalEngine):
         # ply-rewind check is insurance against instance reuse and
         # takebacks (a fresh LoseBot simply replans — always correct).
         if self._bot is None or board.ply() < self._last_ply:
-            profile = _env("LOSEBOT_PROFILE", "vi")
+            profile = _env("LOSEBOT_PROFILE", "field")
             model = _env("LOSEBOT_MODEL", "zach") or None
             depth = int(_env("LOSEBOT_DEPTH", "2"))
             self._bot = LoseBot(

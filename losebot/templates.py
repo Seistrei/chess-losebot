@@ -658,3 +658,96 @@ def kh_bishop_distance(board: chess.Board, us: chess.Color,
             continue
         best = min(best, chess.square_distance(square, cage_square))
     return best
+
+
+def free_piece_count(board: chess.Board, us: chess.Color) -> int:
+    """Our non-king, non-pawn men — the construction economy's currency.
+
+    Any resolvable corner family needs three of them at once: the cage
+    bishop is frozen on the corner's rank-side escape, the knight closer
+    is parked out of the herd's way, and driving their king takes at
+    least one more mobile piece (herder_subsets never returns a subset
+    for a side with nothing left to move). One free piece cannot be
+    cage, closer, and herder simultaneously — the R9tSLBLK lone queen.
+    """
+    return sum(
+        len(board.pieces(piece_type, us))
+        for piece_type in (
+            chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN
+        )
+    )
+
+
+def kh_viable_files(board: chess.Board, us: chess.Color) -> tuple:
+    """Corner files (b/g) whose executioner material THEY still hold.
+
+    A file is viable while a their-pawn can still deliver the corner
+    template's mating push: a pawn on the file itself no further than
+    the pre-corner square, or a pawn on an ADJACENT file that can still
+    capture onto the file at or above it — R9tSLBLK's a6 pawn became the
+    b3 executioner via 57...axb4, so donor pawns are executioner
+    material too. Deliberately MORE permissive than template emission:
+    our own men on the walk path are transient (they die or capture
+    away, and the walk-clear machinery exists to move them), their
+    pieces on the path are strip targets, so neither blocks viability.
+    This predicate prices what material can still be protected, not what
+    can pose today; the emission machinery owns walkability.
+    """
+    them = not us
+    pawns = board.pieces(chess.PAWN, them)
+    if not pawns:
+        return ()
+    files = []
+    for file in (1, 6):
+        for square in pawns:
+            pawn_file = chess.square_file(square)
+            rank = chess.square_rank(square)
+            if them == chess.BLACK:
+                # Pre-corner rank 2 (b3/g3); a donor at rank r lands on
+                # rank r-1, so it needs one more rank of runway.
+                usable = (
+                    rank >= 2
+                    if pawn_file == file
+                    else abs(pawn_file - file) == 1 and rank >= 3
+                )
+            else:
+                usable = (
+                    rank <= 5
+                    if pawn_file == file
+                    else abs(pawn_file - file) == 1 and rank <= 4
+                )
+            if usable:
+                files.append(file)
+                break
+    return tuple(files)
+
+
+def kh_supported_files(board: chess.Board, us: chess.Color,
+                       viable: tuple | None = None) -> tuple:
+    """The viable corner files whose role pieces we still hold.
+
+    Template emission's own material gates, applied file by file: a
+    knight-class closer must exist (the sealing move must not check),
+    and a bishop of the file's cage-square shade must exist (no other
+    piece type is sound on the corner's rank-side escape). The cage
+    square is fixed by the corner geometry — square(file, corner rank),
+    the same square _kh_squares derives — so the shade requirement can
+    never drift from what the construction will actually demand.
+    """
+    if viable is None:
+        viable = kh_viable_files(board, us)
+    if not viable:
+        return ()
+    if not board.pieces(chess.KNIGHT, us):
+        return ()
+    bishops = board.pieces(chess.BISHOP, us)
+    if not bishops:
+        return ()
+    them = not us
+    corner_rank = 7 if them == chess.WHITE else 0
+    supported = []
+    for file in viable:
+        cage_square = chess.square(file, corner_rank)
+        if any(_same_shade(square, cage_square) for square in bishops):
+            supported.append(file)
+    return tuple(supported)

@@ -36,7 +36,10 @@ from .templates import (
     ConstructionPlan,
     PawnMateTemplate,
     best_pawn_mate_template,
+    free_piece_count,
     kh_bishop_distance,
+    kh_supported_files,
+    kh_viable_files,
     pawn_mate_templates,
 )
 
@@ -131,6 +134,7 @@ class LoseBot:
         self.best_plan_distance: int | None = None
         self.hold_moves_filtered = 0
         self.plan_regressions_filtered = 0
+        self.donation_vetoes = 0
         self.forced_herding_choices = 0
         self.plan_repetitions_filtered = 0
         self.herd_search_nodes = 0
@@ -578,6 +582,109 @@ class LoseBot:
         if guarded and len(guarded) < len(moves):
             self.vi_capture_guards += len(moves) - len(guarded)
             return guarded
+        return moves
+
+    def _filter_donation_guard(
+        self,
+        board: chess.Board,
+        moves: list[chess.Move],
+    ) -> list[chess.Move]:
+        """Hold the construction floor against opponents who accept gifts.
+
+        Zach never captures, so a donation has never once been punished
+        in the arena — the training opponent cannot express the failure
+        mode — and R9tSLBLK's human took every gift: rook and bishop
+        donated into forced king captures by move 48, Q+K left holding a
+        side the certify sweep rightly called unconvertible. While THEIR
+        side still carries executioner material (kh_viable_files: a b/g
+        pawn, or an adjacent-file donor — the a6 pawn that became the b3
+        executioner), two floors hold over every candidate move:
+
+        - TYPE: with a supported family in hand (knight closer plus
+          cage-shade bishop for some viable file), never a move that
+          leaves none — neither by our own capture eating the last
+          family's pawn stock (the 59.Qxb3+ shape) nor through any
+          immediate reply that recaptures the last role piece (21.Nxd4
+          cxd4 spent the final closer on a strip the queen could have
+          made later).
+        - COUNT: at or below three free pieces — cage + closer + herder,
+          the minimum ANY family needs — never a non-strip move that
+          lets a reply eat one (45.Rb5+ Kxb5, 48.Bb2+ Kxb2). Captures of
+          their mobile pieces are exempt: finishing the strip outranks
+          the count floor (their promoted queen must die — 65.Qxh1 is
+          model-consistent), and the type floor still polices WHICH
+          piece pays.
+
+        One reply deep and structural: legality is the opponent model
+        here, deliberately — a human eats what Zach never would. The
+        exact selfmate probe outranks the veto by placement (a proven
+        net that spends a piece is a win, not a leak), and the release
+        scan never draws from a filtered menu. Never empties: when every
+        candidate donates, the unfiltered menu stands and the eval floor
+        terms carry the gradient instead.
+        """
+        if not self.profile.donation_guard:
+            return moves
+        us = board.turn
+        viable = kh_viable_files(board, us)
+        if not viable:
+            return moves
+        typed = kh_supported_files(board, us, viable)
+        free = free_piece_count(board, us)
+        kept: list[chess.Move] = []
+        for move in moves:
+            victim = board.piece_type_at(move.to_square)
+            strip_capture = victim is not None and victim != chess.PAWN
+            free_now = free + (1 if move.promotion is not None else 0)
+            count_guard = (
+                not strip_capture
+                and free_now - 1 < 3
+                and free_now - 1 < free
+            )
+            if not typed and not count_guard:
+                # No type material left to police and the reserve is
+                # above the floor (or the move is exempt): nothing this
+                # move could donate is protected, so skip the scan.
+                kept.append(move)
+                continue
+            board.push(move)
+            ok = True
+            if typed and not kh_supported_files(board, us):
+                # Our own move erased every supported family: only a
+                # capture of their executioner material can do that (our
+                # role pieces do not vanish by moving), so this arm is
+                # the Qxb3 veto.
+                ok = False
+            if ok:
+                for reply in board.legal_moves:
+                    taken = board.piece_type_at(reply.to_square)
+                    if taken is None or taken == chess.PAWN:
+                        # Only our non-pawn men are floor material; an
+                        # en-passant victim is a pawn by definition.
+                        continue
+                    if count_guard:
+                        ok = False
+                    elif typed and (
+                        taken in (chess.KNIGHT, chess.BISHOP)
+                        or board.piece_type_at(reply.from_square)
+                        == chess.PAWN
+                    ):
+                        # A role piece dies, or their capturer is a pawn
+                        # changing files (which can move their own
+                        # executioner stock): recheck the type floor on
+                        # the position their reply actually leaves.
+                        board.push(reply)
+                        if not kh_supported_files(board, us):
+                            ok = False
+                        board.pop()
+                    if not ok:
+                        break
+            board.pop()
+            if ok:
+                kept.append(move)
+        if kept and len(kept) < len(moves):
+            self.donation_vetoes += len(moves) - len(kept)
+            return kept
         return moves
 
     def _filter_walk_clear(
@@ -2175,6 +2282,10 @@ class LoseBot:
         safe = [m for m in legal if not gives_mate(board, m)]
         non_stale = [m for m in safe if not gives_stalemate(board, m)]
         safe = non_stale or safe or legal
+        # The donation guard runs before every plan filter and fallback:
+        # anything below draws from a menu that cannot spend the floor.
+        # Only the exact probe outranks it (a PROVEN net is a win).
+        safe = self._filter_donation_guard(board, safe)
 
         # Exact probe, deeper as the opponent runs out of mobile pieces.
         them = not board.turn

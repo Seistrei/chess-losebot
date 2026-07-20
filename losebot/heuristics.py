@@ -19,6 +19,8 @@ from .templates import (
     best_pawn_mate_template,
     herding_metrics,
     kh_bishop_distance,
+    kh_supported_files,
+    kh_viable_files,
 )
 
 PIECE_VALS = {
@@ -49,16 +51,47 @@ def evaluate(board: chess.Board, root_color: chess.Color,
     their_pawns = 0
     their_pieces = 0
     our_men = 0
+    our_pieces = 0
     for piece in board.piece_map().values():
         if piece.color == us:
             if piece.piece_type != chess.KING:
                 our_men += 1
+                if piece.piece_type != chess.PAWN:
+                    our_pieces += 1
         elif piece.piece_type == chess.PAWN:
             their_pawns += 1
         elif piece.piece_type != chess.KING:
             their_pieces += 1
             v -= profile.their_piece_scale * PIECE_VALS[piece.piece_type]
     v += profile.our_man_value * our_men
+
+    # Donation floor (field profiles; every knob zero elsewhere). While
+    # their side still carries executioner material — a b/g pawn, or an
+    # adjacent-file donor that can capture onto the file — the toolkit
+    # is worth holding in BOTH phases: the strip is where trades spend
+    # it (21.Nxd4 cxd4 bought their knight with the last closer), and
+    # king+pawns is where piece-holder templates mask its death from
+    # no_template_penalty (59.Qxb3+ ate the posed executioner while the
+    # d-pawn's worthless piece templates kept a target alive). Bonuses,
+    # not penalties, so killing the geometry can never read as a cure
+    # for missing material; constant while the floor holds, so only the
+    # boundary carries gradient. Adversarial opponent nodes make the
+    # boundary visible: the leaf after their recapture shows the floor
+    # fallen, which the Zach arena — where no capture ever lands —
+    # never once priced.
+    if (
+        profile.floor_supported_bonus
+        or profile.floor_family_bonus
+        or profile.floor_herder_bonus
+    ):
+        viable = kh_viable_files(board, us)
+        if viable:
+            supported = kh_supported_files(board, us, viable)
+            if supported:
+                v += profile.floor_supported_bonus
+                v += profile.floor_family_bonus * (len(supported) - 1)
+            if our_pieces >= 3:
+                v += profile.floor_herder_bonus
 
     # They must keep something to mate us with: a bare king is a dead draw,
     # and so is a king whose only companions are pawns that can never move.
