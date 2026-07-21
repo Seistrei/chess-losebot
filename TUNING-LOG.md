@@ -81,29 +81,33 @@ BY FORCE against a human."
 
 ### Baseline league (2026-07-21, re-pinned same day)
 
-The first pin (commit c1b4588) was superseded within hours by the
-review round — coverage-true chance nodes and seed-paired seats change
-what the runs mean — so THESE are the baseline tables of record
-(artifacts: games/league/baseline-model/ and baseline-specialist/,
-report.json + per-game PGNs). The superseded run survives in git
-history; its one lesson worth keeping: the 4 mercy mates `random`
-handed the model engine there vanished under the new seed schedule —
-mercy-of-noise is luck, which is exactly why the scoreboard separates
-it from forced.
+Pinned twice-over on the same day: the first pin (commit c1b4588) was
+superseded by the review round (coverage-true chance nodes and
+seed-paired seats change what runs mean), and the model table was
+superseded once more by the process-stable subset seed (hash(None) is
+id-derived on PyPy, so pre-fix containers modeled different reply
+subsets from identical positions — the run wasn't reproducible). The
+specialist table needed no third run: its path never touches the
+subset seed. THESE are the tables of record (artifacts:
+games/league/baseline-model/ and baseline-specialist/, report.json +
+per-game PGNs). One lesson from the superseded runs stays: the 4
+mercy mates `random` once handed the model engine vanished under a
+different seed schedule — mercy-of-noise is luck, which is exactly
+why the scoreboard separates it from forced.
 
 MODEL ENGINE (belief=sloppy, depth 3, topk 6, coverage 0.85, probe
 n<=3 cap 40k; 10 games/family = 5 seed-pairs, max 240 plies):
 
 ```
 family       split      n  forced st-them st-us insuf fifty rep maxply
-sloppy       dev       10       0       0     2     4     0   1      3
+sloppy       dev       10       0       0     2     1     3   0      4
 squat        dev       10       0       0     0     0     0   1      9
-zach         dev       10       0       0     0     0     0   0     10
-human-held   held-out  10       0       1     0     2     0   1      6
+zach         dev       10       1       0     0     0     0   0      9
+human-held   held-out  10       0       0     0     3     0   0      7
 random       held-out  10       0       0     0     0     0   1      9
-sloppy-held  held-out  10       0       0     0     5     0   1      4
+sloppy-held  held-out  10       0       0     1     5     0   0      4
 squat-held   held-out  10       0       0     0     0     0   3      7
-forced — held-out: 0/40 (0%); dev: 0/30 (0%); worst held-out: 0%
+forced — held-out: 0/40 (0%); dev: 1/30 (3%); worst held-out: 0%
 ```
 
 SPECIALIST ANCHOR (field+zach, fast tier; 4 games/family = 2 pairs):
@@ -134,10 +138,20 @@ own pocket), and one family at 25% with every other held-out row at
 zero is precisely the specialist's known shape — strength where the
 opponent matches a modeled kernel, nothing where it doesn't.
 
-The model engine's zeros decompose the same way as the first pin:
-greedy families end in stalemate-us/mutual-strip (it strips
-competently, donates under pressure, and has no conversion pressure),
-avoidant families wall at max-plies. The gap to close is now concrete
-and named: the new engine must first MATCH the anchor's 1/16 held-out
-mark, then pass it — steering depth, sub-root oracle probes, and
-league-legal endgame guidance are the levers, then the corpus fit.
+AND THE MODEL ENGINE DREW BLOOD IN THE SAME PIN: zach game 5 (engine
+Black) is the new stack's first forced selfmate ever — 72...Qf7+
+73.gxf7#, the queen donated onto the square where the pawn capture is
+the opponent's only legal reply and the recapture IS the mate. That
+is the forced-recapture device, the same family as v0.3's historic
+54.Qc2+ Kxc2# — rediscovered organically by oracle+steering with zero
+construction machinery. PGN:
+baseline-model/zach_g05_selfmate-forced.pgn. The two firsts are a
+clean diagnostic pair: the anchor converts via the kernel-matched
+zugzwang (corner squatter walks into its own pocket), the model via
+the opponent-robust forcing device. Everything else decomposes as
+before — greedy families end in stalemate-us/mutual-strip (competent
+strip, no sustained conversion pressure), avoidant families wall at
+max-plies, and held-out stays 0/40. The ladder is explicit now:
+match the anchor's 1/16 held-out, then pass it — sub-root oracle
+probes, selective steering depth, and league-legal endgame guidance
+are the levers, then the corpus fit.

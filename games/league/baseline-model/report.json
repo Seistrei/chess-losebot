@@ -26,13 +26,13 @@
   "summary": {
     "overall": {
       "games": 70,
-      "forced": 0,
-      "forced_rate": 0.0
+      "forced": 1,
+      "forced_rate": 0.014285714285714285
     },
     "dev": {
       "games": 30,
-      "forced": 0,
-      "forced_rate": 0.0
+      "forced": 1,
+      "forced_rate": 0.03333333333333333
     },
     "held_out": {
       "games": 40,
@@ -43,7 +43,7 @@
       "zach": {
         "split": "dev",
         "games": 10,
-        "selfmate-forced": 0,
+        "selfmate-forced": 1,
         "selfmate-mercy": 0,
         "accident-zugzwang": 0,
         "accident-mate": 0,
@@ -52,8 +52,8 @@
         "insufficient-material": 0,
         "fifty-move": 0,
         "repetition": 0,
-        "max-plies": 10,
-        "forced_rate": 0.0
+        "max-plies": 9,
+        "forced_rate": 0.1
       },
       "sloppy": {
         "split": "dev",
@@ -64,10 +64,10 @@
         "accident-mate": 0,
         "stalemate-them": 0,
         "stalemate-us": 2,
-        "insufficient-material": 4,
-        "fifty-move": 0,
-        "repetition": 1,
-        "max-plies": 3,
+        "insufficient-material": 1,
+        "fifty-move": 3,
+        "repetition": 0,
+        "max-plies": 4,
         "forced_rate": 0.0
       },
       "squat": {
@@ -93,10 +93,10 @@
         "accident-zugzwang": 0,
         "accident-mate": 0,
         "stalemate-them": 0,
-        "stalemate-us": 0,
+        "stalemate-us": 1,
         "insufficient-material": 5,
         "fifty-move": 0,
-        "repetition": 1,
+        "repetition": 0,
         "max-plies": 4,
         "forced_rate": 0.0
       },
@@ -107,12 +107,12 @@
         "selfmate-mercy": 0,
         "accident-zugzwang": 0,
         "accident-mate": 0,
-        "stalemate-them": 1,
+        "stalemate-them": 0,
         "stalemate-us": 0,
-        "insufficient-material": 2,
+        "insufficient-material": 3,
         "fifty-move": 0,
-        "repetition": 1,
-        "max-plies": 6,
+        "repetition": 0,
+        "max-plies": 7,
         "forced_rate": 0.0
       },
       "squat-held": {
@@ -161,8 +161,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 46.906969766001566,
-      "final_fen": "6Q1/8/5R2/7k/5Rp1/4P1Pp/3PK2P/3N4 w - - 7 121"
+      "seconds": 57.66573214800155,
+      "final_fen": "8/8/1P6/8/QR4Kp/n3P2P/3B1P1P/k7 w - - 79 121"
     },
     {
       "family": "zach",
@@ -175,8 +175,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 39.12392447999446,
-      "final_fen": "2rr4/3Pk3/2P2qb1/3K4/3n1n2/8/p7/b1b1qq2 w - - 1 121"
+      "seconds": 58.3135818830051,
+      "final_fen": "8/P4p2/K2p1k2/2r1p1p1/2q5/8/8/8 w - - 17 121"
     },
     {
       "family": "zach",
@@ -189,8 +189,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 43.7028251390002,
-      "final_fen": "N3B3/1R6/8/4P3/2NK4/2Pp4/1p1P1P2/Bk6 w - - 0 121"
+      "seconds": 55.498235920997104,
+      "final_fen": "3k4/1B6/1PP1Q3/8/8/4P1P1/P2pKP2/R2R2b1 w - - 3 121"
     },
     {
       "family": "zach",
@@ -203,8 +203,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 35.116990465001436,
-      "final_fen": "k7/P7/1rp5/8/3b4/4n3/K5p1/8 w - - 16 121"
+      "seconds": 51.44691196500207,
+      "final_fen": "2b5/pq1P1r2/4k3/5pp1/1K6/4p2n/8/8 w - - 11 121"
     },
     {
       "family": "zach",
@@ -217,8 +217,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 38.47487807300058,
-      "final_fen": "8/5P2/4P3/8/2R5/7k/3Q2p1/6K1 w - - 3 121"
+      "seconds": 56.42957316200773,
+      "final_fen": "4B3/6B1/8/P4P2/4k2p/p1P2R1P/P5p1/1K1R4 w - - 9 121"
     },
     {
       "family": "zach",
@@ -227,12 +227,12 @@
       "focal_color": false,
       "white_name": "zach",
       "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 46.63146131100075,
-      "final_fen": "3b2K1/6P1/5kqq/4r1q1/8/8/p7/2q5 w - - 4 121"
+      "label": "selfmate-forced",
+      "reason": "checkmate",
+      "forced": true,
+      "plies": 145,
+      "seconds": 27.968062346990337,
+      "final_fen": "4k3/p1p1PPp1/p2pK2p/6bP/8/2r5/8/8 b - - 0 73"
     },
     {
       "family": "zach",
@@ -245,8 +245,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 48.45282313099597,
-      "final_fen": "7B/5N2/Q7/P6P/3P4/P3kP2/3p2Kp/1R5R w - - 11 121"
+      "seconds": 57.2895748049923,
+      "final_fen": "8/8/P7/8/7Q/1P2k2B/1PKp2P1/3R1R2 w - - 1 121"
     },
     {
       "family": "zach",
@@ -259,8 +259,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 37.036287180002546,
-      "final_fen": "8/8/1pr1bk2/p3p3/p3P3/5nK1/2pr4/8 w - - 4 121"
+      "seconds": 48.91873549899901,
+      "final_fen": "4k1B1/1b1pPp2/r1pq1b1p/1pP3q1/8/1K6/8/2n5 w - - 3 121"
     },
     {
       "family": "zach",
@@ -273,8 +273,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 40.775829247999354,
-      "final_fen": "4Q3/6k1/3NBN2/2K1PP2/1PPP4/4B3/Pp6/8 w - - 7 121"
+      "seconds": 52.72125352200237,
+      "final_fen": "8/8/8/PQ6/4p3/4P3/kpBPKPPP/1R1N1RN1 w - - 0 121"
     },
     {
       "family": "zach",
@@ -287,8 +287,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 41.643323288997635,
-      "final_fen": "1n6/1Pk3P1/3r1q2/r6K/p1p4P/8/8/3n4 w - - 1 121"
+      "seconds": 48.280350314002135,
+      "final_fen": "8/8/p4b1K/Pkr3r1/1pp5/4R3/8/8 w - - 9 121"
     },
     {
       "family": "sloppy",
@@ -297,12 +297,12 @@
       "focal_color": true,
       "white_name": "losebot(sloppy)",
       "black_name": "sloppy",
-      "label": "stalemate-us",
-      "reason": "stalemate",
+      "label": "fifty-move",
+      "reason": "fifty-move",
       "forced": false,
-      "plies": 120,
-      "seconds": 23.855874853004934,
-      "final_fen": "8/8/8/4k3/8/p3Kp2/P4P2/3q4 w - - 0 61"
+      "plies": 232,
+      "seconds": 19.15396178200899,
+      "final_fen": "7q/8/3K4/8/8/k7/8/8 w - - 100 117"
     },
     {
       "family": "sloppy",
@@ -311,12 +311,12 @@
       "focal_color": false,
       "white_name": "sloppy",
       "black_name": "losebot(sloppy)",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
+      "label": "max-plies",
+      "reason": "max-plies",
       "forced": false,
-      "plies": 212,
-      "seconds": 14.299083671998233,
-      "final_fen": "8/8/4K3/1k6/8/8/8/8 w - - 0 107"
+      "plies": 240,
+      "seconds": 17.165397520002443,
+      "final_fen": "8/8/6Q1/3k4/8/K7/8/8 w - - 55 121"
     },
     {
       "family": "sloppy",
@@ -325,12 +325,12 @@
       "focal_color": true,
       "white_name": "losebot(sloppy)",
       "black_name": "sloppy",
-      "label": "max-plies",
-      "reason": "max-plies",
+      "label": "fifty-move",
+      "reason": "fifty-move",
       "forced": false,
-      "plies": 240,
-      "seconds": 10.781874667009106,
-      "final_fen": "8/4k3/q7/2K5/8/8/8/8 w - - 92 121"
+      "plies": 218,
+      "seconds": 10.796251822990598,
+      "final_fen": "4k3/8/8/8/8/6K1/8/5q2 w - - 100 110"
     },
     {
       "family": "sloppy",
@@ -343,8 +343,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 10.274550463000196,
-      "final_fen": "2k5/8/8/2K5/8/8/6Q1/8 w - - 57 121"
+      "seconds": 4.066951809989405,
+      "final_fen": "8/8/8/8/Q7/4k3/8/7K w - - 71 121"
     },
     {
       "family": "sloppy",
@@ -353,488 +353,488 @@
       "focal_color": true,
       "white_name": "losebot(sloppy)",
       "black_name": "sloppy",
-      "label": "max-plies",
-      "reason": "max-plies",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
       "forced": false,
-      "plies": 240,
-      "seconds": 9.635583634997602,
-      "final_fen": "8/8/8/8/k5Kq/8/8/8 w - - 76 121"
+      "plies": 221,
+      "seconds": 13.07631802900869,
+      "final_fen": "8/5K2/8/8/5k2/8/8/8 b - - 0 111"
     },
     {
       "family": "sloppy",
       "game_index": 5,
       "seed": 2,
-      "focal_color": false,
-      "white_name": "sloppy",
-      "black_name": "losebot(sloppy)",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 192,
-      "seconds": 8.541597645991715,
-      "final_fen": "8/4k3/8/8/4K3/8/8/8 w - - 0 97"
-    },
-    {
-      "family": "sloppy",
-      "game_index": 6,
-      "seed": 3,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 133,
-      "seconds": 7.178322983003454,
-      "final_fen": "8/8/6K1/2k5/8/8/8/8 b - - 0 67"
-    },
-    {
-      "family": "sloppy",
-      "game_index": 7,
-      "seed": 3,
       "focal_color": false,
       "white_name": "sloppy",
       "black_name": "losebot(sloppy)",
       "label": "stalemate-us",
       "reason": "stalemate",
-      "forced": false,
-      "plies": 181,
-      "seconds": 13.33367352699861,
-      "final_fen": "8/8/8/8/8/2K1Q3/8/3k4 b - - 2 91"
-    },
-    {
-      "family": "sloppy",
-      "game_index": 8,
-      "seed": 4,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 147,
-      "seconds": 7.799431496998295,
-      "final_fen": "8/7K/4k3/8/8/8/8/8 b - - 0 74"
-    },
-    {
-      "family": "sloppy",
-      "game_index": 9,
-      "seed": 4,
-      "focal_color": false,
-      "white_name": "sloppy",
-      "black_name": "losebot(sloppy)",
-      "label": "repetition",
-      "reason": "repetition",
-      "forced": false,
-      "plies": 141,
-      "seconds": 10.466665744999773,
-      "final_fen": "8/p7/P7/K2k3Q/8/8/8/8 b - - 26 71"
-    },
-    {
-      "family": "squat",
-      "game_index": 0,
-      "seed": 0,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "squat",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 34.85421995600336,
-      "final_fen": "B4R2/5R2/5Nk1/1P2P1p1/2PK2P1/1P1pP3/3P3P/2B5 w - - 52 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 1,
-      "seed": 0,
-      "focal_color": false,
-      "white_name": "squat",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 25.567894207008067,
-      "final_fen": "8/5pk1/5r1p/7P/7K/3p4/7b/4qq2 w - - 0 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 2,
-      "seed": 1,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "squat",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 37.48553653799172,
-      "final_fen": "5k2/pp2ppp1/8/2N1P1P1/BP5R/BKN4P/P1PP1P2/R7 w - - 9 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 3,
-      "seed": 1,
-      "focal_color": false,
-      "white_name": "squat",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 31.648350513001787,
-      "final_fen": "8/3npr1b/2prkp2/3p2p1/3P2Pp/q3P2P/q1P4K/4q3 w - - 66 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 4,
-      "seed": 2,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "squat",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 31.736546553001972,
-      "final_fen": "5N1k/P7/5R2/4p3/2B1PPP1/3K4/2P3P1/8 w - - 1 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 5,
-      "seed": 2,
-      "focal_color": false,
-      "white_name": "squat",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 28.84763357999327,
-      "final_fen": "8/1rp2p1p/1nkpp2P/1p2P3/8/7K/5q2/7q w - - 24 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 6,
-      "seed": 3,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "squat",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 43.42164496800979,
-      "final_fen": "1rbqkb1Q/ppppppp1/8/PN5P/2P1B3/4PK2/RP1P1PP1/N1B2R2 w - - 1 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 7,
-      "seed": 3,
-      "focal_color": false,
-      "white_name": "squat",
-      "black_name": "losebot(sloppy)",
-      "label": "repetition",
-      "reason": "repetition",
-      "forced": false,
-      "plies": 63,
-      "seconds": 7.237394031995791,
-      "final_fen": "rn5r/pp2npb1/1p3k2/2p1pbpp/4q3/7P/PP1P1PP1/7K b - - 9 32"
-    },
-    {
-      "family": "squat",
-      "game_index": 8,
-      "seed": 4,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "squat",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 25.90419753799506,
-      "final_fen": "7k/8/4N1p1/2P1P1P1/7K/P5P1/P3pp2/8 w - - 14 121"
-    },
-    {
-      "family": "squat",
-      "game_index": 9,
-      "seed": 4,
-      "focal_color": false,
-      "white_name": "squat",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 31.6735601350083,
-      "final_fen": "8/P2r4/1pqkpp1r/2p1nbp1/2Pn3p/6PP/6K1/4q3 w - - 1 121"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 0,
-      "seed": 0,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy-held",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 144,
-      "seconds": 9.14069064099749,
-      "final_fen": "8/k7/8/2K5/8/8/8/8 w - - 0 73"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 1,
-      "seed": 0,
-      "focal_color": false,
-      "white_name": "sloppy-held",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 16.872377446998144,
-      "final_fen": "8/5k2/8/3K4/4R3/8/8/8 w - - 39 121"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 2,
-      "seed": 1,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy-held",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 134,
-      "seconds": 13.851065898998058,
-      "final_fen": "8/8/8/8/8/1K6/6k1/8 w - - 0 68"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 3,
-      "seed": 1,
-      "focal_color": false,
-      "white_name": "sloppy-held",
-      "black_name": "losebot(sloppy)",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 189,
-      "seconds": 19.56635000499955,
-      "final_fen": "6B1/7k/8/8/4K3/8/8/8 b - - 0 95"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 4,
-      "seed": 2,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy-held",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 15.820408792002127,
-      "final_fen": "8/5Kq1/k7/8/8/8/8/8 w - - 62 121"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 5,
-      "seed": 2,
-      "focal_color": false,
-      "white_name": "sloppy-held",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 17.632790204996127,
-      "final_fen": "8/8/2k5/4Q3/6K1/8/8/8 w - - 51 121"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 6,
-      "seed": 3,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy-held",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 12.815479680997669,
-      "final_fen": "8/1k6/7q/8/8/7K/8/8 w - - 70 121"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 7,
-      "seed": 3,
-      "focal_color": false,
-      "white_name": "sloppy-held",
-      "black_name": "losebot(sloppy)",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 196,
-      "seconds": 6.626911580999149,
-      "final_fen": "8/8/8/8/8/8/5k2/2K5 w - - 0 99"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 8,
-      "seed": 4,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "sloppy-held",
-      "label": "repetition",
-      "reason": "repetition",
-      "forced": false,
-      "plies": 26,
-      "seconds": 3.3598227690090425,
-      "final_fen": "rnbqkb1Q/p1pp1p2/1p6/6pp/4p3/1P2P1P1/P1PPKP1P/RNB2BNR w - - 8 14"
-    },
-    {
-      "family": "sloppy-held",
-      "game_index": 9,
-      "seed": 4,
-      "focal_color": false,
-      "white_name": "sloppy-held",
-      "black_name": "losebot(sloppy)",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 146,
-      "seconds": 9.962685310005327,
-      "final_fen": "3K4/1k6/8/8/8/8/8/8 w - - 0 74"
-    },
-    {
-      "family": "human-held",
-      "game_index": 0,
-      "seed": 0,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "human-held",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 25.834165649997885,
-      "final_fen": "8/8/2K5/7q/8/5k2/8/8 w - - 30 121"
-    },
-    {
-      "family": "human-held",
-      "game_index": 1,
-      "seed": 0,
-      "focal_color": false,
-      "white_name": "human-held",
-      "black_name": "losebot(sloppy)",
-      "label": "repetition",
-      "reason": "repetition",
-      "forced": false,
-      "plies": 149,
-      "seconds": 19.187865273008356,
-      "final_fen": "1k6/1q3pp1/4p3/K6p/8/8/8/8 b - - 67 75"
-    },
-    {
-      "family": "human-held",
-      "game_index": 2,
-      "seed": 1,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "human-held",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 18.50159156700829,
-      "final_fen": "8/8/8/4K2k/2q5/8/8/8 w - - 24 121"
-    },
-    {
-      "family": "human-held",
-      "game_index": 3,
-      "seed": 1,
-      "focal_color": false,
-      "white_name": "human-held",
-      "black_name": "losebot(sloppy)",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
-      "forced": false,
-      "plies": 141,
-      "seconds": 12.746639520002645,
-      "final_fen": "8/7b/2k5/8/1K6/8/8/8 b - - 0 71"
-    },
-    {
-      "family": "human-held",
-      "game_index": 4,
-      "seed": 2,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "human-held",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 25.41056220700557,
-      "final_fen": "3k1K1n/8/4P3/5P2/8/1P6/8/8 w - - 2 121"
-    },
-    {
-      "family": "human-held",
-      "game_index": 5,
-      "seed": 2,
-      "focal_color": false,
-      "white_name": "human-held",
-      "black_name": "losebot(sloppy)",
-      "label": "stalemate-them",
-      "reason": "stalemate",
-      "forced": false,
-      "plies": 132,
-      "seconds": 11.441255747005926,
-      "final_fen": "8/k7/5p1p/1p5P/7K/4pq2/8/8 w - - 0 67"
-    },
-    {
-      "family": "human-held",
-      "game_index": 6,
-      "seed": 3,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "human-held",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 33.23767577399849,
-      "final_fen": "8/8/2k4P/1R6/6P1/4PpK1/3p1P2/8 w - - 4 121"
-    },
-    {
-      "family": "human-held",
-      "game_index": 7,
-      "seed": 3,
-      "focal_color": false,
-      "white_name": "human-held",
-      "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
-      "forced": false,
-      "plies": 240,
-      "seconds": 26.70978340500733,
-      "final_fen": "8/5K2/8/6k1/8/8/7p/8 w - - 20 121"
-    },
-    {
-      "family": "human-held",
-      "game_index": 8,
-      "seed": 4,
-      "focal_color": true,
-      "white_name": "losebot(sloppy)",
-      "black_name": "human-held",
-      "label": "insufficient-material",
-      "reason": "insufficient-material",
       "forced": false,
       "plies": 237,
-      "seconds": 23.8141364769981,
-      "final_fen": "8/4k3/8/8/4K3/8/8/8 b - - 0 119"
+      "seconds": 19.489051918004407,
+      "final_fen": "5K1k/8/5PP1/8/P7/8/8/8 b - - 0 119"
+    },
+    {
+      "family": "sloppy",
+      "game_index": 6,
+      "seed": 3,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 20.75295246099995,
+      "final_fen": "8/8/3q4/2K5/8/3k4/8/8 w - - 22 121"
+    },
+    {
+      "family": "sloppy",
+      "game_index": 7,
+      "seed": 3,
+      "focal_color": false,
+      "white_name": "sloppy",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 15.969335187997785,
+      "final_fen": "K5Q1/8/5k2/8/8/8/8/8 w - - 83 121"
+    },
+    {
+      "family": "sloppy",
+      "game_index": 8,
+      "seed": 4,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy",
+      "label": "fifty-move",
+      "reason": "fifty-move",
+      "forced": false,
+      "plies": 240,
+      "seconds": 12.642454279004596,
+      "final_fen": "8/8/3K4/8/8/1k6/8/q7 w - - 100 121"
+    },
+    {
+      "family": "sloppy",
+      "game_index": 9,
+      "seed": 4,
+      "focal_color": false,
+      "white_name": "sloppy",
+      "black_name": "losebot(sloppy)",
+      "label": "stalemate-us",
+      "reason": "stalemate",
+      "forced": false,
+      "plies": 163,
+      "seconds": 7.040201618001447,
+      "final_fen": "8/8/5K2/7k/7p/7P/8/2Q5 b - - 20 82"
+    },
+    {
+      "family": "squat",
+      "game_index": 0,
+      "seed": 0,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "squat",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 45.37988555600168,
+      "final_fen": "3k4/6RN/P7/5P2/4K2P/3PP3/PB4p1/6R1 w - - 1 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 1,
+      "seed": 0,
+      "focal_color": false,
+      "white_name": "squat",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 37.992676919006044,
+      "final_fen": "2r2K2/pn1k2Pb/8/3p2q1/8/8/8/8 w - - 5 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 2,
+      "seed": 1,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "squat",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 45.457644526992226,
+      "final_fen": "Q6R/4N1k1/6p1/6P1/2B1P2P/p2K1P2/P1pP4/2N5 w - - 7 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 3,
+      "seed": 1,
+      "focal_color": false,
+      "white_name": "squat",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 41.107117439009016,
+      "final_fen": "8/3rr3/3pPb2/p1p5/6p1/1p1p1k1p/1P5P/5b1K w - - 0 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 4,
+      "seed": 2,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "squat",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 38.37650613900041,
+      "final_fen": "5Q2/7k/4N3/2P1P3/P7/1P2PPK1/2p2R1P/8 w - - 6 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 5,
+      "seed": 2,
+      "focal_color": false,
+      "white_name": "squat",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 34.285765987995546,
+      "final_fen": "1r2Q3/8/p6p/2pnbkp1/1pP5/4qp2/8/4K3 w - - 5 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 6,
+      "seed": 3,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "squat",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 43.1368222960009,
+      "final_fen": "r1bqkbQ1/ppppppp1/8/1B6/4P1P1/P1N1KP1P/1PPP3N/1RBR4 w - - 91 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 7,
+      "seed": 3,
+      "focal_color": false,
+      "white_name": "squat",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 33.08496062000631,
+      "final_fen": "7r/1pkP1P2/1p1n2K1/8/8/4p1q1/8/8 w - - 9 121"
+    },
+    {
+      "family": "squat",
+      "game_index": 8,
+      "seed": 4,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "squat",
+      "label": "repetition",
+      "reason": "repetition",
+      "forced": false,
+      "plies": 62,
+      "seconds": 7.505352715990739,
+      "final_fen": "r1bqkb1r/pppppppp/2B5/3Q3P/4N3/2NKP3/PPPP1PP1/R1B4R w - - 37 32"
+    },
+    {
+      "family": "squat",
+      "game_index": 9,
+      "seed": 4,
+      "focal_color": false,
+      "white_name": "squat",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 39.164831984002376,
+      "final_fen": "1r3r2/7P/1pp5/1b3pk1/2p5/1p2p3/6Kn/5q2 w - - 51 121"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 0,
+      "seed": 0,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy-held",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 217,
+      "seconds": 24.848802184991655,
+      "final_fen": "8/8/8/8/8/2k5/6K1/8 b - - 0 109"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 1,
+      "seed": 0,
+      "focal_color": false,
+      "white_name": "sloppy-held",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 18.82464584799891,
+      "final_fen": "8/7K/8/4Q3/7k/8/8/8 w - - 89 121"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 2,
+      "seed": 1,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy-held",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 203,
+      "seconds": 21.522267891996307,
+      "final_fen": "8/8/8/8/2K2k2/8/8/8 b - - 0 102"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 3,
+      "seed": 1,
+      "focal_color": false,
+      "white_name": "sloppy-held",
+      "black_name": "losebot(sloppy)",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 216,
+      "seconds": 19.849123021005653,
+      "final_fen": "8/8/3K4/8/8/3k4/8/8 w - - 0 109"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 4,
+      "seed": 2,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy-held",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 19.797547112000757,
+      "final_fen": "8/8/8/4rK2/8/8/8/2k5 w - - 50 121"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 5,
+      "seed": 2,
+      "focal_color": false,
+      "white_name": "sloppy-held",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 22.022207176007214,
+      "final_fen": "2k5/4Q3/8/8/8/8/8/K7 w - - 43 121"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 6,
+      "seed": 3,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy-held",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 49.508078081998974,
+      "final_fen": "8/8/8/1kPP4/p7/P1R5/Pp6/1R1K4 w - - 8 121"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 7,
+      "seed": 3,
+      "focal_color": false,
+      "white_name": "sloppy-held",
+      "black_name": "losebot(sloppy)",
+      "label": "stalemate-us",
+      "reason": "stalemate",
+      "forced": false,
+      "plies": 229,
+      "seconds": 37.96454232999531,
+      "final_fen": "k7/8/1Q6/K7/8/8/8/8 b - - 0 115"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 8,
+      "seed": 4,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "sloppy-held",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 209,
+      "seconds": 17.77437564000138,
+      "final_fen": "8/8/8/1K6/8/8/8/4k3 b - - 0 105"
+    },
+    {
+      "family": "sloppy-held",
+      "game_index": 9,
+      "seed": 4,
+      "focal_color": false,
+      "white_name": "sloppy-held",
+      "black_name": "losebot(sloppy)",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 186,
+      "seconds": 14.221067614998901,
+      "final_fen": "8/8/8/8/6K1/8/k7/8 w - - 0 94"
+    },
+    {
+      "family": "human-held",
+      "game_index": 0,
+      "seed": 0,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "human-held",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 43.084360327993636,
+      "final_fen": "Q7/8/3Q4/1k4P1/1p2p3/1P2P2p/2PKR2P/2RN4 w - - 67 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 1,
+      "seed": 0,
+      "focal_color": false,
+      "white_name": "human-held",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 29.591956028001732,
+      "final_fen": "8/p1r5/P7/1K6/1p6/1kq5/1r6/8 w - - 14 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 2,
+      "seed": 1,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "human-held",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 157,
+      "seconds": 15.232371560996398,
+      "final_fen": "8/8/8/3kB1K1/8/8/8/8 b - - 0 79"
+    },
+    {
+      "family": "human-held",
+      "game_index": 3,
+      "seed": 1,
+      "focal_color": false,
+      "white_name": "human-held",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 29.507486217000405,
+      "final_fen": "8/5K2/2k5/8/8/Q7/8/8 w - - 9 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 4,
+      "seed": 2,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "human-held",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 41.87234086600074,
+      "final_fen": "8/8/8/8/1q3K1k/6N1/8/8 w - - 8 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 5,
+      "seed": 2,
+      "focal_color": false,
+      "white_name": "human-held",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 29.213911345999804,
+      "final_fen": "5k1N/8/6K1/4q3/8/8/8/8 w - - 1 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 6,
+      "seed": 3,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "human-held",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 36.922493146994384,
+      "final_fen": "8/8/1q6/3k4/8/1K6/8/8 w - - 20 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 7,
+      "seed": 3,
+      "focal_color": false,
+      "white_name": "human-held",
+      "black_name": "losebot(sloppy)",
+      "label": "max-plies",
+      "reason": "max-plies",
+      "forced": false,
+      "plies": 240,
+      "seconds": 19.77794618200278,
+      "final_fen": "8/2K5/6Q1/4k3/8/8/8/8 w - - 35 121"
+    },
+    {
+      "family": "human-held",
+      "game_index": 8,
+      "seed": 4,
+      "focal_color": true,
+      "white_name": "losebot(sloppy)",
+      "black_name": "human-held",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
+      "forced": false,
+      "plies": 210,
+      "seconds": 21.366538234011387,
+      "final_fen": "1K6/8/2k5/8/8/1N6/8/8 w - - 0 106"
     },
     {
       "family": "human-held",
@@ -843,12 +843,12 @@
       "focal_color": false,
       "white_name": "human-held",
       "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
+      "label": "insufficient-material",
+      "reason": "insufficient-material",
       "forced": false,
-      "plies": 240,
-      "seconds": 19.77937681399635,
-      "final_fen": "8/8/7K/8/8/8/2k5/Q7 w - - 10 121"
+      "plies": 230,
+      "seconds": 12.978056699997978,
+      "final_fen": "1k6/8/8/8/8/8/8/K7 w - - 0 116"
     },
     {
       "family": "squat-held",
@@ -857,12 +857,12 @@
       "focal_color": true,
       "white_name": "losebot(sloppy)",
       "black_name": "squat-held",
-      "label": "max-plies",
-      "reason": "max-plies",
+      "label": "repetition",
+      "reason": "repetition",
       "forced": false,
-      "plies": 240,
-      "seconds": 26.83782765000069,
-      "final_fen": "8/8/Q7/3KQ2p/1k5P/1p2B3/8/1q5Q w - - 14 121"
+      "plies": 232,
+      "seconds": 26.2439818510029,
+      "final_fen": "8/k7/1N1N4/8/3K4/3PP3/1p6/8 w - - 16 117"
     },
     {
       "family": "squat-held",
@@ -871,12 +871,12 @@
       "focal_color": false,
       "white_name": "squat-held",
       "black_name": "losebot(sloppy)",
-      "label": "repetition",
-      "reason": "repetition",
+      "label": "max-plies",
+      "reason": "max-plies",
       "forced": false,
-      "plies": 115,
-      "seconds": 13.792401858998346,
-      "final_fen": "r1b5/1ppp4/pk3p1p/2nn4/4p3/P5P1/P2PP2P/K1Bq4 b - - 15 58"
+      "plies": 240,
+      "seconds": 23.600342271005502,
+      "final_fen": "8/8/5n2/7p/8/k7/7Q/K7 w - - 13 121"
     },
     {
       "family": "squat-held",
@@ -889,8 +889,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 34.475065599996014,
-      "final_fen": "7Q/1k6/1p1Q4/1P6/N1P5/4B3/4Kp2/5R2 w - - 55 121"
+      "seconds": 23.24096453799575,
+      "final_fen": "8/k7/7p/1Rp2P1P/8/3P4/4p3/4K3 w - - 3 121"
     },
     {
       "family": "squat-held",
@@ -899,12 +899,12 @@
       "focal_color": false,
       "white_name": "squat-held",
       "black_name": "losebot(sloppy)",
-      "label": "repetition",
-      "reason": "repetition",
+      "label": "max-plies",
+      "reason": "max-plies",
       "forced": false,
-      "plies": 225,
-      "seconds": 19.352510235010413,
-      "final_fen": "6k1/3P4/5p2/5P2/5P2/8/8/K7 b - - 12 113"
+      "plies": 240,
+      "seconds": 20.62872634100495,
+      "final_fen": "1n6/1P6/8/p1p5/1k6/1P6/1K6/3q4 w - - 12 121"
     },
     {
       "family": "squat-held",
@@ -917,8 +917,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 28.594177987004514,
-      "final_fen": "8/8/8/1k1K4/4P3/p7/7P/8 w - - 2 121"
+      "seconds": 34.07489235799585,
+      "final_fen": "k4B1B/Np6/1P6/6P1/B7/P3P3/3pK3/R2R4 w - - 1 121"
     },
     {
       "family": "squat-held",
@@ -931,8 +931,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 23.190297371998895,
-      "final_fen": "8/8/2r2p2/4pPk1/1P1pP2p/p5pP/Pr6/1K6 w - - 2 121"
+      "seconds": 29.22976115399797,
+      "final_fen": "8/P2P4/4k3/P4p2/1K6/2q5/2q5/8 w - - 21 121"
     },
     {
       "family": "squat-held",
@@ -945,8 +945,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 26.27136172700557,
-      "final_fen": "8/3Q4/8/2Q5/3BP3/1k1K4/2p4P/8 w - - 8 121"
+      "seconds": 13.330647270006011,
+      "final_fen": "k7/p7/8/1K6/8/8/8/8 w - - 6 121"
     },
     {
       "family": "squat-held",
@@ -955,12 +955,12 @@
       "focal_color": false,
       "white_name": "squat-held",
       "black_name": "losebot(sloppy)",
-      "label": "max-plies",
-      "reason": "max-plies",
+      "label": "repetition",
+      "reason": "repetition",
       "forced": false,
-      "plies": 240,
-      "seconds": 29.164409286997397,
-      "final_fen": "8/8/2p5/p1pnb3/P1Pkq3/PK1b4/7q/4q3 w - - 17 121"
+      "plies": 237,
+      "seconds": 20.47522343500168,
+      "final_fen": "8/1P6/6k1/8/4p1p1/6P1/8/K7 b - - 10 119"
     },
     {
       "family": "squat-held",
@@ -973,8 +973,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 18.84979539399501,
-      "final_fen": "6R1/kpB5/5P2/PQP5/8/8/3Pp3/4K3 w - - 13 121"
+      "seconds": 24.453294487990206,
+      "final_fen": "k7/8/8/7p/1Q3P1P/6K1/1p6/8 w - - 60 121"
     },
     {
       "family": "squat-held",
@@ -986,9 +986,9 @@
       "label": "repetition",
       "reason": "repetition",
       "forced": false,
-      "plies": 191,
-      "seconds": 19.16725628299173,
-      "final_fen": "1k6/1p4Pp/1P5n/5p2/8/3p4/P7/K7 b - - 9 96"
+      "plies": 237,
+      "seconds": 28.00150847400073,
+      "final_fen": "8/2b3P1/2pk1p1p/1p6/1P6/8/7r/K7 b - - 8 119"
     },
     {
       "family": "random",
@@ -1001,8 +1001,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 35.37807361899468,
-      "final_fen": "1k6/2pRN3/R7/4B2P/1P1P4/1NKB4/1PP5/8 w - - 11 121"
+      "seconds": 31.16422982599761,
+      "final_fen": "8/8/p3R3/P2P2k1/8/6K1/6p1/6B1 w - - 11 121"
     },
     {
       "family": "random",
@@ -1015,8 +1015,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 29.53741648000141,
-      "final_fen": "8/7P/pk1p4/1p1p4/1P6/8/4q2K/8 w - - 23 121"
+      "seconds": 26.41953677100537,
+      "final_fen": "1k6/pq6/P6n/P7/8/5b1K/5b2/8 w - - 14 121"
     },
     {
       "family": "random",
@@ -1029,8 +1029,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 43.96164156899613,
-      "final_fen": "8/6N1/8/8/7P/3K4/qk6/7Q w - - 35 121"
+      "seconds": 33.75999616300396,
+      "final_fen": "4Q3/7k/5Qp1/6K1/6QP/6N1/Rp6/1N6 w - - 22 121"
     },
     {
       "family": "random",
@@ -1043,8 +1043,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 52.66281101499044,
-      "final_fen": "6q1/2n5/5K2/8/5k2/4q3/3N4/6q1 w - - 2 121"
+      "seconds": 31.85012766199361,
+      "final_fen": "8/8/8/3q3q/2k5/1p6/4K1B1/6q1 w - - 4 121"
     },
     {
       "family": "random",
@@ -1057,8 +1057,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 33.062313538001035,
-      "final_fen": "8/8/8/4P3/3R4/1k6/2p2B2/Q1K5 w - - 9 121"
+      "seconds": 31.066527971997857,
+      "final_fen": "5k2/8/4Q3/8/8/5P1P/p2PKp2/5B1R w - - 18 121"
     },
     {
       "family": "random",
@@ -1071,8 +1071,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 39.238171075005084,
-      "final_fen": "4q2K/5kr1/6N1/8/8/3n4/8/8 w - - 5 121"
+      "seconds": 29.532732255000155,
+      "final_fen": "1rb5/1pkp2rK/p1p1p3/2P1Pn2/8/8/8/n7 w - - 28 121"
     },
     {
       "family": "random",
@@ -1085,8 +1085,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 32.453841288996045,
-      "final_fen": "3Q4/8/4P3/8/8/5PK1/1R6/4k3 w - - 19 121"
+      "seconds": 26.0552654589992,
+      "final_fen": "8/8/5n2/8/7K/8/7k/5Q2 w - - 19 121"
     },
     {
       "family": "random",
@@ -1098,9 +1098,9 @@
       "label": "repetition",
       "reason": "repetition",
       "forced": false,
-      "plies": 201,
-      "seconds": 37.170031237998046,
-      "final_fen": "7r/K7/2k5/p7/8/6p1/8/R7 b - - 14 101"
+      "plies": 199,
+      "seconds": 17.727663401004975,
+      "final_fen": "8/7k/8/3p4/6q1/3n4/8/7K b - - 25 100"
     },
     {
       "family": "random",
@@ -1113,8 +1113,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 40.28154594700027,
-      "final_fen": "8/8/3N4/3PK1B1/4P1Q1/8/p6p/7k w - - 8 121"
+      "seconds": 20.47854473599,
+      "final_fen": "8/8/8/2PP4/8/7q/4K3/6k1 w - - 1 121"
     },
     {
       "family": "random",
@@ -1127,8 +1127,8 @@
       "reason": "max-plies",
       "forced": false,
       "plies": 240,
-      "seconds": 36.67233742000826,
-      "final_fen": "3nk3/1r1p4/3P3n/4Kp2/p6q/p1p3p1/8/6q1 w - - 10 121"
+      "seconds": 30.542514303000644,
+      "final_fen": "4k3/3bP3/r2p3p/2p4P/2P1p3/1K3p2/6q1/8 w - - 84 121"
     }
   ]
 }
