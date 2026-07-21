@@ -7,7 +7,13 @@ import chess
 
 from .arena import run_match
 from .bot import LoseBot
-from .opponents import CornerSquatBot, RandomBot, WorstfishBot, ZachBot
+from .opponents import (
+    CornerSquatBot,
+    RandomBot,
+    SloppyBot,
+    WorstfishBot,
+    ZachBot,
+)
 from .planning import (
     _pressure_walk,
     eviction_pressure_move,
@@ -46,6 +52,8 @@ def make_bot(kind: str, args, color_tag: str):
         )
     if kind == "zach":
         return ZachBot(seed=args.seed)
+    if kind == "sloppy":
+        return SloppyBot(seed=args.seed)
     if kind == "random":
         return RandomBot(seed=args.seed + 1)
     if kind == "worstfish":
@@ -3810,6 +3818,120 @@ def selftest() -> int:
         " (want pawn offered, only bishop played)",
     )
 
+    # 31a. The sloppy kernel is mate-avoidant like every human we've
+    # met: full greed still refuses the mating rook capture and takes
+    # the small free bishop meal instead, and a zugzwang pool of
+    # nothing but mates plays one — the executioner of last resort.
+    sloppy_mate_pose = chess.Board("4r1k1/5p1p/8/n7/8/2B5/8/4R1K1 w - - 0 1")
+    sloppy_greedy = {
+        SloppyBot(seed=seed, greed=1.0, trade=1.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_mate_pose).uci()
+        for seed in range(30)
+    }
+    sloppy_forced = chess.Board("8/1R6/5pkp/6p1/6K1/5PPP/8/8 b - - 0 1")
+    sloppy_forced.push(SloppyBot(seed=0).choose_move(sloppy_forced))
+    check(
+        "sloppy kernel: greed declines the mate, zugzwang delivers it",
+        sloppy_greedy == {"c3a5"} and sloppy_forced.is_checkmate(),
+        f"greedy={sorted(sloppy_greedy)} (want only Bxa5, never Rxe8#); "
+        f"forced mates={sloppy_forced.is_checkmate()}",
+    )
+
+    # 31b. Zero every urge and the sloppy human decays to a Zach: the
+    # hanging queen is never touched (the fallback shuffles from the
+    # capture-averse support pool); switch greed on and it is ALWAYS
+    # taken — the biggest FREE victim, not the queen-guarded knight.
+    sloppy_queen_pose = chess.Board("6k1/7p/8/1n1q4/8/8/8/1R1R2K1 w - - 0 1")
+    sloppy_zero = {
+        SloppyBot(seed=seed, greed=0.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_queen_pose).uci()
+        for seed in range(30)
+    }
+    sloppy_mvv = {
+        SloppyBot(seed=seed, greed=1.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_queen_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: zeroed abstains, greedy takes the free queen",
+        "d1d5" not in sloppy_zero and "b1b5" not in sloppy_zero
+        and sloppy_mvv == {"d1d5"},
+        f"zeroed={sorted(sloppy_zero)}; greedy={sorted(sloppy_mvv)}",
+    )
+
+    # 31c. The trade knob is YBZEWDGj's willing rook-for-knight
+    # (34.Rxa7 killed our last closer): a pawn-defended victim falls
+    # only when the human wants the piece more than the material.
+    sloppy_trade_pose = chess.Board("6k1/8/4p3/3r4/8/8/8/3R2K1 w - - 0 1")
+    sloppy_no_trade = {
+        SloppyBot(seed=seed, greed=1.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_trade_pose).uci()
+        for seed in range(30)
+    }
+    sloppy_yes_trade = {
+        SloppyBot(seed=seed, greed=1.0, trade=1.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_trade_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: defended victims hinge on the trade roll",
+        "d1d5" not in sloppy_no_trade and sloppy_yes_trade == {"d1d5"},
+        f"trade=0 picks={sorted(sloppy_no_trade)}; "
+        f"trade=1 picks={sorted(sloppy_yes_trade)}",
+    )
+
+    # 31d. Promotion drive: queen on sight (three promotions in
+    # YBZEWDGj, both h-pawns walked in).
+    sloppy_promo_pose = chess.Board("8/1k5P/8/8/8/8/8/6K1 w - - 0 1")
+    sloppy_promos = {
+        SloppyBot(seed=seed, greed=0.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=1.0)
+        .choose_move(sloppy_promo_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: promotes on sight",
+        sloppy_promos == {"h7h8q"},
+        f"picks={sorted(sloppy_promos)} (want h8=Q only)",
+    )
+
+    # 31e. The check urge is 69...h3+ from cG0S5wSF verbatim: the
+    # foreign pawn's entry-square squat arrives as an ordinary
+    # checking impulse, no anti-template intent required.
+    sloppy_entry_pose = chess.Board("8/8/8/5k2/7p/8/6K1/8 b - - 0 1")
+    sloppy_checks = {
+        SloppyBot(seed=seed, greed=0.0, trade=0.0, check=1.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_entry_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: the entry-squat check fires on the urge",
+        sloppy_checks == {"h4h3"},
+        f"picks={sorted(sloppy_checks)} (want h3+ only)",
+    )
+
+    # 31f. The hunt: YBZEWDGj's king marched half the board to eat a
+    # parked bishop; here the bare king takes the only strictly
+    # closing step toward the hanging rook.
+    sloppy_hunt_pose = chess.Board("7r/8/7k/8/8/8/8/K7 w - - 0 1")
+    sloppy_hunts = {
+        SloppyBot(seed=seed, greed=0.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=1.0, promote=0.0)
+        .choose_move(sloppy_hunt_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: the hunt closes on the nearest meal",
+        sloppy_hunts == {"a1b2"},
+        f"picks={sorted(sloppy_hunts)} (want Kb2 only)",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
@@ -3951,10 +4073,13 @@ def endgames(args) -> int:
             release_audit=args.release_audit,
         )
         start_board = chess.Board(fen)
-        if getattr(args, "opponent", "zach") == "squat":
+        kernel = getattr(args, "opponent", "zach")
+        if kernel == "squat":
             opponent = CornerSquatBot(
                 _squat_corner(start_board), seed=args.seed + i
             )
+        elif kernel == "sloppy":
+            opponent = SloppyBot(seed=args.seed + i)
         else:
             opponent = ZachBot(seed=args.seed + i)
         start_target = best_pawn_mate_template(start_board, chess.WHITE)
@@ -4224,11 +4349,13 @@ def main() -> int:
     eg.add_argument("--release-audit", action="store_true",
                     help="log every release-scan decision: candidate "
                          "verdicts, audited goal odds, clean-board twin")
-    eg.add_argument("--opponent", choices=["zach", "squat"],
+    eg.add_argument("--opponent", choices=["zach", "squat", "sloppy"],
                     default="zach",
                     help="sparring kernel: zach shuffles uniformly; "
                          "squat hugs the drill's checked corner (the "
-                         "IYQd0RBC anti-losebot shuffle)")
+                         "IYQd0RBC anti-losebot shuffle); sloppy is the "
+                         "capturing, promoting, hunting human of the "
+                         "field games")
     eg.add_argument("--show-fen", action="store_true")
     eg.add_argument("--pgn-dir", default=None)
 
@@ -4261,9 +4388,11 @@ def main() -> int:
 
     arena = sub.add_parser("arena")
     arena.add_argument("--white", required=True,
-                       choices=["losebot", "zach", "worstfish", "random"])
+                       choices=["losebot", "zach", "sloppy", "worstfish",
+                                "random"])
     arena.add_argument("--black", required=True,
-                       choices=["losebot", "zach", "worstfish", "random"])
+                       choices=["losebot", "zach", "sloppy", "worstfish",
+                                "random"])
     arena.add_argument("-n", "--games", type=int, default=10)
     arena.add_argument("--max-plies", type=int, default=300)
     arena.add_argument("--depth", type=int, default=2)

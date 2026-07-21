@@ -71,6 +71,153 @@ class CornerSquatBot:
         return self.rng.choice(pool)
 
 
+_SLOPPY_VALS = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+    chess.KING: 0,
+}
+
+
+class SloppyBot:
+    """The sloppy human as a kernel (the lichess field games' opponent).
+
+    Zach's one sacred rule survives — never deliver mate unless it is
+    the only legal move — because the live humans held it for hundreds
+    of plies, and the mercy mate that ended cG0S5wSF is deliberately
+    NOT modeled: the corpus clause wants mates landed by force, and a
+    kernel that eventually cooperates would grade our zugzwangs on a
+    curve. Everything else Zach forbids, this one does, because the
+    humans did:
+
+    - GREED (YBZEWDGj took every gift; R9tSLBLK ate the donated rook
+      and bishop by move 48): with probability `greed`, when captures
+      exist, take the biggest victim — free victims first, a DEFENDED
+      victim only on a `trade` roll (the willing rook-for-knight
+      34.Rxa7 that killed our last closer).
+    - PROMOTION DRIVE (three promotions in YBZEWDGj, the a/b train in
+      IYQd0RBC): queen on sight with probability `promote`, otherwise
+      push the most advanced pawn on a `push` roll.
+    - CHECKS (69...h3+ squatted the entry square forever; 56.Qxf6+
+      stripped a rook's pawn shield): any checking move on a `check`
+      roll.
+    - THE HUNT (YBZEWDGj 103-115: the king marched d2 to e5 to eat a
+      parked bishop): on a `hunt` roll, step the king strictly toward
+      the nearest of our men.
+
+    Priority is promote > greed > check > push > hunt > uniform
+    shuffle, each layer rolled independently per move from the seeded
+    RNG — one seed is one reproducible human. A layer that rolls but
+    finds no legal expression falls through. This kernel is both the
+    arena's capturing opponent and the candidate opponent model for
+    the strip/midgame search: model=zach explores no capturing reply
+    at any depth, which is how one fork beat 497 vetoes in YBZEWDGj.
+    """
+
+    def __init__(self, seed: int = 0, name: str = "sloppy",
+                 greed: float = 0.85, trade: float = 0.35,
+                 check: float = 0.25, push: float = 0.5,
+                 hunt: float = 0.5, promote: float = 0.95):
+        self.rng = random.Random(seed)
+        self.name = name
+        self.greed = greed
+        self.trade = trade
+        self.check = check
+        self.push = push
+        self.hunt = hunt
+        self.promote = promote
+
+    def choose_move(self, board: chess.Board) -> chess.Move:
+        legal = list(board.legal_moves)
+        pool = []
+        for move in legal:
+            board.push(move)
+            mates = board.is_checkmate()
+            board.pop()
+            if not mates:
+                pool.append(move)
+        if not pool:
+            return self.rng.choice(legal)  # zugzwang: forced to mate
+        us = board.turn
+
+        promos = [m for m in pool if m.promotion == chess.QUEEN]
+        if promos and self.rng.random() < self.promote:
+            return self.rng.choice(promos)
+
+        if self.rng.random() < self.greed:
+            captures = [m for m in pool if board.is_capture(m)]
+            if captures:
+                def victim(move: chess.Move) -> int:
+                    if board.is_en_passant(move):
+                        return _SLOPPY_VALS[chess.PAWN]
+                    return _SLOPPY_VALS[board.piece_type_at(move.to_square)]
+                free = [
+                    m for m in captures
+                    if not board.attackers(not us, m.to_square)
+                ]
+                pick = free or (
+                    captures if self.rng.random() < self.trade else []
+                )
+                if pick:
+                    best = max(victim(m) for m in pick)
+                    return self.rng.choice(
+                        [m for m in pick if victim(m) == best]
+                    )
+
+        if self.rng.random() < self.check:
+            checks = [m for m in pool if board.gives_check(m)]
+            if checks:
+                return self.rng.choice(checks)
+
+        if self.rng.random() < self.push:
+            pushes = [
+                m for m in pool
+                if board.piece_type_at(m.from_square) == chess.PAWN
+                and not board.is_capture(m)
+            ]
+            if pushes:
+                def progress(move: chess.Move) -> int:
+                    rank = chess.square_rank(move.to_square)
+                    return rank if us == chess.WHITE else 7 - rank
+                far = max(progress(m) for m in pushes)
+                return self.rng.choice(
+                    [m for m in pushes if progress(m) == far]
+                )
+
+        if self.rng.random() < self.hunt:
+            targets = [
+                sq for sq, piece in board.piece_map().items()
+                if piece.color != us and piece.piece_type != chess.KING
+            ]
+            steps = [
+                m for m in pool
+                if board.piece_type_at(m.from_square) == chess.KING
+            ]
+            if targets and steps:
+                here = min(
+                    chess.square_distance(board.king(us), t)
+                    for t in targets
+                )
+                closing = [
+                    m for m in steps
+                    if min(
+                        chess.square_distance(m.to_square, t)
+                        for t in targets
+                    ) < here
+                ]
+                if closing:
+                    return self.rng.choice(closing)
+
+        # Aimless between urges: the shuffle is Zach's capture-averse
+        # support pool, so a fully zeroed SloppyBot decays to a Zach.
+        quiet = support_zach(board)
+        if quiet:
+            return self.rng.choice(quiet)
+        return self.rng.choice(pool)
+
+
 class RandomBot:
     def __init__(self, seed: int = 0, name: str = "random"):
         self.rng = random.Random(seed)

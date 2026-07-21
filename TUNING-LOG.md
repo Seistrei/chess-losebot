@@ -3195,3 +3195,248 @@ The field-frontier list (supersedes the one above):
    corner posed live in cG0S5wSF. The mate LANDING by force is still
    unwitnessed; the entry squat is what stood between, and item 2
    owns it.
+
+### YBZEWDGj: live game 3 — one fork beats 497 vetoes (2026-07-21)
+
+Third live witness (rapid 600+3, us Black, 1/2-1/2 by repetition in
+120), the first game on the merged review-fix build. The stock ledger
+stayed on-doctrine end to end: the queen traded at 16, every enemy
+promotion revoked or ridden (43.d8=Q died to 45...Rxf7; the first
+h8=Q died to 56...Rxf6; the second h8=Q ate our rook and was then
+donated back, 84.Qf6+ Kxf6 — the human's mercy reflex again), zero
+self-promotions across 120 moves. The floor worked HARD: 497
+donation vetoes on replay, midgame menus funneled to 4, 2, even 1
+survivor (moves 25/27/28), and the toolkit still died on move 33.
+
+**The fork (headline).** 5...Bxc3 spent the dark bishop at tier 2 —
+same opening spend as IYQd0RBC, the b-family priced away, the
+g-family (their g2 + h2 donor, our light bishop + knight) held tier
+2 for 33 moves. At 32.d6 the knight already stood attacked (Rc5),
+and the guard kept exactly three of 26 moves — Nb4, Nd8, Nxa7, all
+knight saves. The eval picked 32...Nxa7: revoking the a7 passer (the
+ex-b-pawn) one square from promotion, locally the doctrine move, and
+one-ply clean — no reply touched a role piece. Then 33.Rc7 forked
+bishop and knight, and the replicated guard verdict on that pose
+reads: **all 24 legal moves vetoed** — every candidate loses a role
+piece to Rxa7, Rxd7, or Rxc8 at one ply (defense-by-recapture like
+Rfd8 is invisible to a one-reply legality scan; there is no move
+that saves both). Kept = empty, never-empty returned the whole menu,
+and the eval took the rook: 33...Bxg4 (prize 450 against the 2→0
+gap of 900 — the value-aware veto had correctly refused it, and
+never-empty mooted the refusal). 34.Rxa7 collected the last knight.
+Tier 0 from move 34, permanently: no corner template poses
+knightless, and the remaining 86 moves were played against a
+structurally dead board. Post-mortem: Nb4 and Nd8 also lose a role
+piece to 33.Rc7 — the fork was unavoidable at move 32. The collapse
+was upstream, and it names the real blindness: under model=zach the
+search explores NO capturing replies at any depth — its one
+capture-aware ply is the guard itself — so the human's rook
+infiltration read as harmless shuffling while both role pieces
+drifted onto forkable squares. The floor is a filter; two-move
+tactics beat filters; only a capturing opponent model can price
+them.
+
+**Three sub-exposures for the kernel spec**, then the endgame
+verdict:
+
+1. **Pawn-shield blindness (new).** 55...Ke7 passed the guard
+   honestly: the count floor scans piece victims, and 56.Qxf6+
+   takes a PAWN — but that pawn was the g5-rook's only defender,
+   and after the forced 56...Rxf6 recapture, 57.Kxg5 ate the rook
+   the floor thought was safe. The floor counts pieces; its shields
+   can be pawns. Same one-ply structure as the fork.
+2. **The donation-armed family kill (new).** At 38 the count floor
+   left six survivors (g4-bishop attacked); the eval defended with
+   38...h5 — guard-approved, locally sound — and eleven moves later
+   49.gxh5 cashed it: their on-file g-executioner left its file by
+   eating our donation-placed pawn, exactly the "file-exit only by
+   our donation" the tier docstring names, with the donation ARMED
+   far beyond any one-ply horizon. Both White h-pawns then promoted
+   (55, 82).
+3. **Forced-block donation (cG0S5wSF exposure 2, mirrored).**
+   82.h8=Q+ Rg7 — a three-move menu, the block donates the rook to
+   83.Qxg7+. Checks convert our material through forced replies;
+   family-ledger sight for forcing moves cuts both ways.
+
+**The endgame was doctrine, not drift.** From move 73 their last
+h-pawn crossed the usable front, kh_viable_files went empty, and
+the guard exited by design. The parked-bishop finale (96...Bxe4,
+then seventeen king moves) resolved into the only winning try the
+position still held: 113...Kg5 and 114...Kg6 donated the
+e5-blockade and the bishop to UNFREEZE their e4 passer — their
+promotion is our mating material, the all-pawns-frozen dead-state
+logic playing the cooperative line. The human declined the script
+(115.Kxe4 ate the bishop instead of running the passer) and claimed
+the repetition at 120. Replay confirms today's bot replays Kg6 at
+114 and the guard's viable-empty exit is the designed reason — no
+regression, an honest dead draw from move 34.
+
+**Kernel spec, grown by this game:** greedy captures (every gift
+taken), two-move tactics (the fork, the defender-removal check),
+promotion trains (three promotions, both h-pawns walked in), king
+piece-hunts (103-115: their king marched d2→e5 to eat a parked
+bishop), and mercy declined when a draw serves better (took the
+repetition, not the K+Q mate the free passer offered). The frontier
+list above stands unchanged in order; item 2's evidence grew again,
+and the fork adds its sharpest requirement — the kernel is not just
+the arena opponent, it is the OPPONENT MODEL the strip/midgame
+search needs, because model=zach cannot see a fork at any depth.
+
+## The field baseline pin: what the floor costs in a Zach drill (2026-07-21)
+
+Frontier item 1, executed at the merged review-fix HEAD (67e5dc8)
+before any sloppy-driven field-knob change. Until now every battery
+reference was a vi-profile reference; the field profile — the one
+the live bridge actually runs — had no drill numbers of its own,
+and the choreography/guard/tier features all live behind its knobs.
+Commands mirror the vi references with the profile swapped: cases
+6/7/8 seeds 0-9 `endgames --case N --profile field --vi-herders 1
+--max-plies 240`, case-2 seed-5 `--profile field --max-plies 240
+--probe-cap 10000 --probe-depth 3`. The case-9 squat battery is
+already pinned on this exact build (10/10 CONVERTED @84 plies,
+`squat: evictions=7; chores=7; seal-guards=2` uniform — the
+choreography review entry above).
+
+**Case 6** (vi reference 7/10 @ 48/52/34/64/42/38/34): field
+**3/10** — CONVERTED seeds 1@90, 3@72, 9@96; stalemates 0@47, 2@31,
+4@75, 5@91, 7@75, 8@71; repetition 6@44. Guard vetoes per game
+154-407 (seed 9 additionally logs `squat: chores=1` — a transient
+corner-shaped state). **Case 7** (vi 4/10 @ 68/76/86/106, seeds
+2/5/6/7): field **4/10** but a different four at faster plies —
+1@48, 5@44, 7@62, 9@44; fifty-moves 0@112, 2@118, 4@110, 8@126;
+stalemate 3@59; max-plies 6@240; vetoes 144-451. **Case 8** (vi
+3/10 @ 26/48/42): field **3/10 at the same three ply counts** —
+3@26, 5@48, 8@42; stalemates 0@51, 2@89, 6@139, 7@47, 9@29;
+repetitions 1@58, 4@28; vetoes 35-173 (the drill starts at four
+free pieces, so the count arm sleeps until the donations begin).
+**Case 2 seed 5** (vi fifty-move@225): field **repetition@86**,
+vetoes 1660 — at full material the guard reshapes the whole game.
+
+Interpretation, so the next diff reads honestly: the case-6 drop
+(7/10 → 3/10) is the floor's designed tax in a Zach drill, not a
+regression. The drill's whole material is R+N+B — free count pegged
+at the floor of 3 — so the count arm polices every single move, and
+the vi scripts' Zach-immune en-prise placements (the family-
+selection entry named them when the guard first forbade them) cost
+tempo and geometry to re-derive defended. Against a kernel that
+never captures, every veto is pure constraint and zero protection;
+the benefit half of the ledger only exists against capturing
+opponents, which is exactly what the sloppy kernel below now
+measures. Case 7 shows the other face — the same count discipline
+prunes wander and converts FASTER where it converts — and case 8's
+outcome-identical table says the guard goes quiet when the reserve
+sits above the floor. Any future field-knob change re-runs these 31
+games and diffs against this table.
+
+## The sloppy-human kernel: the field games' opponent, distilled (2026-07-21)
+
+Frontier item 2's first half, built kernel-first the way the corner
+work went. `SloppyBot` (opponents.py) keeps Zach's one sacred rule
+— never deliver mate unless it is the only legal move; the mercy
+mate that ended cG0S5wSF is deliberately NOT modeled, because the
+corpus clause wants mates landed by force and a kernel that
+eventually cooperates would grade our zugzwangs on a curve — and
+breaks every other Zach vow, because the live humans did. Five
+seeded urges, rolled independently per move, priority promote >
+greed > check > push > hunt > shuffle:
+
+- **greed** (default 0.85): when captures exist, take the biggest
+  victim — free victims first, a DEFENDED victim only on a
+  **trade** roll (0.35; YBZEWDGj's willing rook-for-knight 34.Rxa7
+  that killed our last closer).
+- **promote** (0.95): queen on sight; **push** (0.5): otherwise
+  advance the furthest pawn (the promotion trains).
+- **check** (0.25): any checking move (69...h3+ arrived as an
+  ordinary checking impulse — no anti-template intent required).
+- **hunt** (0.5): step the king strictly toward the nearest of our
+  men (the d2→e5 bishop hunt).
+
+Aimless turns fall through to Zach's own capture-averse support
+pool, so a fully zeroed SloppyBot decays to a Zach — the kernel is
+a superset by construction. One seed is one reproducible human.
+Wired as `endgames --opponent sloppy` and `arena --white/--black
+sloppy`. Suite 109→115: 31a greed still refuses a mating rook
+capture and takes the small free meal, and a pool of nothing but
+mates plays one; 31b zeroed abstains from the hanging queen while
+greed=1 takes it every seed (biggest FREE victim, not the
+queen-guarded knight); 31c defended victims hinge on the trade
+roll; 31d promotes on sight; 31e is the entry-squat check verbatim
+(`8/8/8/5k2/7p/8/6K1/8 b`, thirty seeds, h3+ every time); 31f the
+hunt closes by the only strictly-approaching king step.
+
+**The acceptance baseline the fixes must move** — case 9 (the
+squat-drill start, the choreography's own 10/10 pose) vs sloppy,
+field profile, seeds 0-9: **0/10, every game insufficient-material,
+23-72 plies.** Seed 0 is the whole story in one script: the chore
+chain opens exactly as against the squatter — 1.Kf3 (march duty),
+2.Re1 (lane), 3.Bd4 (ready), 4.Nh4 (lift; chores=4) — and the
+kernel answers the lift with **4...g2: the voluntary executioner
+dump, king moves available, ply 8** — cG0S5wSF's 113...g2+
+reproduced organically by the push urge. The pushed pawn is spent,
+the family dies on the spot (viable empty), 5.Nxg2 is the honest
+cleanup, twenty bishop-shuttle moves follow, and the greed urge
+eats the knight (25...Kxg2) and the offered rook (28...Kxf1) down
+to bare kings. Two seed families: the 56-ply lift-then-dump script
+(seeds 0/1/2/6/8, vetoes 14-16) and faster collapses where the
+urges fire earlier (3/4/5/7 @ 23-38 plies, vetoes 42-43); seed 9
+lasted 72. Squat kernel 10/10, sloppy kernel 0/10 on the same pose:
+the corner choreography is exactly as kernel-scoped as its entry
+claimed, and the dump exposure owns the whole gap.
+
+**The arena taste** (`arena --white losebot --black sloppy --model
+zach --profile field -n 3`): 0/3 conversions — repetition@170,
+max-plies@300 twice — but the queue of walls is now visible in one
+run. Game 1: the strip phase HELD against the greed kernel — a
+revocation spree (the queen ate four pieces and was donated on the
+fifth), both enemy promotions revoked on arrival (66.Bxa1, 68.Bxa1),
+the floor pegged at exactly three free pieces to the end — and the
+draw came because their b/g stock died in the tactical wash: donors
+eaten as tactic-food, the on-file pawns run down and promoted into
+revocation. Game 3 (293s, the long one) is the first ORGANIC arena
+corner in the project's history: their g-pawn survived the wash as
+a live executioner (11...g5, 21...g4, 23...g3), the bot marched
+into the pocket (24.Kf1, 25.Kg2), caged on 35.Bg1, and reached plan
+distance 1 with the family intact — the full live-game arc,
+in-arena, against the capturing kernel. Then the known walls, in
+order: the herding VI could not build at posed-corner material —
+**107 builds, 98 state-cap failures, 16.3M states attempted, 72.6s
+of build time, one policy move played** (the session-17 watch-list
+item, now the binding constraint: our surplus a4/c4/f3 pawns plus
+the full toolkit blow the sub-MDP past any cap while the drill's
+clean material builds fine); the hunt-kernel king TOURS instead of
+squatting, so the eviction choreography's premise (a corner-hugger
+to evict and readmit) never engages and eighty moves of
+walk-pressure waits (84) and goal stalls (5) follow; and when our
+king finally took h1 at move 120, the kernel answered with
+120...g2+ — the dump again — 122...g1=Q+ 123.Kxg1, family spent,
+honest shuffle to the cap. The strip works, the pose happens, the
+conversion machinery is what the kernel breaks.
+
+The field-frontier list (supersedes the one above):
+
+1. **The sloppy fix round**, driven against this session's pinned
+   numbers (case-9-sloppy 0/10; arena 0/3; the field battery table
+   above guards the Zach references). The measured walls, roughly
+   in kill order: (a) the voluntary dump — the lift doctrine was
+   derived for a kernel that never pushes while a king move
+   exists, and the push urge does; kernel-conditional plug-holding
+   or pose-pace-before-the-dump needs the old fortress adjudication
+   re-run against SLOPPY, not squat; (b) the posed-corner state cap
+   — game 3 wasted its only organic pose on 98 failed builds;
+   directions: shed non-toolkit material once a plan commits (the
+   surplus pawns had no role), or prune/absorb statics so the
+   sub-MDP fits; (c) their-pieces-on-pocket-squares pricing plus
+   the revocation-capture value (cG0S5wSF's entry squat — the
+   check urge reproduces it on demand now); (d) family-ledger
+   sight for forcing moves (94.Re1+ b1=Q). Every fix lands with
+   the field battery re-run and diffed against the pin.
+2. **Sloppy as the strip/midgame OPPONENT MODEL** — YBZEWDGj's
+   fork: model=zach explores no capturing reply at any depth, so
+   the search cannot see two-move tactics against the toolkit; the
+   kernel now exists to BE the replacement reply model in probes
+   and negamax for the pre-herding phases (vi herding stays
+   Zach-scoped — the frozen-statics premise is the certificate's).
+   Biggest structural item; needs its own design round.
+3. **Corpus protocol continues.** The corner now poses organically
+   in-arena against a capturing kernel; the live bar is unchanged —
+   the corner poses AND the mate lands by force against a human.
