@@ -4,3 +4,11 @@ __pycache__/
 # The lichess OAuth token and downloaded game records stay out of git.
 lichess/lichess.env
 lichess/game_records/
+
+# League artifacts: landmarks and pinned reports only. Forced-selfmate
+# PGNs are the rare citable trophies; pinned runs keep report.json;
+# everything else regenerates bit-for-bit (process-stable seeds), so
+# dev-exploration runs and draw PGNs stay out of git.
+games/league/dev-*/
+games/league/*/*.pgn
+!games/league/*/*selfmate-forced*.pgn

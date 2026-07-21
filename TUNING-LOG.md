@@ -248,3 +248,14 @@ needs value memoization to be affordable, which needs a decision
 about draw-state honesty in a steering-only cache. The squat
 near-miss (r1 g00: king frozen into pawn_last, pawns released to
 promotion) is the concrete target shape.
+
+### Artifact policy (2026-07-21)
+
+Adopted with the subprobe merge: git keeps the citable minimum —
+every forced-selfmate PGN (the trophies; four exist as of today) and
+report.json for runs a log entry pins as a table of record. Draw
+PGNs and dev-exploration runs (the dev-* directories above included)
+stay on disk, out of git: the process-stable seed makes every run
+regenerable bit-for-bit from the committed code plus the config its
+report records, so bulk artifacts are redundant evidence. The two
+baseline directories predate the policy and stay tracked as pushed.
