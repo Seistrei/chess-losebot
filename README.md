@@ -20,64 +20,64 @@ docker run --rm losebot
 
 # LoseBot (White) tries to lose to a Zach clone (Black), saving PGNs to .\games
 docker run --rm -v "D:\ChessLosebot\games:/app/games" losebot `
-  pypy3 -m losebot arena --white losebot --black zach --model zach -n 10 --pgn-dir /app/games
+  pypy3 -m specialists arena --white losebot --black zach --model zach -n 10 --pgn-dir /app/games
 
 # Baseline: Worstfish (real Stockfish argmin) fails to lose to Zach
-docker run --rm losebot pypy3 -m losebot arena --white worstfish --black zach -n 4
+docker run --rm losebot pypy3 -m specialists arena --white worstfish --black zach -n 4
 
 # Two dedicated losers fight it out
-docker run --rm losebot pypy3 -m losebot arena --white losebot --black worstfish -n 2
+docker run --rm losebot pypy3 -m specialists arena --white losebot --black worstfish -n 2
 
 # Inspect a finished game
 docker run --rm -v "D:\ChessLosebot\games:/app/games" losebot `
-  pypy3 -m losebot.analyze /app/games/game_001_losebot_vs_zach.pgn
+  pypy3 -m specialists.analyze /app/games/game_001_losebot_vs_zach.pgn
 
 # Endgame conversion drills (Zach pre-stripped to king+pawns)
-docker run --rm losebot pypy3 -m losebot endgames --seed 5
+docker run --rm losebot pypy3 -m specialists endgames --seed 5
 
 # Reproducible profile comparison with a bounded exact probe
-docker run --rm losebot pypy3 -m losebot endgames --profile v03 --seed 5 `
+docker run --rm losebot pypy3 -m specialists endgames --profile v03 --seed 5 `
   --max-plies 40 --probe-cap 10000 --probe-depth 3
 
 # Inspect one drill and its final position
-docker run --rm losebot pypy3 -m losebot endgames --profile template `
+docker run --rm losebot pypy3 -m specialists endgames --profile template `
   --case 2 --seed 5 --max-plies 40 --probe-cap 10000 `
   --probe-depth 3 --show-fen
 
 # Exercise the stateful construction planner with bounded tactical searches
-docker run --rm losebot pypy3 -m losebot endgames --profile planner `
+docker run --rm losebot pypy3 -m specialists endgames --profile planner `
   --seed 5 --max-plies 40 --probe-cap 10000 --probe-depth 3
 
 # Guarded depth-two herding experiment (beam search plus memoization)
-docker run --rm losebot pypy3 -m losebot endgames --profile herding `
+docker run --rm losebot pypy3 -m specialists endgames --profile herding `
   --case 2 --seed 5 --max-plies 120 --probe-cap 10000 --probe-depth 3
 
 # Exact value iteration over the herding sub-MDP, with dead-side
 # certificates and prospective side-flips
-docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+docker run --rm losebot pypy3 -m specialists endgames --profile vi `
   --case 2 --seed 5 --max-plies 240 --probe-cap 10000 --probe-depth 3
 
 # King-holder corner drills: case 6 builds the corner from a delivered
 # pawn; case 7 starts from a certified-dead piece construction, adopts
 # the corner plan, and walks the executioner to it
-docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+docker run --rm losebot pypy3 -m specialists endgames --profile vi `
   --case 7 --seed 1 --vi-herders 1 --max-plies 240 --show-fen
 
 # Same drill with the release audit: log every release-scan decision
 # (candidate verdicts, audited goal odds, clean-board twin rescore)
-docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+docker run --rm losebot pypy3 -m specialists endgames --profile vi `
   --case 7 --seed 1 --vi-herders 1 --max-plies 240 --release-audit
 
 # Stacked-executioner drill: case 8's doubled b-pawns renew the corner
 # vacate race after a lost coin (audited EV 1/2 -> 3/4); watch for
 # releases=2 and renewal-captures=1 in the vi gauges of a renewed seed
-docker run --rm losebot pypy3 -m losebot endgames --profile vi `
+docker run --rm losebot pypy3 -m specialists endgames --profile vi `
   --case 8 --seed 0 --vi-herders 1 --max-plies 240
 
 # Adjudicate conversion motifs (king-holder release, forced capture-mate)
 # with the conversion audit under research budgets
-docker run --rm losebot pypy3 -m losebot motifs
-docker run --rm losebot pypy3 -m losebot motifs --case 3 --conversion-ms 120000
+docker run --rm losebot pypy3 -m specialists motifs
+docker run --rm losebot pypy3 -m specialists motifs --case 3 --conversion-ms 120000
 ```
 
 ## Play against it on lichess
@@ -171,7 +171,7 @@ records that the guarded search is fast but has not improved conversions.
 The `vi` profile treats the herd phase as what it actually is against a fixed
 stochastic opponent: a Markov decision process. With the construction frozen
 (king parked, holder defended, pawns blocked), the only dynamic units are
-their king and one or two of our free pieces, and `losebot/herding_vi.py`
+their king and one or two of our free pieces, and `specialists/herding_vi.py`
 solves that sub-MDP exactly by value iteration — the opponent edges reproduce
 `support_zach` move-for-move and are validated against it on every build
 (plus a full-graph audit mode in the selftest). The dead/live certificate is

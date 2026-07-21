@@ -99,7 +99,7 @@ def main() -> int:
     )
 
     # 4. The signature property: a mate-in-1 on the board must be refused.
-    from losebot.search import gives_mate
+    from specialists.search import gives_mate
 
     mate_board = chess.Board("6k1/5ppp/8/8/8/8/8/1R4K1 w - - 0 1")
     result = engine.search(

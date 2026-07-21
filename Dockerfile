@@ -8,6 +8,6 @@ RUN apt-get update \
 RUN pypy3 -m pip install --no-cache-dir "chess>=1.10,<2"
 
 WORKDIR /app
-COPY losebot ./losebot
+COPY specialists ./specialists
 
-CMD ["pypy3", "-m", "losebot", "selftest"]
+CMD ["pypy3", "-m", "specialists", "selftest"]

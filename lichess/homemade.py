@@ -46,8 +46,8 @@ from chess.engine import PlayResult
 
 from lib.engine_wrapper import MinimalEngine
 
-from losebot.bot import LoseBot
-from losebot.search import gives_mate, gives_stalemate
+from specialists.bot import LoseBot
+from specialists.search import gives_mate, gives_stalemate
 
 logger = logging.getLogger(__name__)
 
