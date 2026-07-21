@@ -276,6 +276,7 @@ class LoseBot:
         # checked or escape square (the sealed-box stalemate trap).
         self.vi_eviction_moves = 0
         self.vi_squat_chores = 0
+        self.vi_squat_holds = 0
         self.vi_seal_guards = 0
         self.vi_flip_value: float | None = None
         self.vi_king_marches = 0
@@ -912,24 +913,41 @@ class LoseBot:
         moves: list[chess.Move],
         current: PawnMateTemplate | None,
     ) -> list[chess.Move]:
-        """Sequence the squat build: lane, bishop-ready, lift, park.
+        """Sequence the squat build: lane, bishop-ready, then the handoff.
 
         The squat construction is a blocking DAG the one-ply eviction
         potential provably cannot order (seed 0, three times over): the
         rook must pin the shuttle off the corner lane before anything
         else matters, the king must clear the landing diagonal before
-        any bishop park can attack the cage, the plug must lift only
-        when their reply pool keeps a king move (a pool of nothing but
-        the expiry push is the family's death, and covering the
-        shuttle's last flight square manufactures exactly that), and the
-        freed knight must park out of the pocket so the eventual landing
-        leaves a flight square open instead of stalemating. Commitment
-        filters are this codebase's tool for exactly this — the march,
-        the cage, and the walk chores upstream are the precedent — so
-        each chore restricts the menu while its predicate is unmet and
-        falls through once satisfied (or unachievable). The landing
-        itself stays with the cage-build filter downstream, gated by the
-        seal guard; the march stays with the march filter; the arm's
+        any bishop park can attack the cage, and the freed knight must
+        park out of the pocket so the eventual landing leaves a flight
+        square open instead of stalemating. The 2026-07-21 dump
+        revision splits the doctrine by where their king stands. In
+        the DENIED regime (their king inside the pocket) the
+        session-17 order is provably the only convert and runs
+        verbatim — the fortress facts close every alternative: our
+        f3 post seals g4, f1 breaks the rook's own lane, and the plug
+        itself seals h4, so holding the plug against a squatter is a
+        permanent stall, and the early lift plus the park tour that
+        reopens h4 is the route. When their king is CLEAR of the
+        pocket, the same early lift is the sloppy kernel's dinner
+        bell — the push urge dumps the executioner on the first open
+        ply (case-9-sloppy died 0/10 exactly there) — so a plugged
+        arrival now holds: lane and bishop-ready build BEHIND the
+        plug, arrival exits are stripped, and the lift waits for the
+        handoff shape — our king one step from the arrival, their
+        king two or more away — one exposed their-ply instead of
+        four. After such a lift the relief arm walks the king onto
+        the still-warm arrival (the exited knight covers it by hop
+        symmetry) before the cage lands; once the cage is down the
+        ordinary march owns that step exactly as before. The lift's
+        exit conditions are unchanged in both regimes: their reply
+        pool must keep a king move (a pool of nothing but the expiry
+        push is the family's death), the exit must not cover the
+        shuttle's escape or entry, and it must not re-block the
+        bishop's landing lane. Commitment filters are this codebase's
+        tool for exactly this; the landing stays with the cage-build
+        filter downstream, gated by the seal guard, and the arm's
         potential ranks within whatever chore is active.
         """
         if not self.profile.vi_herding or not self.profile.squat_eviction:
@@ -941,11 +959,10 @@ class LoseBot:
             or current.hold_established
         ):
             return moves
-        if not kh_construction_denied(board, board.turn, current):
-            return moves
         us = board.turn
         cage = current.kh_cage_square
         corner = current.checked_square
+        arrival = current.arrival_square
         cage_piece = board.piece_at(cage)
         caged = (
             cage_piece is not None
@@ -960,11 +977,11 @@ class LoseBot:
                     return True
             return False
 
-        if not caged and not lane_ok(board):
-            # Chore 1: the corner lane. A rook covering the corner and
-            # the cage at once (e2-e1 in the drill) pins the shuttle off
-            # both, which is what makes the escape square the squat's
-            # only deep post — and the landing closes that forever.
+        def lane_chore() -> list[chess.Move]:
+            # The corner lane: a rook covering the corner and the cage
+            # at once (e2-e1 in the drill) pins the shuttle off both,
+            # which is what makes the escape square the squat's only
+            # deep post — and the landing closes that forever.
             lane_moves = []
             for move in moves:
                 board.push(move)
@@ -972,42 +989,37 @@ class LoseBot:
                 board.pop()
                 if achieves:
                     lane_moves.append(move)
-            if lane_moves:
-                self.vi_squat_chores += 1
-                return lane_moves
-        if not caged:
-            steps = _cage_ready_steps(board, us, cage)
-            if steps > 0:
-                # Chore 2: bishop ready. Real reachability, so a king on
-                # the landing diagonal shows up as the blocker it is and
-                # the unblocking king step counts as progress.
-                readying = []
-                for move in moves:
-                    board.push(move)
-                    after = _cage_ready_steps(board, us, cage)
-                    board.pop()
-                    if after < steps:
-                        readying.append(move)
-                if readying:
-                    self.vi_squat_chores += 1
-                    return readying
-        occupant = board.piece_at(current.arrival_square)
-        if (
-            occupant is not None
-            and occupant.color == us
-            and occupant.piece_type == chess.KNIGHT
-        ):
-            # Chore 3: the lift. Free against a mate-avoider whenever
-            # their pool keeps a king move (the pawn only pushes under
-            # zugzwang — the live human held it 48 plies), so the exit
-            # must not manufacture the push-only pool: not immediately
-            # (the reply-pool check) and not one ply out — an exit
-            # covering the escape or the entry square takes the
-            # shuttle's oxygen while the lift opens the push, and the
-            # very next pool is the family-killing forced push (Nf4
-            # covers h3; the check looks safe, the continuation is not).
-            # It must also not undo chore 2 by landing on the bishop's
-            # lane. Exit-square safety is the guard's job upstream.
+            return lane_moves
+
+        def ready_chore(steps: int) -> list[chess.Move]:
+            # Bishop ready: real reachability, so a king on the landing
+            # diagonal shows up as the blocker it is and the unblocking
+            # king step counts as progress.
+            readying = []
+            for move in moves:
+                board.push(move)
+                after = _cage_ready_steps(board, us, cage)
+                board.pop()
+                if after < steps:
+                    readying.append(move)
+            return readying
+
+        our_king = board.king(us)
+        their_king = board.king(not us)
+        handoff = (
+            our_king is not None
+            and their_king is not None
+            and chess.square_distance(our_king, arrival) == 1
+            and chess.square_distance(their_king, arrival) >= 2
+        )
+        occupant = board.piece_at(arrival)
+
+        def lift_chore() -> list[chess.Move]:
+            # The lift's exit conditions, shared by both regimes: keep
+            # their pool a king move (never manufacture the push-only
+            # pool), stay off the shuttle's escape and entry, and never
+            # re-block the bishop's landing lane. Exit-square safety is
+            # the guard's job upstream.
             base_steps = _cage_ready_steps(board, us, cage)
             shuttle = (
                 current.kh_escape_square,
@@ -1015,7 +1027,7 @@ class LoseBot:
             )
             lifts = []
             for move in moves:
-                if move.from_square != current.arrival_square:
+                if move.from_square != arrival:
                     continue
                 exit_hits = chess.SquareSet(
                     chess.BB_KNIGHT_ATTACKS[move.to_square]
@@ -1031,18 +1043,145 @@ class LoseBot:
                 board.pop()
                 if king_reply and after <= base_steps:
                     lifts.append(move)
+            return lifts
+
+        plugged = (
+            occupant is not None
+            and occupant.color == us
+            and occupant.piece_type == chess.KNIGHT
+        )
+        if not kh_construction_denied(board, us, current):
+            if plugged:
+                # The plug regime: build behind the plug, lift only
+                # into the handoff, hold otherwise. A bishop landing
+                # on the cage while the plug stands builds the trap
+                # the case-10 smoke game died in — cage down, their
+                # king walks to the entry, the handoff post becomes a
+                # stalemate move, every quiet hangs the undefended
+                # plug, and the arm's only survivors are lifting
+                # checks — so landings wait for the king's hold no
+                # matter which chore is active.
+                sealed_menu = [
+                    move for move in moves
+                    if move.to_square != cage
+                    or (
+                        move.promotion
+                        or board.piece_type_at(move.from_square)
+                    ) != chess.BISHOP
+                ]
+                if sealed_menu and len(sealed_menu) < len(moves):
+                    self.vi_squat_holds += 1
+                    moves = sealed_menu
+                if not caged and not lane_ok(board):
+                    lane_moves = lane_chore()
+                    if lane_moves:
+                        self.vi_squat_chores += 1
+                        return lane_moves
+                if not caged:
+                    steps = _cage_ready_steps(board, us, cage)
+                    if steps > 0:
+                        readying = ready_chore(steps)
+                        if readying:
+                            self.vi_squat_chores += 1
+                            return readying
+                if handoff:
+                    lifts = lift_chore()
+                    if lifts:
+                        self.vi_squat_chores += 1
+                        return lifts
+                else:
+                    # The ring chore: the handoff needs the king one
+                    # step from the arrival and nothing else drives it
+                    # there — the arm's gradient is eviction-shaped,
+                    # and the smoke game wandered its king to e4 while
+                    # the handoff never became ready. Same futures
+                    # device as the march filter.
+                    ring = []
+                    for move in moves:
+                        if move.from_square != our_king:
+                            continue
+                        board.push(move)
+                        future = self.planned_target(board, us)
+                        board.pop()
+                        if (
+                            future is not None
+                            and future.our_king_steps
+                            < current.our_king_steps
+                        ):
+                            ring.append(move)
+                    if ring:
+                        self.vi_squat_chores += 1
+                        return ring
+                held = [
+                    move for move in moves if move.from_square != arrival
+                ]
+                if held and len(held) < len(moves):
+                    self.vi_squat_holds += 1
+                    return held
+                return moves
+            if (
+                not caged
+                and handoff
+                and occupant is None
+                and any(
+                    arrival
+                    in chess.SquareSet(chess.BB_KNIGHT_ATTACKS[square])
+                    for square in board.pieces(chess.KNIGHT, us)
+                )
+            ):
+                # The relief: a plug just lifted (its knight still
+                # covers the arrival by hop symmetry), so the king
+                # takes the square before the cage lands and before
+                # any park tour. Post-cage the ordinary march owns
+                # this step.
+                plug = [
+                    move for move in moves
+                    if move.from_square == our_king
+                    and move.to_square == arrival
+                ]
+                if plug:
+                    self.vi_squat_chores += 1
+                    return plug
+            return moves
+        if not caged and not lane_ok(board):
+            lane_moves = lane_chore()
+            if lane_moves:
+                self.vi_squat_chores += 1
+                return lane_moves
+        if not caged:
+            steps = _cage_ready_steps(board, us, cage)
+            if steps > 0:
+                readying = ready_chore(steps)
+                if readying:
+                    self.vi_squat_chores += 1
+                    return readying
+        if plugged:
+            # Denied-regime lift: the session-17 early lift, distance
+            # unconditioned — against a squatter the park tour that
+            # follows is what reopens h4 and the whole script depends
+            # on it. When NO exit passes (the smoke game's trap state:
+            # cage landed, their king adjacent, the survivors are
+            # lifting checks the shuttle rule refuses), the plug holds
+            # rather than leaking arrival exits to the arm.
+            lifts = lift_chore()
             if lifts:
                 self.vi_squat_chores += 1
                 return lifts
+            held = [
+                move for move in moves if move.from_square != arrival
+            ]
+            if held and len(held) < len(moves):
+                self.vi_squat_holds += 1
+                return held
             return moves
         park = current.kh_closer_park_square
         hop = _closer_park_hop(board, us, park)
         if hop is not None and hop > 0:
-            # Chore 4: park the freed knight on the template's park
-            # square, out of every lane and off the pocket — which also
-            # reopens the flight square its plug duty covered, and THAT
-            # is what turns the cage landing from a stalemate into the
-            # forced step out (h4 in the drill).
+            # Park the freed knight on the template's park square, out
+            # of every lane and off the pocket — which also reopens the
+            # flight square its plug duty covered, and THAT is what
+            # turns the cage landing from a stalemate into the forced
+            # step out (h4 in the drill).
             parking = []
             for move in moves:
                 if board.piece_type_at(move.from_square) != chess.KNIGHT:

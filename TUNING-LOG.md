@@ -3490,3 +3490,108 @@ nonblocking — adopted as practice instead: A/B comparisons between
 engine versions run one-invocation-per-seed (`-n 1 --seed k`, the
 case-9 battery's own method); `-n N` stays fine for a
 single-version taste. The frontier list above stands.
+
+## The dump handoff: hold, ring, relief — and the pocket keeps its secret (2026-07-21)
+
+Fix round (a), attempted against the pinned 0/10. The finding that
+reframed it landed first: **the case-9 start is hover-locked.**
+Every kernel king sits the pocket from ply 1 — the squatter by
+policy, the sloppy king because its hunt gravity points at our
+corner cluster — so the position is DENIED from the opening ply,
+the session-17 early lift is the only doctrine that ever runs, and
+its four open their-plies are four push lotteries the sloppy kernel
+wins on the first (the same geometry that made case-9-zach 0/3 in
+the choreography entry). No ordering fix moves that number from
+that pose. The feature therefore got its own acceptance pose —
+**case 10, the wanderer drill** (`WANDER_DRILL_FEN`: case 9's exact
+material, their king displaced to f5) — where the handoff shape is
+at least reachable.
+
+**The machinery, all pinned (suite 117→119).** The chore filter's
+doctrine now splits by denial. DENIED keeps session-17 verbatim
+(30d proves the lane/ready/lift pins unchanged), with one repair:
+when NO exit passes the lift's own discipline, the plug HOLDS —
+arrival exits are stripped — instead of leaking them to the arm
+(30d3's trap pin). UNDENIED, a plugged arrival gets the new regime:
+lane and bishop-ready build BEHIND the plug; a bishop landing on
+the cage is vetoed while the plug stands (30d3's other pin); the
+RING chore drives the king toward the handoff post by the march's
+own futures device (30d2: Kf3 alone); the lift fires only into the
+handoff shape — our king one step from the arrival, their king two
+or more away — with the old exit discipline intact (30d2: Nh4
+alone); and the relief walks the king onto the still-warm arrival
+before any cage or park tour (30d2: Kg2 alone).
+
+**Two smoke games earned those vetoes, three probes deep.** Smoke
+one: the cage landed early (4.Bg1, legal — their king was clear),
+their king walked to h3, and the trap snapped shut: Kf3 became a
+stalemate DELIVERY (the safe-strip removed it), every quiet hung
+the undefended plug (the guard stripped 21 of 24 moves), the lift
+menu emptied on the shuttle rule, and the old code leaked the
+arrival exits to the arm — 5.Nf4+, a lifting check, dump on ply
+six. Smoke two, with the vetoes and the ring in: the king reached
+its post (7.Kf3), the trap never re-formed — and at the first
+hover ply (their Kh2, denied) the session-17 lift fired exactly as
+designed for the squatter, 8.Nh4 g2, the same dump through the
+denied door. The pocket-hover state DEMANDS opposite doctrine by
+kernel — lift early for the squatter (the park tour needs it), never
+lift for the pusher — and no position predicate tells them apart.
+
+**The designed next device (the f1-post doctrine), for the next
+round.** The diagnosis says the f3 post is the poison twice over:
+it seals g4 — the hover's only exit — so their king can never
+reach handoff distance while we stand ready. From f1 instead, the
+king still defends the plug and the cage square, seals h1 by
+adjacency, and leaves g4 OPEN; the lane rook becomes redundant
+(the king covers what it covered) — and its e1 post, it turns
+out, is what has been blocking the one hop-safe lift exit (Ne1)
+all along; and a rook check of the h5 class forces even the
+squatter to g4 — its only evasion, h4 being plug-sealed —
+MANUFACTURING the handoff moment against both kernels instead of
+waiting for one. That is a fortress-facts adjudication of its own
+(the lane-drop soundness, the check-forcing device, the
+denied-oscillation) and it is the round after this one.
+
+**Batteries (all on the final code).** The guard held everywhere:
+**case-9-squat 10/10 CONVERTED @84 plies, byte-identical to the
+session-18 reference modulo the new `holds=0` gauge token** (one
+seed's file was a scratch-write race between loops; its clean
+re-run diffed identical), and the **full field baseline — cases
+6/7/8 all seeds plus case-2 seed-5 — came back 31/31 identical to
+this session's pin**: the revision touches nothing outside plugged
+squat shapes. The new drill earned its keep twice over:
+**case-10-squat 10/10 CONVERTED @84 plies**, every seed the same
+script with the new machinery visibly engaged (`evictions=9;
+chores=8; holds=2; seal-guards=1` uniform — the plug holds twice
+during the wanderer's approach and the mate still lands), so the
+handoff regime coexists with the session-17 conversion. The sloppy
+metrics stay honest: **case-9-sloppy 0/10** (seeds 0-8 unchanged to
+the ply — the hover-locked pose never reaches the new regime — and
+seed 9 shifted 72→31), **case-10-sloppy 0/10 conversions** but the
+machinery's designed behavior showed: eight fast family-deaths
+(24-45 plies, the denied hover-lift dump), and TWO HOLD GAMES —
+seed 5 fifty-move@173 and seed 9 fifty-move@100, the plug held,
+the family alive at the clock, `holds=3` on the gauge — the draws
+the doctrine buys while the f1-post round is unbuilt.
+
+The field-frontier list (supersedes the one above):
+
+1. **The sloppy fix round, continued — the f1-post doctrine
+   leads.** As designed above: relief post f1 (defends plug and
+   cage, seals h1 by adjacency, leaves the g4 door open), the
+   lane-drop adjudication (the e1 lane rook is what blocks the
+   hop-safe Ne1 lift), and the h5-class rook-check forcing device
+   that manufactures the handoff moment against squatter and
+   pusher alike. Acceptance: case-10-sloppy conversions above
+   zero with case-9/10-squat still 10/10 and the field battery
+   diffed against the pin. Then the rest of the round as before:
+   (b) the posed-corner state cap, (c) their-pieces-on-pocket
+   pricing plus the revocation-capture value, (d) family-ledger
+   sight for forcing moves, and the arena A/B once (a) converts.
+2. **Sloppy as the strip/midgame OPPONENT MODEL** — unchanged:
+   model=zach explores no capturing reply at any depth (YBZEWDGj's
+   fork; one fork beat 497 vetoes), and the kernel exists to be
+   the replacement reply model for the pre-herding phases.
+3. **Corpus protocol continues.** The corner poses organically
+   in-arena now; the live bar is unchanged — the corner poses AND
+   the mate lands by force against a human.

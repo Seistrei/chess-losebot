@@ -3702,6 +3702,78 @@ def selftest() -> int:
         f" chores+={field_bot.vi_squat_chores - chores_before}",
     )
 
+    # 30d2. The dump handoff (2026-07-21): with their king CLEAR of
+    # the pocket the session-17 early lift is the sloppy kernel's
+    # dinner bell, so the plug regime replaces it. Same board family,
+    # three shapes: our king off the ring — the RING chore drives it
+    # there (the smoke game's king wandered to e4 on the arm's
+    # eviction gradient and the handoff never became ready); our king
+    # on the ring and their king two-plus away — the lift fires with
+    # the old exit discipline (Nh4 alone: Nf4 covers the entry, Ne3
+    # re-blocks the lane); and after the lift the relief walks the
+    # king onto the still-warm arrival before any cage or park tour.
+    # The denied poses above are untouched — 30d just proved the old
+    # script verbatim.
+    from .planning import ConstructionPlan as _CP
+
+    ring_pose = chess.Board("8/8/8/7k/3BK3/6p1/6N1/4R3 w - - 0 1")
+    ring_target = best_pawn_mate_template(ring_pose, chess.WHITE)
+    field_bot.plan = _CP(
+        pawn_file=6, checked_side=1, created_ply=0, holder_mode="king"
+    )
+    ring_kept = field_bot._filter_squat_chores(
+        ring_pose, list(ring_pose.legal_moves), ring_target
+    )
+    far_lift_pose = chess.Board("8/8/8/7k/3B4/5Kp1/6N1/4R3 w - - 6 4")
+    far_lift_target = best_pawn_mate_template(far_lift_pose, chess.WHITE)
+    far_lift_kept = field_bot._filter_squat_chores(
+        far_lift_pose, list(far_lift_pose.legal_moves), far_lift_target
+    )
+    relief_pose = chess.Board("8/8/7k/8/3B3N/5Kp1/8/4R3 w - - 0 1")
+    relief_target = best_pawn_mate_template(relief_pose, chess.WHITE)
+    relief_kept = field_bot._filter_squat_chores(
+        relief_pose, list(relief_pose.legal_moves), relief_target
+    )
+    check(
+        "dump handoff: the ring drives, the lift waits, relief lands",
+        [m.uci() for m in ring_kept] == ["e4f3"]
+        and far_lift_kept == [chess.Move.from_uci("g2h4")]
+        and [m.uci() for m in relief_kept] == ["f3g2"],
+        f"ring={[ring_pose.san(m) for m in ring_kept]} (want Kf3);"
+        f" far-lift={[far_lift_pose.san(m) for m in far_lift_kept]}"
+        f" (want Nh4 alone);"
+        f" relief={[relief_pose.san(m) for m in relief_kept]} (want Kg2)",
+    )
+
+    # 30d3. The two trap vetoes the case-10 smoke game earned. A cage
+    # landing while the plug stands builds the stalemate trap (4.Bg1,
+    # then their Kh3 poisons the handoff ring), so the plug regime
+    # strips it whatever chore is active; and in the trap state itself
+    # (denied, cage down, every exit shuttle- or guard-refused) the
+    # denied path holds the plug instead of leaking arrival exits to
+    # the arm's lifting checks (the smoke game's 5.Nf4+, dumped on
+    # ply 6).
+    holds_before = field_bot.vi_squat_holds
+    veto_menu = [chess.Move.from_uci("d4g1"), chess.Move.from_uci("e1e2")]
+    veto_kept = field_bot._filter_squat_chores(
+        ring_pose, list(veto_menu), ring_target
+    )
+    trap_pose = chess.Board("8/8/8/8/4K3/6pk/6N1/4R1B1 w - - 8 5")
+    trap_target = best_pawn_mate_template(trap_pose, chess.WHITE)
+    trap_menu = [chess.Move.from_uci("g2f4"), chess.Move.from_uci("e1e2")]
+    trap_kept = field_bot._filter_squat_chores(
+        trap_pose, list(trap_menu), trap_target
+    )
+    check(
+        "dump handoff: no cage landing on the plug, the trap holds",
+        [m.uci() for m in veto_kept] == ["e1e2"]
+        and [m.uci() for m in trap_kept] == ["e1e2"]
+        and field_bot.vi_squat_holds - holds_before == 2,
+        f"landing-veto={[m.uci() for m in veto_kept]} (want e1e2);"
+        f" trap={[m.uci() for m in trap_kept]} (want e1e2);"
+        f" holds+={field_bot.vi_squat_holds - holds_before} (want 2)",
+    )
+
     # 30e. After a check-tempo lift (the Nf4+ class) the arrival is
     # empty, the cage gate is satisfied, and the march lands the king
     # with no waiver — the arrival never has a second open ply. The
@@ -4064,6 +4136,23 @@ STACK_DRILL_FEN = "2N5/8/2k5/3N1B2/1pP5/1p6/8/2K4R w - - 0 1"
 # the construction poses and g2# lands against the h1-h3 shuffle.
 SQUAT_DRILL_FEN = "8/8/8/8/8/2B1K1p1/4R1N1/7k w - - 0 1"
 
+# Wanderer drill (case 10): case 9's exact material with their king
+# displaced off the pocket (f5) — the dump-handoff feature's acceptance
+# pose (2026-07-21). From the case-9 start every kernel king hovers the
+# pocket (hunt gravity or squat policy), the position is denied from
+# ply 1, and the session-17 early lift is forced — a pusher kernel
+# dumps on the first of its four open plies, which is why
+# case-9-sloppy is structurally 0/10 (the same way case-9-zach was
+# 0/3). Here their king starts CLEAR: the plug regime builds lane and
+# cage-ready behind the held knight, lifts only into the handoff ring
+# (our king one step from the arrival, theirs two-plus away), the
+# relief lands the king on the still-warm arrival next ply — one
+# exposed push lottery instead of four — and the readmission wait
+# runs with the pawn king-plugged. Against the squat kernel the same
+# start decays to the session-17 script once the homing king reaches
+# the pocket.
+WANDER_DRILL_FEN = "8/8/8/5k2/8/2B1K1p1/4R1N1/8 w - - 0 1"
+
 # Conversion drills: Zach is already stripped to king+pawns; can LoseBot
 # force him to deliver mate? This is the phase where full games stall.
 ENDGAME_FENS = [
@@ -4076,6 +4165,7 @@ ENDGAME_FENS = [
     ADOPTION_DRILL_FEN,
     STACK_DRILL_FEN,
     SQUAT_DRILL_FEN,
+    WANDER_DRILL_FEN,
 ]
 
 
@@ -4262,6 +4352,7 @@ def endgames(args) -> int:
         if (
             bot.vi_eviction_moves
             or bot.vi_squat_chores
+            or bot.vi_squat_holds
             or bot.vi_seal_guards
         ):
             # Zero for every squat-off profile (and for any game whose
@@ -4270,6 +4361,7 @@ def endgames(args) -> int:
             print(
                 f"  squat: evictions={bot.vi_eviction_moves};"
                 f" chores={bot.vi_squat_chores};"
+                f" holds={bot.vi_squat_holds};"
                 f" seal-guards={bot.vi_seal_guards}",
                 flush=True,
             )
