@@ -1,0 +1,10 @@
+[Event "Misere league"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "sloppy-held"]
+[Black "losebot(sloppy)"]
+[Result "1/2-1/2"]
+[Termination "max-plies; focal=black; max-plies"]
+
+1. g4 e5 2. e4 Qh4 3. Na3 Bxa3 4. bxa3 Na6 5. g5 Qxe4+ 6. Be2 Qxh1 7. g6 Qxg1+ 8. Bf1 Kf8 9. gxh7 Ne7 10. a4 e4 11. a3 g6 12. Qh5 gxh5 13. d3 e3 14. Bxe3 Qg7 15. Ke2 Qxa1 16. Kf3 Qxf1 17. Bxa7 Rxa7 18. c4 Ng6 19. h3 Kg7 20. c5 Nxc5 21. a5 Rxa5 22. a4 Qxh3+ 23. Ke2 Qxd3+ 24. Ke1 Rb5 25. a5 Qd4 26. Ke2 f6 27. a6 b6 28. a7 Rb2+ 29. Kf1 Rb1+ 30. Ke2 Ba6+ 31. Kf3 Bb7+ 32. Kg3 Rh1 33. a8=Q Bxa8 34. f4 h4+ 35. Kg4 Qd5 36. f5 Rf8 37. h8=Q+ Nxh8 38. Kf4 Qe5+ 39. Kg4 Qe2+ 40. Kf4 Qe8 41. Kg4 Qe2+ 42. Kf4 Qe8 43. Kg4 d6 44. Kf4 Nd3+ 45. Kg4 Nf2+ 46. Kf4 Nd3+ 47. Kg4 Nf2+ 48. Kf4 Nh3+ 49. Kg4 Ng1 50. Kf4 Ne2+ 51. Kg4 Nf4 52. Kxf4 Kh6 53. Kg4 Rg8+ 54. Kf4 Rf8 55. Kg4 Rg8+ 56. Kf4 Kg7 57. Kg4 b5 58. Kf4 b4 59. Kg4 Qe2+ 60. Kf4 Qe8 61. Kg4 Qe2+ 62. Kf4 Qe5+ 63. Kg4 Qe8 64. Kf4 b3 65. Kg4 Qe2+ 66. Kf4 Qe8 67. Kg4 Qe2+ 68. Kf4 Qe5+ 69. Kg4 Qe8 70. Kf4 b2 71. Kg4 Qe2+ 72. Kf4 Qe8 73. Kg4 Qe2+ 74. Kf4 Qe5+ 75. Kg4 Qe8 76. Kf4 b1=Q 77. Kg4 Qg1+ 78. Kf4 Qge3+ 79. Kg4 Qh3+ 80. Kf4 Qhe3+ 81. Kg4 Qh3+ 82. Kf4 Qh2+ 83. Kg4 Qg2+ 84. Kf4 Qh2+ 85. Kg4 Qg2+ 86. Kf4 Qf2+ 87. Kg4 Bf3+ 88. Kf4 Bg4+ 89. Kxg4 Qfe2+ 90. Kf4 Q2e3+ 91. Kg4 Qe2+ 92. Kf4 Q2e3+ 93. Kg4 Qd3 94. Kf4 Qf1+ 95. Kg4 Qd3 96. Kf4 c6 97. Kg4 d5 98. Kf4 Qde3+ 99. Kg4 Qh3+ 100. Kf4 Qhe3+ 101. Kg4 Qh3+ 102. Kf4 Qf1+ 103. Kg4 Qfe2+ 104. Kf4 Qf2+ 105. Kg4 Qfe2+ 106. Kf4 Qf2+ 107. Kg4 Qg2+ 108. Kf4 Qf1+ 109. Kg4 Qd3 110. Kf4 c5 111. Kg4 d4 112. Kf4 Qde3+ 113. Kg4 Qe2+ 114. Kf4 Q2e3+ 115. Kg4 Qe2+ 116. Kf4 Qf2+ 117. Kg4 Qg2+ 118. Kf4 Qf2+ 119. Kg4 Qg2+ 120. Kf4 Qf1+ 1/2-1/2

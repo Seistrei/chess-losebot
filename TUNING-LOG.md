@@ -3681,4 +3681,41 @@ BY FORCE against a human."
 
 ### Baseline league (2026-07-21)
 
-(to be recorded from the first pinned runs below)
+First pinned runs, both engines on the frozen roster, artifacts under
+`games/league/baseline-model/` and `games/league/baseline-specialist/`
+(report.json + per-game PGNs; commit 512deef's code).
+
+MODEL ENGINE (belief=sloppy, depth 3, topk 5, probe n<=3 cap 40k;
+10 games/family, seats alternated, max 240 plies):
+
+```
+family       split      n  forced mercy st-us insuf fifty rep maxply
+sloppy       dev       10       0     0     2     4     1   0      3
+squat        dev       10       0     0     0     0     0   1      9
+zach         dev       10       0     0     0     0     0   0     10
+human-held   held-out  10       0     0     3     1     0   1      5
+random       held-out  10       0     4     0     0     0   0      6
+sloppy-held  held-out  10       0     0     1     4     1   0      4
+squat-held   held-out  10       0     0     0     0     0   3      7
+overall: 0/70 forced (0%); worst family: 0%
+```
+
+SPECIALIST ANCHOR (field+zach, fast tier; 4 games/family): 0/28
+forced; one stalemate-them vs zach; otherwise the same draw families
+(insuf/fifty/maxply). Full games were never the specialist's win
+condition — its 10/10s live in hand-set endgame drills — and the
+league now states that plainly on the same scoreboard as everything
+else.
+
+Reading the zeros: the mate-shaped failures live exactly where the
+models say they should — `random` hands out mercy mates (4/10) that
+the mate-avoidant families never will; the greedy families
+(sloppy/sloppy-held/human-held) produce stalemate-us and
+insufficient-material deaths (we get eaten or both sides strip bare);
+the avoidant shufflers (zach/squat) wall at max-plies. Zero forced
+anywhere means every future point of held-out forced rate is real,
+and the first lever is known: the engine strips competently and then
+has no conversion pressure — steering depth and endgame handling
+(oracle probes below the root, deeper/selective expectimax, and the
+specialists' certified endgame knowledge recast as league-legal
+guidance) are the next entries' work.

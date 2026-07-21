@@ -1,0 +1,10 @@
+[Event "Misere league"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "sloppy"]
+[Black "losebot(sloppy)"]
+[Result "1/2-1/2"]
+[Termination "stalemate; focal=black; stalemate-us"]
+
+1. g4 e5 2. h4 Bc5 3. e3 Qf6 4. h5 Qa6 5. Bxa6 Nxa6 6. h6 Nb4 7. hxg7 Nd3+ 8. cxd3 Nh6 9. gxh8=Q+ Bf8 10. Rxh6 Kd8 11. Rxh7 d6 12. Qxf8+ Kd7 13. Rxf7+ Kc6 14. Qxc8 Rxc8 15. g5 Kb5 16. Qa4+ Kxa4 17. Rxc7 Rxc7 18. d4 Rxc1+ 19. Ke2 Rxg1 20. dxe5 Rc1 21. exd6 Rxb1 22. Rxb1 b5 23. g6 b4 24. g7 b3 25. g8=Q bxa2 26. Qxa2+ Kb4 27. Qxa7 Kc4 28. d7 Kd5 29. d8=Q+ Ke5 30. Qde7+ Kf5 31. d4 Kg4 32. d5 Kh3 33. d6 Kh2 34. Qe5+ Kh3 35. d7 Kh4 36. d8=Q+ Kh3 37. Qa4 Kg2 38. Qed5+ Kh3 39. Qad7+ Kh2 40. f4 Kg3 41. b3 Kh2 42. Qe5 Kg3 43. f5+ Kg2 44. f6 1/2-1/2
