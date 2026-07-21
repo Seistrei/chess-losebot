@@ -1,9 +1,15 @@
-"""Drive a league: fresh objects per game, seats alternated, records out.
+"""Drive a league: fresh objects per game, seed-paired seats, records out.
 
-Every game constructs a fresh opponent (own RNG stream, seed = seed0 +
-game index) and a fresh engine. The old arena reused one bot and one
-kernel RNG across a match, so two engine versions could only be A/B'd
-one-invocation-per-seed; here per-game independence is structural.
+Every game constructs a fresh opponent (own RNG stream) and a fresh
+engine. The old arena reused one bot and one kernel RNG across a
+match, so two engine versions could only be A/B'd one-invocation-per-
+seed; here per-game independence is structural.
+
+Seats are SEED-PAIRED, not merely alternated: each opponent seed plays
+once with the engine as White and once as Black (game 2k and 2k+1
+share seed k), so seed effects and seat effects stay unconfounded and
+the pair is the benchmark's natural unit. Keep ``games_per_family``
+even; an odd count leaves the last seed half-paired.
 """
 
 from __future__ import annotations
@@ -30,7 +36,7 @@ def run_league(
     records = []
     for family in families:
         for index in range(games_per_family):
-            seed = seed0 + index
+            seed = seed0 + index // 2
             opponent = ModelPlayer(make_model(family), seed=seed)
             engine = engine_factory()
             focal_color = chess.WHITE if index % 2 == 0 else chess.BLACK

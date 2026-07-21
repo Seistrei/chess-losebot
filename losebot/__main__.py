@@ -28,7 +28,15 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "beliefs must include captures; that lesson cost a fork)",
     )
     parser.add_argument("--depth", type=int, default=3)
-    parser.add_argument("--topk", type=int, default=5)
+    parser.add_argument(
+        "--topk", type=int, default=6,
+        help="reply cap per chance node; an oversized probability class "
+        "is represented by a seeded unbiased subset carrying its mass",
+    )
+    parser.add_argument(
+        "--coverage", type=float, default=0.85,
+        help="minimum probability mass a trimmed reply set must cover",
+    )
     parser.add_argument("--probe-n", type=int, default=3)
     parser.add_argument("--probe-cap", type=int, default=40_000)
 
@@ -38,6 +46,7 @@ def _build_engine(args) -> ModelEngine:
         belief=make_model(args.belief),
         depth=args.depth,
         topk=args.topk,
+        coverage=args.coverage,
         probe_n=args.probe_n,
         probe_cap=args.probe_cap,
     )
@@ -104,6 +113,7 @@ def _cmd_league(args) -> int:
             "belief": args.belief,
             "depth": args.depth,
             "topk": args.topk,
+            "coverage": args.coverage,
             "probe_n": args.probe_n,
             "probe_cap": args.probe_cap,
         }

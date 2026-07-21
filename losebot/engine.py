@@ -30,7 +30,8 @@ class ModelEngine:
         self,
         belief: OpponentModel,
         depth: int = 3,
-        topk: int = 5,
+        topk: int = 6,
+        coverage: float = 0.85,
         probe_n: int = 3,
         probe_cap: int = 40_000,
         draw_contempt: float = 400.0,
@@ -38,6 +39,7 @@ class ModelEngine:
         self.belief = belief
         self.depth = depth
         self.topk = topk
+        self.coverage = coverage
         self.probe_n = probe_n
         self.probe_cap = probe_cap
         self.draw_contempt = draw_contempt
@@ -70,6 +72,7 @@ class ModelEngine:
             model=self.belief,
             depth=self.depth,
             topk=self.topk,
+            coverage=self.coverage,
             draw_contempt=self.draw_contempt,
             root_moves=pool,
         )

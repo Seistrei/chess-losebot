@@ -50,7 +50,20 @@ def family_table(records: list[GameRecord]) -> dict[str, dict]:
     return families
 
 
+def _rollup(records: list[GameRecord]) -> dict:
+    forced = sum(1 for r in records if r.label == SELFMATE_FORCED)
+    return {
+        "games": len(records),
+        "forced": forced,
+        "forced_rate": forced / len(records) if records else 0.0,
+    }
+
+
 def summarize(records: list[GameRecord]) -> dict:
+    """Aggregate a run. The milestone metrics are the HELD-OUT rollup
+    and the worst held-out family — a pooled mean would rise from dev
+    improvement alone, which is exactly the self-grading the league
+    exists to prevent."""
     families = family_table(records)
     held = {
         name: row for name, row in families.items()
@@ -60,12 +73,14 @@ def summarize(records: list[GameRecord]) -> dict:
     worst_name = None
     if scored:
         worst_name = min(scored, key=lambda name: scored[name]["forced_rate"])
-    total = len(records)
-    forced = sum(1 for r in records if r.label == SELFMATE_FORCED)
     return {
-        "games": total,
-        "forced": forced,
-        "forced_rate": forced / total if total else 0.0,
+        "overall": _rollup(records),
+        "dev": _rollup(
+            [r for r in records if split_of(r.family) == "dev"]
+        ),
+        "held_out": _rollup(
+            [r for r in records if split_of(r.family) == "held-out"]
+        ),
         "families": families,
         "worst_family": worst_name,
         "worst_family_forced_rate": (
@@ -91,10 +106,18 @@ def render(summary: dict) -> str:
             + f" {100.0 * row['forced_rate']:>7.0f}%"
         )
     lines.append("-" * len(header))
+
+    def _rate(rollup: dict) -> str:
+        return (
+            f"{rollup['forced']}/{rollup['games']} "
+            f"({100.0 * rollup['forced_rate']:.0f}%)"
+        )
+
     lines.append(
-        f"overall: {summary['forced']}/{summary['games']} forced "
-        f"({100.0 * summary['forced_rate']:.0f}%); "
-        f"worst family: {summary['worst_family']} "
+        f"forced — held-out: {_rate(summary['held_out'])}; "
+        f"dev: {_rate(summary['dev'])}; "
+        f"overall: {_rate(summary['overall'])}; "
+        f"worst held-out family: {summary['worst_family']} "
         f"({100.0 * summary['worst_family_forced_rate']:.0f}%)"
     )
     return "\n".join(lines)

@@ -208,6 +208,74 @@ def test_squat_homing() -> None:
     )
 
 
+def test_reply_support() -> None:
+    from .search import reply_support
+
+    def mv(uci: str) -> chess.Move:
+        return chess.Move.from_uci(uci)
+
+    mixed = [
+        (mv("a2a3"), 0.5), (mv("b2b3"), 0.2), (mv("c2c3"), 0.2),
+        (mv("d2d3"), 0.05), (mv("e2e3"), 0.05),
+    ]
+    kept = dict(reply_support(mixed, coverage=0.85, cap=3, seed=7))
+    check(
+        "search: coverage keeps whole probability classes",
+        set(kept) == {mv("a2a3"), mv("b2b3"), mv("c2c3")}
+        and abs(sum(kept.values()) - 1.0) < 1e-9
+        and abs(kept[mv("a2a3")] - 0.5 / 0.9) < 1e-9,
+        f"kept={len(kept)}, top={kept[mv('a2a3')]:.3f}",
+    )
+    board = chess.Board()
+    flat = make_model("zach").distribution(board)
+    once = reply_support(flat, coverage=0.85, cap=6, seed=1234)
+    again = reply_support(flat, coverage=0.85, cap=6, seed=1234)
+    legal = set(board.legal_moves)
+    check(
+        "search: an oversized tie class is a seeded unbiased subset",
+        len(once) == 6
+        and once == again
+        and all(m in legal for m, _ in once)
+        and abs(sum(p for _, p in once) - 1.0) < 1e-9
+        and all(abs(p - 1.0 / 6.0) < 1e-9 for _, p in once),
+        f"kept={len(once)} of {len(flat)}",
+    )
+    check(
+        "search: a distribution within the cap is untouched",
+        reply_support(mixed, coverage=0.85, cap=5, seed=7) == mixed,
+    )
+
+
+def test_report_rollups() -> None:
+    from .league.play import GameRecord
+    from .league.report import render, summarize
+
+    def rec(family: str, label: str, index: int) -> GameRecord:
+        return GameRecord(
+            family=family, game_index=index, seed=index // 2,
+            focal_color=chess.WHITE, white_name="e", black_name="o",
+            label=label, reason="checkmate", forced=True, plies=40,
+            seconds=1.0, final_fen="8/8/8/8/8/8/8/8 w - - 0 1",
+        )
+
+    records = [
+        rec("zach", SELFMATE_FORCED, 0),
+        rec("zach", "max-plies", 1),
+        rec("random", "max-plies", 0),
+        rec("random", "max-plies", 1),
+    ]
+    summary = summarize(records)
+    text = render(summary)
+    check(
+        "report: dev and held-out rollups stay separate",
+        summary["dev"]["forced"] == 1
+        and summary["held_out"]["forced"] == 0
+        and summary["held_out"]["games"] == 2
+        and "held-out: 0/2" in text,
+        f"dev={summary['dev']} held={summary['held_out']}",
+    )
+
+
 def test_evaluate_shape() -> None:
     bare = evaluate(chess.Board("8/8/8/8/8/4k3/8/4K3 w - - 0 1"),
                     chess.WHITE)
@@ -258,11 +326,12 @@ def test_league_smoke() -> None:
         )
         pgns = list(out.glob("*.pgn"))
         check(
-            "league: fresh seats alternate and records land",
+            "league: each seed plays the pair of seats",
             len(records) == 2
             and records[0].focal_seat == "white"
             and records[1].focal_seat == "black"
-            and summary["games"] == 2
+            and records[0].seed == records[1].seed
+            and summary["overall"]["games"] == 2
             and len(pgns) == 2,
             f"labels={[r.label for r in records]}",
         )
@@ -281,6 +350,8 @@ def run() -> int:
         test_model_distributions,
         test_greed_adjudication,
         test_squat_homing,
+        test_reply_support,
+        test_report_rollups,
         test_evaluate_shape,
         test_engine_safety_and_oracle,
         test_league_smoke,
