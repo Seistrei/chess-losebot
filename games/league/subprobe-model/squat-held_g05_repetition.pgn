@@ -1,0 +1,10 @@
+[Event "Misere league"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "squat-held"]
+[Black "losebot(sloppy)"]
+[Result "1/2-1/2"]
+[Termination "repetition; focal=black; repetition"]
+
+1. Na3 e5 2. Rb1 Bb4 3. Nb5 a6 4. Nxc7+ Qxc7 5. Ra1 Qb6 6. Rb1 Ba3 7. Nf3 e4 8. bxa3 Qxb1 9. Ng1 Ke7 10. Nf3 exf3 11. Rg1 Qb5 12. gxf3 Kf6 13. Rg3 Qe5 14. Rg4 d6 15. Rg2 Bh3 16. Rxg7 Bxf1 17. Bb2 Kxg7 18. Bd4 Qxd4 19. Kxf1 Nc6 20. Ke1 Qa4 21. Kf1 Qd4 22. Ke1 Qa4 23. Kf1 Kg6 24. Ke1 Kh5 25. Kf1 Kg6 26. Ke1 Kh5 27. Kf1 Kh4 28. Ke1 Ne5 29. Kf1 Nd3 30. exd3 Re8 31. Kg2 Nf6 32. Kf1 Rhf8 33. Kg1 b5 34. Kf1 Qg4 35. Qb1 Qa4 36. Kg2 Nh5 37. Qxb5 Qxb5 38. Kf1 Qf5 39. Kg1 Re1+ 40. Kg2 Qf4 41. c3 Rh8 42. h3 Rf8 43. c4 Rh8 44. a4 Rf8 45. a3 a5 46. c5 dxc5 47. d4 cxd4 48. d3 Qg5+ 49. Kh2 Rh8 50. f4 Nxf4 51. f3 Nh5 52. f4 Qg8 53. f5 Qg5 54. f6 Qf4+ 55. Kg2 Qf5 56. Kh2 Qe4 57. dxe4 Rg8 58. e5 Rg5 59. e6 fxe6 60. f7 Rg2+ 61. Kxg2 Nf4+ 62. Kf3 Re3+ 63. Kxf4 e5+ 64. Kf5 Rf3+ 65. Ke4 Re3+ 66. Kd5 Rc3 67. Ke4 Re3+ 68. Kd5 Rc3 69. Ke4 Kg5 70. Kxe5 Rc8 71. Ke4 h6 72. Kd3 Kh5 73. Kd2 Rf8 74. Kc1 Rc8+ 75. Kb1 Rf8 76. Ka1 Kh4 77. Kb2 Kh5 78. Ka1 Kh4 79. Ka2 h5 80. Ka1 d3 81. Ka2 d2 82. Ka1 d1=Q+ 83. Ka2 Qc1 84. Kb3 Rb8+ 85. Ka2 Rf8 86. Kb3 Rb8+ 87. Ka2 Qxa3+ 88. Kxa3 Kg5 89. Ka2 Rb2+ 90. Kxb2 h4 91. Ka1 Kf4 92. Kb1 Kf3 93. Ka1 Kf4 94. Ka2 Kf3 95. Ka1 Kg2 96. Kb2 Kf3 97. Ka1 1/2-1/2

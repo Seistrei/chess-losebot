@@ -155,3 +155,96 @@ max-plies, and held-out stays 0/40. The ladder is explicit now:
 match the anchor's 1/16 held-out, then pass it — sub-root oracle
 probes, selective steering depth, and league-legal endgame guidance
 are the levers, then the corpus fit.
+
+## Sub-root probes and the crossfire: first held-out blood (2026-07-21)
+
+The session opened the named levers in order and the league graded
+each honestly. What landed (commit e7c1f2d, selftest 24 -> 32
+checks):
+
+- SUB-ROOT PROBES: steering's our-nodes carry a budgeted oracle probe
+  (n<=2, 30k/move sliced 8k/call, memo shared with the root probe —
+  its keys were already position+clock+repetition+n+side complete).
+  Two gates, either opens: opponent at <=5 non-king men, or our king
+  in check.
+- FLIGHT-SQUARE PRICING (evaluate.py): in the king+pawns regime,
+  every open flight square around our king costs 24 — corner
+  affinity, self-smothering, and their-coverage in one gradient.
+- BARE-KING GUARD: the safety partition now refuses to strip the last
+  mating man while alternatives exist.
+- ROOT PROBE DEEPENED: n 3 -> 4 under cap 40k -> 50k; iterative
+  deepening self-regulates (wide positions burn out early and answer
+  UNKNOWN, narrow ones — where conversions live — reach n=4).
+
+Dev evidence chain (games/league/dev-subprobe-r1/r2/r3, 10
+games/family, baseline seeds): r1 (material gate <=3) produced the
+session's first discovery — sloppy g01, the CROSSFIRE DEVICE:
+37...Re8 baits the near-certain promotion, 38.a8=Q+ Rxa8+ 39.Qxa8# —
+check, counter-check, forced recapture-mate. The model engine's
+first forced selfmate against a greedy family, found by the leaf
+zugzwang term through the belief's 95% promotion mass, at SIX
+opponent men — invisible to the material gate (and to the oracle
+gauge: the engine's final move was its only legal one, so no probe
+ever ran). The r1 autopsies also caught the engine stripping zach to
+a bare king and then donating a bishop to reset the draw clock over
+the corpse — hence the guard. r2 isolated the widened gate cleanly:
+IDENTICAL trajectories to r1, the probe confirming the crossfire
+(sub=4/182) and proving nothing anywhere else (thousands of calls,
+zero hits) — the certifier works; steering never assembles anything
+for it to certify. r3 (guard + n=4) prevented the corpses without
+changing a label. Cost: ~35-64s/game on strip-heavy families (~52
+min full league).
+
+### Pinned league (2026-07-21, engine model, subprobe stack)
+
+belief=sloppy, depth 3, topk 6, coverage 0.85, probe n<=4 cap 50k,
+sub-probe n<=2 cap 30k men<=5|check; 10 games/family; artifacts:
+games/league/subprobe-model/.
+
+```
+family       split      n  forced mercy st-us insuf rep maxply
+sloppy       dev       10       1     0     1     2   0      6
+squat        dev       10       0     0     0     0   2      8
+zach         dev       10       0     0     0     0   2      8
+human-held   held-out  10       0     0     2     4   0      4
+random       held-out  10       1     2     0     0   0      7
+sloppy-held  held-out  10       0     0     0     6   0      4
+squat-held   held-out  10       0     0     0     0   2      8
+forced — held-out: 1/40 (2%); dev: 1/30 (3%); worst held-out: 0%
+```
+
+FIRST HELD-OUT BLOOD: random g00 (engine White) is the model
+engine's first held-out forced selfmate — and it is the corner
+construction itself, assembled organically against UNIFORM NOISE.
+The engine walks its king to h1 behind its own h2 pawn, preserves
+random's h-pawn as the executioner the whole game, herds random's
+king across the board with queen checks (Qa2/Qb2/Qc2 driving
+Kc1-d1-e1-f1), promotes a second queen for tempo, and donates:
+99.Qg2+ hxg2# — the forced-recapture finish on the FORCED_FIXTURE's
+exact shell, closed under three root certificates (oracle=3). PGN:
+subprobe-model/random_g00_selfmate-forced.pgn. Against mercy=1.0
+there is no policy to exploit — the net held against every legal
+reply, which is the robustness claim in its purest form. The two
+random mercy mates in the same row are ledgered as luck, exactly as
+the taxonomy intends. Against the baseline: held-out 0/40 -> 1/40
+(2%), dev 1/30 -> 1/30 (the conversion relocated from zach's
+recapture device to sloppy's crossfire), worst held-out 0% in both.
+The anchor still leads on rate (1/16, 6%) — but the diagnostic pair
+sharpened: the anchor converts the kernel-matched squatter and
+nothing else; the model now converts the two families NO kernel ever
+cracked (a greedy human, pure noise) and not the squatters. Strip
+quality also moved: sloppy-held's draws shifted toward
+insufficient-material 6/10 (clean strips, no conversion pressure)
+and stalemate-us stayed rare (3/70 total).
+
+The reading, for next session: certification is solved down to the
+budget knobs — the root oracle plus sub-probes close whatever
+steering reaches, and the gauges prove where nothing was reachable
+(sub=0/N across 69 of 70 pinned games). The binding constraint is
+ASSEMBLY: flat depth-3 steering does not construct nets, and the r2
+null is the cleanest possible statement of it. Lever 2 stays the
+named next move — selective deepening in stripped positions, which
+needs value memoization to be affordable, which needs a decision
+about draw-state honesty in a steering-only cache. The squat
+near-miss (r1 g00: king frozen into pawn_last, pawns released to
+promotion) is the concrete target shape.
