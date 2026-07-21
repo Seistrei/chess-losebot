@@ -80,6 +80,28 @@ def best_move(
     return best, best_value, stats
 
 
+_SEED_MASK = (1 << 64) - 1
+_SEED_MULT = 0x9E3779B97F4A7C15
+
+
+def stable_seed(key) -> int:
+    """Fold a transposition key into a process-stable subset seed.
+
+    Python's built-in hash is id-derived for None — and None is the
+    key's empty en-passant slot, i.e. almost every position — so
+    hash(key) differed per process and fresh containers modeled
+    DIFFERENT reply subsets from the same position (2026-07-21
+    review: the frozen league was not reproducible). Plain arithmetic
+    over the key's ints is stable everywhere; None maps to 64, one
+    past the last square, which no real en-passant slot can be.
+    """
+    seed = 0
+    for part in key:
+        value = 64 if part is None else int(part)
+        seed = ((seed ^ value) * _SEED_MULT) & _SEED_MASK
+    return seed
+
+
 def reply_support(
     dist: list[tuple[chess.Move, float]],
     coverage: float,
@@ -176,9 +198,7 @@ def _node_value(
     stats.chance_nodes += 1
     dist = model.distribution(board)
     if len(dist) > topk:
-        # Int hashes are value-stable and the transposition key is a
-        # tuple of ints, so the subset is reproducible across runs.
-        seed = hash(board._transposition_key()) & 0x7FFFFFFF
+        seed = stable_seed(board._transposition_key())
         trimmed = reply_support(dist, coverage, topk, seed)
         stats.truncated_replies += len(dist) - len(trimmed)
         dist = trimmed

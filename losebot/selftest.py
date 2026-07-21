@@ -209,7 +209,14 @@ def test_squat_homing() -> None:
 
 
 def test_reply_support() -> None:
-    from .search import reply_support
+    from .search import reply_support, stable_seed
+
+    check(
+        "search: subset seed is process-stable (exact pin)",
+        stable_seed(chess.Board()._transposition_key())
+        == 9906737308688735056,
+        f"got {stable_seed(chess.Board()._transposition_key())}",
+    )
 
     def mv(uci: str) -> chess.Move:
         return chess.Move.from_uci(uci)
