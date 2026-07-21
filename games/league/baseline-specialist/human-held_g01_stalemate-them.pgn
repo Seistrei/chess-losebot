@@ -1,0 +1,10 @@
+[Event "Misere league"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "human-held"]
+[Black "specialist-field[fast]"]
+[Result "1/2-1/2"]
+[Termination "stalemate; focal=black; stalemate-them"]
+
+1. f3 g5 2. a4 a5 3. g4 Nh6 4. f4 gxf4 5. Kf2 Nxg4+ 6. Kf3 Ne5+ 7. Ke4 d5+ 8. Kxe5 Qd6+ 9. Kd4 Bg7+ 10. Kd3 Qa6+ 11. c4 dxc4+ 12. Kc2 Qg6+ 13. e4 Qxg1 14. e5 Qxh1 15. e6 Qxf1 16. Qxf1 Bd4 17. Qg1 Bxg1 18. b3 c3 19. h4 cxd2 20. Kc3 dxc1=Q+ 21. Kd3 Qxb1+ 22. Kc3 Qxa1+ 23. Kc2 Bxe6 24. Kd3 Bc5 25. h5 Qd4+ 26. Ke2 Bg4+ 27. Kf1 Bh3+ 28. Ke1 Bb4+ 29. Ke2 Kd7 30. Kf3 Kd6 31. h6 Kc5 32. Ke2 c6 33. Kf3 Qd5+ 34. Kf2 Qd4+ 35. Kf3 Rg8 36. Ke2 b6 37. Kf3 Rg3+ 38. Ke2 Qe3+ 39. Kd1 Bg4+ 40. Kc2 Rg1 41. Kb2 Qd4+ 42. Kc2 Qe5 43. Kd3 Qd4+ 44. Kc2 Qe4+ 45. Kb2 Rb1+ 46. Ka2 Rh1 47. Kb2 Qd4+ 48. Ka2 Qd3 49. Kb2 Qc3+ 50. Ka2 Qh3 51. Kb2 Nd7 52. Kc2 Qg2+ 53. Kd3 Qd5+ 54. Kc2 Bf5+ 55. Kb2 Qd4+ 56. Ka2 Qd6 57. Kb2 Rb1+ 58. Ka2 Rg1 59. Kb2 Qd4+ 60. Ka2 Qd5 61. Kb2 Rb1+ 62. Ka2 Rh1 63. Kb2 Qe5+ 64. Ka2 Qb8 65. Kb2 Qh8+ 66. Ka2 Qg8 67. Kb2 Qg7+ 68. hxg7 Rb1+ 69. Ka2 Rh8 70. gxh8=Q e5 71. Qxe5+ Nxe5 1/2-1/2

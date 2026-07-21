@@ -79,43 +79,65 @@ games/league/), mean AND worst family; milestones 60/80/90% held-out
 forced rate; the live bar stays "the corner poses and the mate lands
 BY FORCE against a human."
 
-### Baseline league (2026-07-21)
+### Baseline league (2026-07-21, re-pinned same day)
 
-First pinned runs, both engines on the frozen roster, artifacts under
-`games/league/baseline-model/` and `games/league/baseline-specialist/`
-(report.json + per-game PGNs; commit 512deef's code).
+The first pin (commit c1b4588) was superseded within hours by the
+review round — coverage-true chance nodes and seed-paired seats change
+what the runs mean — so THESE are the baseline tables of record
+(artifacts: games/league/baseline-model/ and baseline-specialist/,
+report.json + per-game PGNs). The superseded run survives in git
+history; its one lesson worth keeping: the 4 mercy mates `random`
+handed the model engine there vanished under the new seed schedule —
+mercy-of-noise is luck, which is exactly why the scoreboard separates
+it from forced.
 
-MODEL ENGINE (belief=sloppy, depth 3, topk 5, probe n<=3 cap 40k;
-10 games/family, seats alternated, max 240 plies):
+MODEL ENGINE (belief=sloppy, depth 3, topk 6, coverage 0.85, probe
+n<=3 cap 40k; 10 games/family = 5 seed-pairs, max 240 plies):
 
 ```
-family       split      n  forced mercy st-us insuf fifty rep maxply
-sloppy       dev       10       0     0     2     4     1   0      3
-squat        dev       10       0     0     0     0     0   1      9
-zach         dev       10       0     0     0     0     0   0     10
-human-held   held-out  10       0     0     3     1     0   1      5
-random       held-out  10       0     4     0     0     0   0      6
-sloppy-held  held-out  10       0     0     1     4     1   0      4
-squat-held   held-out  10       0     0     0     0     0   3      7
-overall: 0/70 forced (0%); worst family: 0%
+family       split      n  forced st-them st-us insuf fifty rep maxply
+sloppy       dev       10       0       0     2     4     0   1      3
+squat        dev       10       0       0     0     0     0   1      9
+zach         dev       10       0       0     0     0     0   0     10
+human-held   held-out  10       0       1     0     2     0   1      6
+random       held-out  10       0       0     0     0     0   1      9
+sloppy-held  held-out  10       0       0     0     5     0   1      4
+squat-held   held-out  10       0       0     0     0     0   3      7
+forced — held-out: 0/40 (0%); dev: 0/30 (0%); worst held-out: 0%
 ```
 
-SPECIALIST ANCHOR (field+zach, fast tier; 4 games/family): 0/28
-forced; one stalemate-them vs zach; otherwise the same draw families
-(insuf/fifty/maxply). Full games were never the specialist's win
-condition — its 10/10s live in hand-set endgame drills — and the
-league now states that plainly on the same scoreboard as everything
-else.
+SPECIALIST ANCHOR (field+zach, fast tier; 4 games/family = 2 pairs):
 
-Reading the zeros: the mate-shaped failures live exactly where the
-models say they should — `random` hands out mercy mates (4/10) that
-the mate-avoidant families never will; the greedy families
-(sloppy/sloppy-held/human-held) produce stalemate-us and
-insufficient-material deaths (we get eaten or both sides strip bare);
-the avoidant shufflers (zach/squat) wall at max-plies. Zero forced
-anywhere means every future point of held-out forced rate is real,
-and the first lever is known: the engine strips competently and then
-has no conversion pressure — steering depth and endgame handling
-(oracle probes below the root, deeper/selective expectimax, and the
-specialists' certified endgame knowledge recast as league-legal
-guidance) are the next entries' work.
+```
+family       split      n  forced st-them st-us insuf fifty rep maxply
+sloppy       dev        4       0       0     1     0     1   1      1
+squat        dev        4       0       0     0     0     0   0      4
+zach         dev        4       0       1     0     0     0   0      3
+human-held   held-out   4       0       1     0     1     0   0      2
+random       held-out   4       0       0     0     0     0   0      4
+sloppy-held  held-out   4       0       0     0     1     0   0      3
+squat-held   held-out   4       1       0     0     0     0   0      3
+forced — held-out: 1/16 (6%); dev: 0/12 (0%); worst held-out: 0%
+```
+
+THE ANCHOR DREW FIRST BLOOD: squat-held game 2 (engine White) is the
+specialist's first full-game forced selfmate ever recorded — every
+prior conversion started from a hand-set endgame drill. The corner
+construction poses organically (Kh1, g1 plug, g-pawn executioner
+preserved through the squatter's greed), the rook strips the last
+loose pawn, and 81.Qg5+ Kh3 82.Qf4 g2# closes a genuine zugzwang —
+the exact shape of the standing live bar, landed against a held-out
+kernel. PGN: baseline-specialist/squat-held_g02_selfmate-forced.pgn.
+Two readings, both true: the corner machinery is real when the
+opponent's king cooperates by temperament (a squatter walks into its
+own pocket), and one family at 25% with every other held-out row at
+zero is precisely the specialist's known shape — strength where the
+opponent matches a modeled kernel, nothing where it doesn't.
+
+The model engine's zeros decompose the same way as the first pin:
+greedy families end in stalemate-us/mutual-strip (it strips
+competently, donates under pressure, and has no conversion pressure),
+avoidant families wall at max-plies. The gap to close is now concrete
+and named: the new engine must first MATCH the anchor's 1/16 held-out
+mark, then pass it — steering depth, sub-root oracle probes, and
+league-legal endgame guidance are the levers, then the corpus fit.
