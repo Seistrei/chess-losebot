@@ -61,6 +61,13 @@ class CornerSquatBot:
                 if chess.square_distance(move.to_square, self.corner)
                 == best
             ]
+        else:
+            held = [
+                move for move in pool
+                if board.piece_type_at(move.from_square) != chess.PAWN
+            ]
+            if held:
+                pool = held  # the hostage waits: quiet piece moves first
         return self.rng.choice(pool)
 
 

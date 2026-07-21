@@ -522,14 +522,21 @@ def eviction_pressure_cost(board: chess.Board, target: PawnMateTemplate,
             our_king, target.arrival_square
         )
     cage = target.kh_cage_square
+    boxer = board.piece_at(cage)
     if king in (target.checked_square, target.kh_escape_square) and (
-        board.piece_at(cage) is not None
+        boxer is not None
+        and boxer.color == us
+        and boxer.piece_type in (chess.BISHOP, chess.QUEEN)
     ):
         # The sealed box (or the ply that seals it): their king inside
-        # the corner pocket with the cage square occupied is the
-        # stalemate trap the handoff filter's seal guard refuses — a
-        # certain draw, priced like one so the arm never steers toward
-        # what the filter would have to veto.
+        # the corner pocket with our diagonal slider on the cage is the
+        # stalemate trap the handoff filter's seal guard refuses — the
+        # cage and escape squares are diagonal neighbors, so the slider
+        # covers the shuttle's oxygen unblockably. A certain draw,
+        # priced like one so the arm never steers toward what the
+        # filter would have to veto. Any other occupant leaves the
+        # shuttle breathing: those are the race and readiness terms'
+        # business, not a box.
         cost += _PRESSURE_DRAW
     if not any(
         cage in board.attacks(square)

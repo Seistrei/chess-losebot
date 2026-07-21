@@ -844,11 +844,13 @@ class LoseBot:
         moves: list[chess.Move],
         current: PawnMateTemplate | None,
     ) -> list[chess.Move]:
-        """No landing on the cage square while their king holds the box.
+        """No diagonal slider onto the cage square while their king
+        holds the box.
 
-        The cage square attacks the escape square by geometry (they are
-        diagonal neighbors), so a landing while their king sits on the
-        escape CHECKS the squatter into the corner — and with the cage
+        The cage and escape squares are diagonal neighbors in every
+        corner template, so a bishop or queen landed on the cage covers
+        the escape unblockably, and a landing while their king sits on
+        the escape CHECKS the squatter into the corner — with the cage
         down and the arrival held or plugged, the corner is a sealed
         box: their king has no moves, the pawn is frozen, and every
         box-keeping move of ours is a stalemate the safe filter strips,
@@ -856,8 +858,13 @@ class LoseBot:
         6.Bg1+ Kh1 trap, 2026-07-20 — the forced lift donated the
         expiry push and the family died). Landed with their king one
         square farther out, the same cage closes the escape forever and
-        the box can never seal — so this strips exactly the landings
-        onto a king on the checked or escape square, nothing else.
+        the box can never seal. A knight or rook on the cage projects
+        no cover onto the escape, so the shuttle keeps its oxygen and
+        whether such a landing serves the build is the chores' and the
+        arm's business, not a family risk — so this strips exactly the
+        bishop and queen landings (promotion arrivals included, though
+        no pawn of ours can reach our own back rank) onto a king on the
+        checked or escape square, nothing else.
 
         Note what this filter deliberately does NOT do: hold a knight
         plug on the arrival. Against the shuffle kernel (and the live
@@ -887,7 +894,12 @@ class LoseBot:
             return moves
         cage_square = current.kh_cage_square
         open_box = [
-            move for move in moves if move.to_square != cage_square
+            move for move in moves
+            if move.to_square != cage_square
+            or (
+                move.promotion
+                or board.piece_type_at(move.from_square)
+            ) not in (chess.BISHOP, chess.QUEEN)
         ]
         if open_box and len(open_box) < len(moves):
             self.vi_seal_guards += len(moves) - len(open_box)

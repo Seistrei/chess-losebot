@@ -3050,3 +3050,148 @@ The field-frontier list (supersedes the one above):
    opponent — the drill now proves the choreography against the
    kernel that models the observed human; a live game is the next
    witness.
+
+## Review round on the choreography: the box is diagonal, the kernel holds its hostage (2026-07-20)
+
+Three findings on 842ed98, two refined and one taken straight.
+
+**Seal guard strips too much (P1) — right diagnosis, sharper cut than
+proposed.** The guard refused EVERY landing on the cage square while
+their king held the checked or escape square; the reviewer's example
+(a protected knight to the cage, no check, no seal) is real. But the
+correct restriction is not "bishop landings" as filed — it is the
+box's geometry: the cage and escape squares are diagonal neighbors in
+every corner orientation, so a bishop OR QUEEN landed on the cage
+covers the escape unblockably (from the escape square it checks the
+squatter into the corner; from the checked square it seals the box
+where it stands), while a knight or rook projects nothing onto the
+escape and the shuttle keeps its oxygen. The strip now keys on the
+arriving piece type — bishop and queen, promotion arrivals included
+defensively, though the reviewer's "bishop promotions" case cannot
+arise (the cage sits on our own back rank; no pawn of ours can land
+there). The reviewer's fallback suggestion ("verify the landing gains
+cage occupancy") declined: the guard exists to refuse box-sealing
+landings, not to audit useful ones — usefulness is the chores' and
+the arm's business.
+
+**Box charge prices any occupant (P1) — taken, same geometry.** The
+eviction arm's _PRESSURE_DRAW fired for any piece of either color on
+the cage square; the reviewer measured an own knight on the cage
+charged 93 -> 10,099 with the shuttle still breathing. The charge now
+requires OUR bishop or queen on the cage — the only occupants that
+seal — mirroring the guard exactly. Any other occupant leaves the
+shuttle alive and is the race and readiness terms' business. Guard
+and charge now state the same theorem on both sides of the
+filter/pricing divide, which is where the last review round already
+pushed this codebase once (the veto and its pricing).
+
+**The kernel leaks its hostage (P2) — taken straight.** The
+CornerSquatBot docstring promised "a pawn moves only when the pool
+offers nothing else"; the code fell through to a uniform choice over
+the whole support pool the moment king moves ran out, so the modeled
+human would spend the executioner while quiet piece moves sat
+unplayed. Now quiet piece moves are preferred and a pawn moves only
+from a pushes-only pool. New selftest 30g2 pins it: a frozen-king
+pose with bishop + pawn mobile (tighter than the reviewer's
+rook-plus-pawn suggestion — 5 quiet moves + 1 push gives the 30-seed
+sweep ~99.6% detection against the old uniform fallback), the pawn
+offered in the pool and never played. Drill impact nil by
+construction: the drill squatter owns king + pawn only, so the
+changed branch never fires with a non-empty quiet pool and the RNG
+streams are untouched.
+
+Verification: selftest 107 -> 109, all green — 30f2 reworked to pin
+the narrowing from both sides (the bishop's landing refused, the
+rook's released, on the same menu), a knight-on-cage companion beside
+30c pins the un-charge (knight-cage minus open-cage delta measured 0;
+the old code charged it 10,000), and 30g2 pins the hostage hold.
+Squat acceptance battery re-run (field profile, squat kernel, seeds
+0-9): 10/10 CONVERTED, every seed the identical 84-ply g2# script.
+The guard's fingerprint moved exactly as the narrowing predicts:
+seal-guards 4 -> 2 per game (the two released strips were
+knight/rook landings that never won a menu), with filter-internal
+counter drift only (+8 nodes, +5 regressions-filtered, -1
+donation-veto) and the vi build fingerprint identical
+(states=1204783, releases=1) — same moves, smaller veto. vi spot references (case6-seed0, case8-seed0, motifs)
+byte-identical modulo wall-clock vs the bf97462-chain control: the
+planning.py and bot.py edits live behind squat_eviction/king-holder
+gates and the kernel edit lives in the sparring opponent, so vi is
+structurally untouched and the replay confirms it. Runner hygiene
+note for future rounds: the case-9 battery MUST pass
+`--profile field` — the endgames default is `current`, which runs a
+planless bot and reports a plausible-looking `template: none,
+insufficient-material` line that means nothing.
+
+### cG0S5wSF: live game 2 — the toolkit dances, a foreign pawn squats the entry (2026-07-20)
+
+Second live witness (rapid 600+3, us White, 0-1 in 165 — the
+objective on the scoreboard, but not by force: the human promoted
+twice and mated us out of mercy or boredom, which no kernel ever
+does). The user threw material at the board all game — the stock
+ledger answered on-doctrine: their surplus revoked (both knights,
+both rooks, the b1 promotion queen, pawns a6/c4/d5), our surplus
+donated (the queen at 14, the exchange rook at 25, both bishops and
+the knight late). By move 50 they were stripped to king + pawns with
+the b- and g-families both on file, and the construction POSED live
+for the first time: 37.Kf1-38.Kg2 the march, 46.Rf1 the lane, 50.Bg1
+the cage, the g3 executioner on station since move 33. The corpus
+clause's first half is witnessed — the corner posed.
+
+Then three exposures, in order of novelty:
+
+1. **The entry squat (new, unpriced).** 69...h3+ parked the
+   NON-family h-pawn on the entry square for the rest of the game. A
+   their-pawn on entry is a double geometric kill: the readmission
+   square their king must occupy at delivery is blocked, and the
+   arrival g2 is covered forever, so our king can never hold the
+   plug. The family was dead from move 69 with both executioners
+   still unspent — while their king danced through the pocket for
+   fifteen moves (70-86), the prime herding window, and the
+   machinery could only shuffle. Nothing prices THEIR pieces on the
+   pocket squares (race debt is ours-only on entry/far/rear), and
+   nothing valued the cure the position offered the whole time: the
+   h3 pawn is worthless stock whose revocation (Nxh3, in reach of
+   the touring knight) clears the entry for free. Eviction pressure
+   moves kings; a pawn squatter answers only to capture.
+
+2. **Stock-blind forcing (new).** The check chase 88-94 herded their
+   king a1-ward, and 94.Re1+ met Ka1 + pawn b2 with exactly one
+   legal reply: 94...b1=Q, the b-family's last pawn spent as a check
+   block — an executioner burned by OUR forcing move. The 1-ply
+   eviction expectation prices geometry (prox, doors, race squares,
+   the box) and cannot see a family die inside a forced reply; we
+   then spent the lane rook buying the fresh queen back (96.Rxb1
+   Kxb1). The tier veto prices moves that hand stock to capture — a
+   forced promotion-block is a channel it never sees.
+
+3. **The pawn dump (known, now witnessed).** 113...g2+ — king moves
+   available, executioner pushed anyway. The lift doctrine's
+   accepted exposure, performed live by exhibit A.
+
+After 113 the board was family-dead (b spent at 94, g at 113, h is
+no executioner), and the endgame played the only honest line left:
+donate everything (115.Bh2+ Kxh2, 123.Nh2 Kxh2), promote 126.d8=Q,
+hand the queen over (152.Qg7 g1=Q+ 153...Qxg7), bare king, mated on
+165. What the new machinery did do live: the park chore visibly
+steered Nf8 through both denial windows (111 and 113, their king on
+f3), the eviction arm pried with checks in the same windows, the
+seal guard never mis-fired, and 165 plies passed without a stalemate
+accident. The chores ran; the game was lost two layers upstream of
+them.
+
+The field-frontier list (supersedes the one above):
+
+1. **Pin a field baseline battery** before the next field-knob change
+   — unchanged, and now more urgent: the field surface grew again.
+2. **The sloppy-human opponent model**, now carrying three live
+   sub-exposures as its acceptance evidence: the voluntary
+   executioner dump (113...g2+), the foreign-pawn pocket squat
+   (69...h3+ — price their pieces on entry/pocket squares and value
+   the revocation capture), and stock-blind forcing (94.Re1+ forcing
+   b1=Q — forcing moves need family-ledger sight, not just
+   geometry). Build the kernel first, then drive the fixes against
+   it, the way the corner work went.
+3. **Corpus protocol continues.** Half the clause is witnessed — the
+   corner posed live in cG0S5wSF. The mate LANDING by force is still
+   unwitnessed; the entry squat is what stood between, and item 2
+   owns it.

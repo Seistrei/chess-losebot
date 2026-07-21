@@ -3639,6 +3639,19 @@ def selftest() -> int:
         f"box={box_cost:.0f} open={open_cost:.0f}"
         f" delta={box_cost - open_cost:.0f} (want >= 9000)",
     )
+    # Only our diagonal slider seals: the same pocket with our KNIGHT
+    # on the cage square leaves the shuttle its oxygen (a knight on g1
+    # covers neither h1 nor h2) and draws no draw-class charge
+    # (review 2026-07-20: any occupant was charged 10k).
+    nbox_pose = chess.Board("8/8/8/8/8/2B2Kp1/8/R5Nk w - - 0 1")
+    nbox_target = best_pawn_mate_template(nbox_pose, chess.WHITE)
+    nbox_cost = _evict_cost(nbox_pose, nbox_target, chess.WHITE)
+    check(
+        "a knight on the cage square is no box: no draw-class charge",
+        nbox_cost - open_cost < 9_000.0,
+        f"knight-cage={nbox_cost:.0f} open={open_cost:.0f}"
+        f" delta={nbox_cost - open_cost:.0f} (want < 9000)",
+    )
 
     # 30d. The squat chore chain, pinned ply by ply on the drill's own
     # opening: chore 1 commits the corner lane (Re1 — the one rook move
@@ -3723,13 +3736,20 @@ def selftest() -> int:
     )
 
     # 30f2. The seal guard: with their king on the escape square the
-    # cage landing is refused — it would check the squatter into the
-    # corner and seal the stalemate box whose only exit is the plug
-    # lift (seed 0's 6.Bg1+ Kh1 trap) — and one square farther out the
-    # same landing is the fence that closes the escape forever.
+    # BISHOP's cage landing is refused — it would check the squatter
+    # into the corner and seal the stalemate box whose only exit is
+    # the plug lift (seed 0's 6.Bg1+ Kh1 trap) — while the ROOK's
+    # landing on the same square projects nothing onto the escape and
+    # passes (review 2026-07-20: only diagonal sliders seal). One
+    # square farther out the bishop's landing is the fence that
+    # closes the escape forever and everything passes.
     seal_pose = chess.Board("8/8/8/8/8/5Kp1/5BNk/R7 w - - 0 1")
     seal_target = best_pawn_mate_template(seal_pose, chess.WHITE)
-    seal_menu = [chess.Move.from_uci("f2g1"), chess.Move.from_uci("a1b1")]
+    seal_menu = [
+        chess.Move.from_uci("f2g1"),
+        chess.Move.from_uci("a1g1"),
+        chess.Move.from_uci("a1b1"),
+    ]
     guards_before = field_bot.vi_seal_guards
     seal_kept = field_bot._filter_seal_guard(
         seal_pose, list(seal_menu), seal_target
@@ -3740,13 +3760,14 @@ def selftest() -> int:
         clear_pose, list(seal_menu), clear_target
     )
     check(
-        "seal guard: no cage landing onto a king on the escape square",
-        [m.uci() for m in seal_kept] == ["a1b1"]
+        "seal guard: the bishop's landing is refused, the rook's passes",
+        [m.uci() for m in seal_kept] == ["a1g1", "a1b1"]
         and field_bot.vi_seal_guards - guards_before == 1
-        and [m.uci() for m in clear_kept] == ["f2g1", "a1b1"],
-        f"escape-squat kept={[m.uci() for m in seal_kept]} (want a1b1);"
+        and [m.uci() for m in clear_kept] == ["f2g1", "a1g1", "a1b1"],
+        f"escape-squat kept={[m.uci() for m in seal_kept]}"
+        f" (want a1g1,a1b1);"
         f" guards+={field_bot.vi_seal_guards - guards_before};"
-        f" clear kept={[m.uci() for m in clear_kept]} (want both)",
+        f" clear kept={[m.uci() for m in clear_kept]} (want all 3)",
     )
 
     # 30g. The kernel: mate-avoidant, capture-averse, corner-glued —
@@ -3759,6 +3780,34 @@ def selftest() -> int:
         "corner-squat kernel: the shuffle hugs home (h3 -> h2)",
         kernel_move == chess.Move.from_uci("h3h2"),
         f"chose {kernel_pose.san(kernel_move)} (want Kh2)",
+    )
+
+    # 30g2. The kernel holds its hostage: king frozen, a piece still
+    # mobile, and the pawn stays put — quiet piece moves come first,
+    # and only a pool of nothing but pushes spends the executioner
+    # (review 2026-07-20: the uniform fallback leaked the pawn into
+    # the shuffle whenever the king ran out of moves).
+    from .search import support_zach as _support
+    hostage_pose = chess.Board("7b/8/8/8/8/6p1/1Q6/5K1k b - - 0 1")
+    hostage_kinds = {
+        hostage_pose.piece_type_at(move.from_square)
+        for move in _support(hostage_pose)
+    }
+    hostage_kept = {
+        hostage_pose.piece_type_at(
+            CornerSquatBot(chess.H1, seed=seed)
+            .choose_move(hostage_pose)
+            .from_square
+        )
+        for seed in range(30)
+    }
+    check(
+        "corner-squat kernel: no king move, the pawn is held anyway",
+        chess.PAWN in hostage_kinds
+        and chess.KING not in hostage_kinds
+        and hostage_kept == {chess.BISHOP},
+        f"pool kinds={hostage_kinds}; kept kinds={hostage_kept}"
+        " (want pawn offered, only bishop played)",
     )
 
     # 13. A promoted piece means the king-and-pawns phase has ended. The
