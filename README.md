@@ -112,8 +112,11 @@ docker run --rm losebot pypy3 -m specialists endgames --profile vi --case 7 --se
 docker run --rm losebot pypy3 -m specialists arena --white losebot --black sloppy --model zach --profile field
 ```
 
-Historical commands in `TUNING-LOG.md` predating the pivot read
-`pypy3 -m losebot ...`; substitute `-m specialists`. Its roles now:
+Its complete lab notebook — every tuning entry, drill battery, and
+live-game postmortem of the first era — lives beside it as
+`specialists/TUNING-LOG.md` (commands there predate the rename and
+read `pypy3 -m losebot ...`; substitute `-m specialists`). Its roles
+now:
 the lichess driver (below), the anchor row on the league, a source of
 labeled training positions, and the reference implementation of every
 theorem the drills proved (release theorem, diagonal seal, vacate-race
@@ -130,7 +133,8 @@ business in rated pools or bullet.
 
 The bridge still drives the **specialist** (`LOSEBOT_PROFILE=field
 LOSEBOT_MODEL=zach` — the donation-guarded profile the first live games
-selected; see TUNING-LOG's field notes). The new engine takes over the
+selected; see the field notes in `specialists/TUNING-LOG.md`). The new
+engine takes over the
 bridge once it beats the specialist's held-out league rows — swapping
 is one import in `lichess/homemade.py`, and until then every live game
 keeps landing in `lichess/game_records/` as fitting data for the urge
