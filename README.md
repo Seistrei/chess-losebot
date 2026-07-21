@@ -2,9 +2,62 @@
 
 A **misère chess** engine: standard chess rules, but the goal is to *get
 checkmated*. Built to out-lose Worstfish against opponents that refuse to
-deliver mate (like Chess.com's Zach bot).
+deliver mate (like Chess.com's Zach bot) — and, since the 2026-07-21
+pivot, to generalize that ability to opponents nobody hand-modeled.
 
 Everything runs in Docker — no local installs.
+
+## The architecture (post-pivot)
+
+The first era of this project hand-built a specialist: exact herding
+MDPs, corner templates, chore choreography, a donation guard — all
+keyed to specific opponent kernels. It converts its home drills, but
+the results forced a verdict: the squat kernel converts 10/10 while
+the human-like sloppy kernel converts 0/10 *from the same position*,
+and the doctrines the two kernels demand are opposite with no position
+predicate to discriminate. The discriminating information lives in the
+opponent's policy distribution, so the engine was rebuilt around one.
+The full decision record is in `TUNING-LOG.md` ("The pivot").
+
+The new `losebot/` package has three load-bearing ideas:
+
+1. **One parametric opponent family** (`losebot/models/`): every
+   opponent is a point in "urge space" (greed, checks, pushes, king
+   hunting, corner homing, promotion drive, mercy lapses) over a
+   mate-avoidant core. Kernels are presets, not code; new observed
+   behavior updates parameters — eventually by fitting to the live
+   corpus — never a new doctrine stack. Models expose exact per-move
+   probability distributions.
+2. **Expectimax steering** (`losebot/search.py`): our nodes maximize,
+   opponent nodes take the expectation over the model's distribution.
+   Hold vs. lift, cage vs. race — the search prices doctrine questions
+   per opponent because the opponent is *in the tree*.
+3. **An opponent-free oracle** (`losebot/oracle.py`): exact
+   forced-selfmate certificates, valid against ANY reply. The steering
+   layer's job is to reach positions where the oracle fires; the
+   oracle's job is to make the finish unconditional. "Forced selfmate"
+   is the only win the scoreboard fully credits.
+
+Progress is measured by the **frozen league** (`losebot/league/`):
+dev families (fair game for tuning) and held-out families (frozen
+parameters, report-only), seats alternated, fresh RNG per game, every
+game classified by an outcome taxonomy — forced selfmate, mercy mate,
+accidental win, stalemates in both directions, each draw kind — and
+reported per-family with the worst family given equal billing to the
+mean. Generalization claims cite held-out rows, nothing else.
+
+```text
+losebot/
+  outcomes.py    termination rules + outcome taxonomy (one source of truth)
+  oracle.py      exact forced-selfmate probe, no opponent model anywhere
+  evaluate.py    asymmetric misère eval (root-as-loser at every leaf)
+  search.py      expectimax vs the opponent distribution (top-k truncated)
+  engine.py      oracle first, steering second, misère-safe root partition
+  models/        the urge family, presets incl. FROZEN held-out params
+  league/        play loop, family roster, runner, report, specialist wrapper
+specialists/     the frozen first-era engine (Zach herding VI, templates,
+                 donation guard) — benchmark teacher + lichess driver
+```
 
 ## Build
 
@@ -15,70 +68,56 @@ docker build -t losebot .
 ## Run
 
 ```powershell
-# sanity checks (forced-selfmate probe, mate refusal, Zach zugzwang)
+# fast self-checks for the new package (also the image's default CMD)
 docker run --rm losebot
 
-# LoseBot (White) tries to lose to a Zach clone (Black), saving PGNs to .\games
+# one game against a family, from either seat
+docker run --rm losebot pypy3 -m losebot play --opponent sloppy --seed 3 --seat black
+
+# the frozen league: the benchmark of record
 docker run --rm -v "D:\ChessLosebot\games:/app/games" losebot `
-  pypy3 -m specialists arena --white losebot --black zach --model zach -n 10 --pgn-dir /app/games
+  pypy3 -m losebot league --engine model --belief sloppy --games 10 `
+  --out games/league/baseline
 
-# Baseline: Worstfish (real Stockfish argmin) fails to lose to Zach
-docker run --rm losebot pypy3 -m specialists arena --white worstfish --black zach -n 4
-
-# Two dedicated losers fight it out
-docker run --rm losebot pypy3 -m specialists arena --white losebot --black worstfish -n 2
-
-# Inspect a finished game
+# the frozen specialist on the same benchmark (the anchor)
 docker run --rm -v "D:\ChessLosebot\games:/app/games" losebot `
-  pypy3 -m specialists.analyze /app/games/game_001_losebot_vs_zach.pgn
+  pypy3 -m losebot league --engine specialist --games 4 `
+  --out games/league/specialist
 
-# Endgame conversion drills (Zach pre-stripped to king+pawns)
-docker run --rm losebot pypy3 -m specialists endgames --seed 5
-
-# Reproducible profile comparison with a bounded exact probe
-docker run --rm losebot pypy3 -m specialists endgames --profile v03 --seed 5 `
-  --max-plies 40 --probe-cap 10000 --probe-depth 3
-
-# Inspect one drill and its final position
-docker run --rm losebot pypy3 -m specialists endgames --profile template `
-  --case 2 --seed 5 --max-plies 40 --probe-cap 10000 `
-  --probe-depth 3 --show-fen
-
-# Exercise the stateful construction planner with bounded tactical searches
-docker run --rm losebot pypy3 -m specialists endgames --profile planner `
-  --seed 5 --max-plies 40 --probe-cap 10000 --probe-depth 3
-
-# Guarded depth-two herding experiment (beam search plus memoization)
-docker run --rm losebot pypy3 -m specialists endgames --profile herding `
-  --case 2 --seed 5 --max-plies 120 --probe-cap 10000 --probe-depth 3
-
-# Exact value iteration over the herding sub-MDP, with dead-side
-# certificates and prospective side-flips
-docker run --rm losebot pypy3 -m specialists endgames --profile vi `
-  --case 2 --seed 5 --max-plies 240 --probe-cap 10000 --probe-depth 3
-
-# King-holder corner drills: case 6 builds the corner from a delivered
-# pawn; case 7 starts from a certified-dead piece construction, adopts
-# the corner plan, and walks the executioner to it
-docker run --rm losebot pypy3 -m specialists endgames --profile vi `
-  --case 7 --seed 1 --vi-herders 1 --max-plies 240 --show-fen
-
-# Same drill with the release audit: log every release-scan decision
-# (candidate verdicts, audited goal odds, clean-board twin rescore)
-docker run --rm losebot pypy3 -m specialists endgames --profile vi `
-  --case 7 --seed 1 --vi-herders 1 --max-plies 240 --release-audit
-
-# Stacked-executioner drill: case 8's doubled b-pawns renew the corner
-# vacate race after a lost coin (audited EV 1/2 -> 3/4); watch for
-# releases=2 and renewal-captures=1 in the vi gauges of a renewed seed
-docker run --rm losebot pypy3 -m specialists endgames --profile vi `
-  --case 8 --seed 0 --vi-herders 1 --max-plies 240
-
-# Adjudicate conversion motifs (king-holder release, forced capture-mate)
-# with the conversion audit under research budgets
-docker run --rm losebot pypy3 -m specialists motifs
-docker run --rm losebot pypy3 -m specialists motifs --case 3 --conversion-ms 120000
+# probe any FEN for forced-selfmate certificates
+docker run --rm losebot pypy3 -m losebot oracle `
+  --fen "8/8/8/R7/8/3PPk1p/6RP/6BK w - - 0 1" --n 3
 ```
+
+During development, mount the checkout over the baked copy instead of
+rebuilding (`MSYS_NO_PATHCONV=1` stops Git Bash mangling the paths):
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "D:\ChessLosebot:/app" losebot pypy3 -m losebot selftest
+```
+
+## The specialists package
+
+The entire first-era engine lives on, importable and battle-tested,
+under `specialists/`: the exact `selfmate_in` probe with the Zach reply
+model, misère negamax, construction templates, the herding-sub-MDP
+value iteration with dead-side certificates and conversion audits,
+king-holder corner machinery, the donation guard / herder-material
+floor, and the drill batteries (`endgames`, `motifs`, `arena`). Its
+selftest and batteries still run:
+
+```powershell
+docker run --rm losebot pypy3 -m specialists selftest
+docker run --rm losebot pypy3 -m specialists endgames --profile vi --case 7 --seed 1 --vi-herders 1
+docker run --rm losebot pypy3 -m specialists arena --white losebot --black sloppy --model zach --profile field
+```
+
+Historical commands in `TUNING-LOG.md` predating the pivot read
+`pypy3 -m losebot ...`; substitute `-m specialists`. Its roles now:
+the lichess driver (below), the anchor row on the league, a source of
+labeled training positions, and the reference implementation of every
+theorem the drills proved (release theorem, diagonal seal, vacate-race
+odds, donation doctrine).
 
 ## Play against it on lichess
 
@@ -88,6 +127,14 @@ The bot runs as a lichess BOT account through the
 It accepts casual standard challenges at rapid (10+0) and slower,
 correspondence and unlimited included — a bot that plays to lose has no
 business in rated pools or bullet.
+
+The bridge still drives the **specialist** (`LOSEBOT_PROFILE=field
+LOSEBOT_MODEL=zach` — the donation-guarded profile the first live games
+selected; see TUNING-LOG's field notes). The new engine takes over the
+bridge once it beats the specialist's held-out league rows — swapping
+is one import in `lichess/homemade.py`, and until then every live game
+keeps landing in `lichess/game_records/` as fitting data for the urge
+family.
 
 One-time setup: create an OAuth token with the `bot:play` scope on the
 (already upgraded) BOT account, then
@@ -111,122 +158,19 @@ docker run --rm --env-file lichess/lichess.env `
 
 The account is challengeable while that container runs; Ctrl-C finishes
 running games first. Every game is archived as PGN in
-`lichess/game_records/` — real mate-avoidant opponents are tuning data the
-Zach clone cannot generate.
-
-Engine selection on lichess defaults to the full machinery hardened for
-humans: `LOSEBOT_PROFILE=field LOSEBOT_MODEL=zach`. The first live games
-settled both halves of that default. The model-free generalist stripped a
-mate-avoidant human to king-and-pawn, squeezed him to mobility 1, and then
-— having no construction plan — shuffled checks and promoted two of its
-own queens until he resigned; and plain `vi` donated its rook and bishop
-into forced king captures (Zach never captures, so the arena never once
-punished a gift) and held an unconvertible Q+K to the fifty-move draw.
-`field` is `vi` plus the donation guard / herder-material floor: it keeps
-the closer knight, the cage-shade bishop, and the three-piece herding
-reserve alive while the opponent still has executioner material. The vi
-machinery's certificates assume the Zach reply kernel and real humans are
-off-model, but mate-avoidant challengers are the closest thing to Zach on
-the internet, and every mismatch lands in `game_records/` as data. Set
-`LOSEBOT_PROFILE=vi` for the arena-exact control, or
-`LOSEBOT_PROFILE=current LOSEBOT_MODEL=` in `lichess/lichess.env` for the
-model-free fallback. A small governor in the wrapper clamps probe/build
-budgets as the clock shrinks; the engine itself has no movetime concept.
-
-## How LoseBot works
-
-1. **Never** delivers mate or stalemate if any alternative exists.
-2. **Exact forced-selfmate probe** (`selfmate_in`): finds moves after which
-   *every* opponent reply leads to LoseBot being checkmated — the selfmate
-   search Worstfish's flipped-Stockfish construction cannot express. Probes
-   deepen as the opponent runs out of mobile pieces.
-3. **Opponent model** (`--model zach`): restricts the opponent's reply set in
-   the probe to the pool Zach actually samples from (never mates if avoidable,
-   never captures if avoidable), making forced losses far easier to prove.
-4. **Misère negamax** otherwise, with inverted terminals (being mated = +MATE)
-   and an eval encoding the human-discovered recipe: eat their mobile pieces
-   (they are shuffle fuel), leave them king-and-pawns, walk our king in front
-   of their pawns, smother it with our own men, minimize their mobility,
-   and treat draws/50-move drift as failure.
-
-Named engine profiles keep experiments reproducible: `current` preserves the
-pre-profile build, `v03` reconstructs the best historic full-game weights from
-the tuning log, and experimental `template` couples both kings to one concrete
-opponent-pawn mating push. Experimental `planner` persists one such target,
-holds a defended blocker on the pawn's mating square until release, preserves
-the king cage, filters repetitions and plan regressions, and uses bounded
-short-horizon searches to herd the defending king. The `herding` profile is a
-separate depth-two experiment: it retains every forcing check, limits quiet
-setup continuations to an eight-move beam, memoizes only fully evaluated
-modeled states, and accounts for Zach reply classification inside its cap.
-Deep proof searches are only unlocked when the selected target is close and
-partially caged.
-
-The baseline `planner` modeled search deliberately remains at one turn, 1,000
-nodes, and 250 ms per invocation. `herding` retries two turns with an eight-
-move beam, a 5,000-node cap, a draw-history-safe transposition table, and the
-same hard 250 ms deadline. It is intentionally experimental: the tuning log
-records that the guarded search is fast but has not improved conversions.
-
-The `vi` profile treats the herd phase as what it actually is against a fixed
-stochastic opponent: a Markov decision process. With the construction frozen
-(king parked, holder defended, pawns blocked), the only dynamic units are
-their king and one or two of our free pieces, and `specialists/herding_vi.py`
-solves that sub-MDP exactly by value iteration — the opponent edges reproduce
-`support_zach` move-for-move and are validated against it on every build
-(plus a full-graph audit mode in the selftest). The dead/live certificate is
-exact graph reachability computed on the completed state graph, independent
-of the solver: a value-iteration pass cut short by its deadline can degrade
-move ranking (it reports `converged=False` and resumes across moves), never
-a certificate. A checked side is only declared hopeless once **every**
-maximal herder subset of the frozen configuration is certified dead; that
-verdict is scoped to the exact certified configuration (it cannot be
-inherited by a rebuilt plan) and triggers a prospective flip of the plan to
-the mirrored checked side when a completed build certifies that side live.
-The certify sweep also carries the conversion audit's side-level verdict:
-it stops early only for a live subset that positively converts, keeps the
-first merely-live subset as the playable fallback, and — when the sweep and
-every live subset's audit completed with nothing converting — declares the
-side unconvertible, which triggers the same prospective flip under a
-stricter gate: abandoning a live side requires a mirror that positively
-converts (forced-mate pockets or accepted release races), while a hopeless
-side keeps accepting any live mirror.
-Committed march/cage filters, a forced-capture guard, and a draw-aware
-scored race-release (it shares the arena's fifty-move/repetition/material
-adjudications) round out the profile. At play time the policy also prices
-the arena's threefold rule into the solved values: each move it recounts
-the game's reversible era, maps every position (either side to move) onto
-a graph state, and pins twice-seen states at value 0 — re-entering one is
-the draw — so Zach's deterministic funnels reprice the moves that feed
-them instead of tripping repetition mid-herd, and an irreversible move
-lifts the burns with the era. Piece holders provably cannot release
-the arrival square (every retreat re-attacks it and refutes the mate); the
-one immune holder is our own king, and the `motifs` command adjudicates
-that motif with the conversion audit: king-holder graphs get a dedicated
-GOAL_VACATE goal (classified against the hypothetically vacated position),
-and the corner fixtures audit convertible at race odds 1/2 — the entry and
-the premature pawn push are legalized by the same vacate tempo. King-holder
-template mode builds that construction in real games (cage-first,
-king-parks-last, vacate gated on the audited race) and converts the
-dedicated drill; the tuning log records the geometry rules the probe
-taught. Adoption pressure routes full games there: a side whose certify
-verdict comes back hopeless or unconvertible replaces its piece plan
-with the corner king-holder plan of a walkable b/g-file pawn (walking
-templates name the corner geometry before it exists), releases the
-freeze, marches the king to the arrival square FIRST (pending pushes
-make the walk clock-free, and the parked king stops the premature
-push), cages the bishop, parks the knight closer on its template
-square, and waits out Zach's uniform pushes behind a funnel guard that
-shares the arena's draw adjudications — then the ordinary certify,
-herd, and audited-race machinery finishes the game.
+`lichess/game_records/`.
 
 ## Roadmap
 
-- v1: add Fairy-Stockfish with a `[misere:chess] checkmateValue = win` variant
-  as a deep tactical oracle for forced selfmate nets.
-- ~~Lichess BOT bridge (lichess-bot)~~ — done; see *Play against it on
-  lichess*. Still the only misère bot there, as far as we know.
-- The human frontier: donation guard + a capture-tolerant "sloppy human"
-  opponent model. Zach never captures, so the arena never punished the
-  bot for shedding its construction material — real humans do. Findings
-  and priorities in TUNING-LOG.md, *Lichess field notes* (2026-07-20).
+- **Fit the urge family to the corpus**: maximum-likelihood urge
+  weights from `lichess/game_records/` (and every future live game) —
+  the step that turns live games from session-costing exposures into
+  training data.
+- **Deepen the steering**: memoization, star-pruning at chance nodes,
+  quiescence on forced sequences, oracle probes below the root.
+- **Deepen the closing**: a dedicated selfmate solver (Popeye) as a
+  stronger oracle; the specialists' Zach-modeled probe as a
+  family-conditional oracle where a family justifies it.
+- **League milestones**: held-out forced-selfmate rate 60% → 80% → 90%,
+  worst-family reported alongside every mean; the first *forced* mate
+  against a live human remains the standing live bar.

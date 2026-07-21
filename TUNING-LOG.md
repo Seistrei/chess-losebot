@@ -3611,3 +3611,74 @@ in 30d3 (suite still 119; the check's holds delta grew 2→3).
 Battery impact is nil by construction: no drill FEN but case 2
 carries a queen, and case-2 seed-5 field re-ran IDENTICAL to the
 pin. The frontier list above stands.
+
+## The pivot: one opponent family, expectimax steering, oracle closing (2026-07-21)
+
+Decision, taken with two concurring outside opinions on the same
+evidence: the specialist line stays frozen as teacher and anchor, and
+primary development moves to a model-based architecture. The evidence
+that forced it, all first-party: case-9/10 convert 10/10 vs the squat
+kernel and 0/10 vs sloppy FROM THE SAME CORNER; the two kernels demand
+opposite doctrines (early lift vs. plug hold) and the session-19 fix
+round concluded "no position predicate discriminates"; YBZEWDGj's one
+two-move fork beat 497 donation-guard vetoes because model=zach search
+explores no capturing reply at any depth; six live games produced zero
+forced mates (both landed mates were human cooperation); and the drill
+EVs vs Zach have sat at their audited structural caps (vacate coin at
+1/2-3/4) since 07-17 while each live game bought 2-3 new kernel-scoped
+exposures at a session of machinery apiece. The economics inverted:
+cost per exposure rising, transfer per fix ~zero. The fix is not a
+bigger doctrine stack and not tabula-rasa self-play RL either (misère
+equilibrium is a mutual-strip draw; self-play never observes the
+error distribution that makes weak opponents beatable). It is: put the
+opponent's policy DISTRIBUTION in the tree, and make certificates
+opponent-free.
+
+What landed (package `losebot/`, the old engine renamed intact to
+`specialists/` — its selftest passed through the rename untouched):
+
+- `models/`: the URGE FAMILY — one parametric stochastic opponent
+  (mate-avoidant core; urges: mercy lapse, promote, greed+trade with
+  the push-and-scan recapture adjudication, check, push, hunt, corner
+  homing, pawn-hostage shuffle) exposing EXACT per-move distributions.
+  Zach = all-zeros, session-19 sloppy = one point, the corner squatter
+  = home 1.0 + pawn_last. New behavior updates parameters, not code.
+- `oracle.py`: the exact forced-selfmate probe, ported adversarial-only
+  (Zach-modeled probes remain a specialist tool). Repetition-era
+  history walk, draw-state memo keys, UNKNOWN-vs-DISPROVEN honesty all
+  preserved verbatim.
+- `search.py` + `engine.py`: expectimax over the model distribution
+  (top-k truncated, renormalized) under an oracle-first, misère-safe
+  root partition (no one-ply accident mate/stalemate/draw while an
+  alternative exists).
+- `evaluate.py`: the asymmetric CURRENT-profile core (root-as-loser
+  at every leaf, mate-aware menu squeeze, executioner preservation,
+  clock fear) minus all template machinery — steering owns that now.
+- `league/`: the FROZEN LEAGUE. Dev families zach/sloppy/squat;
+  held-out families sloppy-held/human-held/squat-held/random with
+  parameters pinned in `models/presets.py` on 2026-07-21 — report
+  against, never tune against. Fresh RNG and fresh engine per game
+  (the old arena's shared-stream cascade caveat is retired), seats
+  alternated, outcomes classified by taxonomy (forced vs mercy mate,
+  accident wins, stalemates both ways, draw kinds), per-family rows
+  plus worst-family billing. `--engine specialist` runs the frozen
+  bot on the same scoreboard via a lazy wrapper (bridge's >=60s-tier
+  budget clamps).
+
+Selftest: 19/19 (oracle re-proves the organic FORCED_MATE fixture
+adversarially at n=1 and the proof line's last ply IS the taxonomy's
+forced case; the x-ray/pin greed poses port as distribution tests;
+league smoke alternates seats end-to-end). Timing: ~0.2s/move at
+depth 3 / topk 5 under PyPy — a 240-ply game in ~23s, a full 7x10
+league in ~30-40 min serial.
+
+Protocol from here: tuning and fitting touch dev families only;
+held-out parameters move for mechanics bugs, never performance; every
+progress claim cites the league report (JSON + PGNs under
+games/league/), mean AND worst family; milestones 60/80/90% held-out
+forced rate; the live bar stays "the corner poses and the mate lands
+BY FORCE against a human."
+
+### Baseline league (2026-07-21)
+
+(to be recorded from the first pinned runs below)
