@@ -3440,3 +3440,53 @@ The field-frontier list (supersedes the one above):
 3. **Corpus protocol continues.** The corner now poses organically
    in-arena against a capturing kernel; the live bar is unchanged —
    the corner poses AND the mate lands by force against a human.
+
+## Review round on the kernel: recapture safety is legality, not an attack map (2026-07-21)
+
+One [P2] taken, one nonblocking caveat verified and adopted as
+practice.
+
+**[P2] The greed layer's free/defended split trusted a pre-move
+attack map.** Verified with the reviewer's own FEN
+(`b6k/8/2B5/3q4/8/8/8/6K1 w`): greed=1/trade=0 took Bxd5 in all 30
+seeds, and a8xd5 recaptures — the capturer's own body blocked the
+defender's line pre-move, so `board.attackers()` called the queen
+free and the trade knob never voted. The same pose hides the same
+trick twice: Bxa8 looks free while the d5-a8 diagonal is blocked by
+the bishop that is about to vacate it. Fix taken as suggested —
+`recaptured()` pushes the candidate and asks whether ANY legal
+reply lands on the destination square; legality after the push is
+the ground truth, so checks, promotions and en passant come along
+free. The mirror error dies with it: a pinned "defender" counts on
+the attack map but cannot legally take back, so the old code
+under-ate exactly where it should feast. Design note for honesty:
+my first pinned-witness pose was refuted mid-construction (c8's
+diagonal runs through f5, not g8 — no pin at all); the witness that
+survived verification is `6k1/6b1/5n2/3N4/8/8/8/1K4R1 w`, where
+Bg7 guards f6 on paper only (Rg1 pins it) and the Bg7 meal itself
+hangs to Kxg7 — the attack-map kernel abstained entirely at
+trade=0, and push-and-scan takes Nxf6 every seed. Suite 115→117
+(31g the double x-ray + trade=1 still takes the biggest victim;
+31h the pinned defender does not defend).
+
+**Re-pins after the behavior change.** Case-9 sloppy battery:
+**still 0/10, all insufficient-material** — eight of ten seeds
+byte-identical modulo wall-clock, seeds 3 and 5 collapse faster
+(38→29 and 30→21 plies, veto fingerprints 43/42 unchanged). The
+arena taste: all three games PGN **byte-identical**, every summary
+gauge identical to the digit — the misclassification never bit in
+those streams. The acceptance numbers the fix round must move are
+unchanged.
+
+**The nonblocking caveat, verified in arena.py:** `run_match`
+loops `play_game` over the SAME bot objects, so `arena -n N`
+evolves one kernel RNG stream (and one LoseBot instance — the
+session-8 adoption-memory fact) across all N games: an engine
+change that alters game k perturbs the kernel's stream position
+for every later game, so per-game deltas past the first divergence
+are cascade, not signal. No code change — historical arena numbers
+were produced under this convention and the reviewer marked it
+nonblocking — adopted as practice instead: A/B comparisons between
+engine versions run one-invocation-per-seed (`-n 1 --seed k`, the
+case-9 battery's own method); `-n N` stays fine for a
+single-version taste. The frontier list above stands.

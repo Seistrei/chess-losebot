@@ -94,9 +94,13 @@ class SloppyBot:
 
     - GREED (YBZEWDGj took every gift; R9tSLBLK ate the donated rook
       and bishop by move 48): with probability `greed`, when captures
-      exist, take the biggest victim — free victims first, a DEFENDED
-      victim only on a `trade` roll (the willing rook-for-knight
-      34.Rxa7 that killed our last closer).
+      exist, take the biggest victim — recapture-proof victims first,
+      a victim someone can legally take back only on a `trade` roll
+      (the willing rook-for-knight 34.Rxa7 that killed our last
+      closer). Recapture safety is adjudicated by pushing the
+      capture, not by an attack map: the capturer's own body can
+      mask an x-ray defender, and a pinned defender cannot legally
+      recapture at all (2026-07-21 review).
     - PROMOTION DRIVE (three promotions in YBZEWDGj, the a/b train in
       IYQd0RBC): queen on sight with probability `promote`, otherwise
       push the most advanced pawn on a `push` roll.
@@ -153,10 +157,24 @@ class SloppyBot:
                     if board.is_en_passant(move):
                         return _SLOPPY_VALS[chess.PAWN]
                     return _SLOPPY_VALS[board.piece_type_at(move.to_square)]
-                free = [
-                    m for m in captures
-                    if not board.attackers(not us, m.to_square)
-                ]
+
+                def recaptured(move: chess.Move) -> bool:
+                    # Push-and-scan, not an attack map: pre-move
+                    # attackers() misses the x-ray defender the
+                    # capturer's own body blocks (Bc6xd5 hiding
+                    # Ba8xd5) and counts pinned defenders that can
+                    # never legally take back. Any legal reply onto
+                    # the landed square IS a recapture — checks,
+                    # promotions and en passant included.
+                    board.push(move)
+                    hit = any(
+                        reply.to_square == move.to_square
+                        for reply in board.legal_moves
+                    )
+                    board.pop()
+                    return hit
+
+                free = [m for m in captures if not recaptured(m)]
                 pick = free or (
                     captures if self.rng.random() < self.trade else []
                 )

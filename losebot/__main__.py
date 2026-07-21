@@ -3932,6 +3932,51 @@ def selftest() -> int:
         f"picks={sorted(sloppy_hunts)} (want Kb2 only)",
     )
 
+    # 31g. Recapture safety is legality, not an attack map (review
+    # 2026-07-21): the capturer's own body masks the x-ray defender —
+    # Bc6xd5 looks free while the bishop blocks Ba8, but a8xd5 is
+    # legal the moment c6 empties (and Bxa8 hides the same trick
+    # behind the queen). No free captures here: trade=0 abstains
+    # entirely, trade=1 takes the biggest victim.
+    sloppy_xray_pose = chess.Board("b6k/8/2B5/3q4/8/8/8/6K1 w - - 0 1")
+    sloppy_xray_shy = {
+        SloppyBot(seed=seed, greed=1.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_xray_pose).uci()
+        for seed in range(30)
+    }
+    sloppy_xray_bold = {
+        SloppyBot(seed=seed, greed=1.0, trade=1.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_xray_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: the x-ray defender is seen through the capturer",
+        "c6d5" not in sloppy_xray_shy and "c6a8" not in sloppy_xray_shy
+        and sloppy_xray_bold == {"c6d5"},
+        f"trade=0 picks={sorted(sloppy_xray_shy)} (want no capture); "
+        f"trade=1 picks={sorted(sloppy_xray_bold)} (want Bxd5 only)",
+    )
+
+    # 31h. The mirror error: a pinned "defender" cannot legally take
+    # back, so the knight meal is recapture-proof — the g7 bishop
+    # guards f6 on the attack map only (Rg1 pins it), and the g7
+    # bishop meal itself hangs to Kxg7. Push-and-scan takes Nxf6
+    # every seed where the attack map abstained.
+    sloppy_pin_pose = chess.Board("6k1/6b1/5n2/3N4/8/8/8/1K4R1 w - - 0 1")
+    sloppy_pin_picks = {
+        SloppyBot(seed=seed, greed=1.0, trade=0.0, check=0.0,
+                  push=0.0, hunt=0.0, promote=0.0)
+        .choose_move(sloppy_pin_pose).uci()
+        for seed in range(30)
+    }
+    check(
+        "sloppy kernel: a pinned defender does not defend",
+        sloppy_pin_picks == {"d5f6"},
+        f"picks={sorted(sloppy_pin_picks)} (want Nxf6 only)",
+    )
+
     # 13. A promoted piece means the king-and-pawns phase has ended. The
     # construction must be dropped so the ordinary search can remove it.
     promoted_board = chess.Board(
