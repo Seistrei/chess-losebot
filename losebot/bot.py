@@ -1053,21 +1053,25 @@ class LoseBot:
         if not kh_construction_denied(board, us, current):
             if plugged:
                 # The plug regime: build behind the plug, lift only
-                # into the handoff, hold otherwise. A bishop landing
-                # on the cage while the plug stands builds the trap
-                # the case-10 smoke game died in — cage down, their
-                # king walks to the entry, the handoff post becomes a
-                # stalemate move, every quiet hangs the undefended
-                # plug, and the arm's only survivors are lifting
-                # checks — so landings wait for the king's hold no
-                # matter which chore is active.
+                # into the handoff, hold otherwise. A diagonal slider
+                # landing on the cage while the plug stands builds the
+                # trap the case-10 smoke game died in — cage down,
+                # their king walks to the entry, the handoff post
+                # becomes a stalemate move, every quiet hangs the
+                # undefended plug, and the arm's only survivors are
+                # lifting checks — so landings wait for the king's
+                # hold no matter which chore is active. Bishop AND
+                # queen, the seal guard's own pair (2026-07-21
+                # review: a queen seals the same escape, and the
+                # ready chore even elected Qg1 as bishop progress
+                # because the vacated f2 unblocked the diagonal).
                 sealed_menu = [
                     move for move in moves
                     if move.to_square != cage
                     or (
                         move.promotion
                         or board.piece_type_at(move.from_square)
-                    ) != chess.BISHOP
+                    ) not in (chess.BISHOP, chess.QUEEN)
                 ]
                 if sealed_menu and len(sealed_menu) < len(moves):
                     self.vi_squat_holds += 1

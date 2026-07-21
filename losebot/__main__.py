@@ -3745,18 +3745,27 @@ def selftest() -> int:
         f" relief={[relief_pose.san(m) for m in relief_kept]} (want Kg2)",
     )
 
-    # 30d3. The two trap vetoes the case-10 smoke game earned. A cage
-    # landing while the plug stands builds the stalemate trap (4.Bg1,
-    # then their Kh3 poisons the handoff ring), so the plug regime
-    # strips it whatever chore is active; and in the trap state itself
-    # (denied, cage down, every exit shuttle- or guard-refused) the
-    # denied path holds the plug instead of leaking arrival exits to
-    # the arm's lifting checks (the smoke game's 5.Nf4+, dumped on
-    # ply 6).
+    # 30d3. The trap vetoes the case-10 smoke game earned. A diagonal
+    # slider landing on the cage while the plug stands builds the
+    # stalemate trap (4.Bg1, then their Kh3 poisons the handoff
+    # ring), so the plug regime strips it whatever chore is active —
+    # bishop AND queen, the seal guard's own pair (review 2026-07-21:
+    # Qf2-g1 survived the whole chain, and the ready chore even
+    # elected it because the vacated f2 unblocks the bishop's
+    # diagonal); and in the trap state itself (denied, cage down,
+    # every exit shuttle- or guard-refused) the denied path holds the
+    # plug instead of leaking arrival exits to the arm's lifting
+    # checks (the smoke game's 5.Nf4+, dumped on ply 6).
     holds_before = field_bot.vi_squat_holds
     veto_menu = [chess.Move.from_uci("d4g1"), chess.Move.from_uci("e1e2")]
     veto_kept = field_bot._filter_squat_chores(
         ring_pose, list(veto_menu), ring_target
+    )
+    queen_pose = chess.Board("8/8/8/8/3B2k1/6p1/5QN1/4R2K w - - 0 1")
+    queen_target = best_pawn_mate_template(queen_pose, chess.WHITE)
+    queen_menu = [chess.Move.from_uci("f2g1"), chess.Move.from_uci("e1e2")]
+    queen_kept = field_bot._filter_squat_chores(
+        queen_pose, list(queen_menu), queen_target
     )
     trap_pose = chess.Board("8/8/8/8/4K3/6pk/6N1/4R1B1 w - - 8 5")
     trap_target = best_pawn_mate_template(trap_pose, chess.WHITE)
@@ -3765,13 +3774,15 @@ def selftest() -> int:
         trap_pose, list(trap_menu), trap_target
     )
     check(
-        "dump handoff: no cage landing on the plug, the trap holds",
+        "dump handoff: no slider landing on the plug, the trap holds",
         [m.uci() for m in veto_kept] == ["e1e2"]
+        and [m.uci() for m in queen_kept] == ["e1e2"]
         and [m.uci() for m in trap_kept] == ["e1e2"]
-        and field_bot.vi_squat_holds - holds_before == 2,
+        and field_bot.vi_squat_holds - holds_before == 3,
         f"landing-veto={[m.uci() for m in veto_kept]} (want e1e2);"
+        f" queen-veto={[m.uci() for m in queen_kept]} (want e1e2);"
         f" trap={[m.uci() for m in trap_kept]} (want e1e2);"
-        f" holds+={field_bot.vi_squat_holds - holds_before} (want 2)",
+        f" holds+={field_bot.vi_squat_holds - holds_before} (want 3)",
     )
 
     # 30e. After a check-tempo lift (the Nf4+ class) the arrival is

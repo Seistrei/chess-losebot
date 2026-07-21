@@ -3595,3 +3595,19 @@ The field-frontier list (supersedes the one above):
 3. **Corpus protocol continues.** The corner poses organically
    in-arena now; the live bar is unchanged — the corner poses AND
    the mate lands by force against a human.
+
+### Review round on the handoff: the queen seals the same box (2026-07-21)
+
+One [P1], verified and taken. The plugged-cage veto stripped
+BISHOP landings only, while the seal guard — the box theorem's
+original home — has tested the diagonal-slider pair since the
+session-18 review. The reviewer's position
+(`8/8/8/8/3B2k1/6p1/5QN1/4R2K w`) reproduced better than claimed:
+Qf2-g1 not only survived the whole chain, the READY CHORE elected
+it — vacating f2 unblocks the d4-bishop's diagonal, so the
+box-closing queen landing scored as bishop progress. The veto now
+matches the guard's `(BISHOP, QUEEN)` test, and the queen twin sits
+in 30d3 (suite still 119; the check's holds delta grew 2→3).
+Battery impact is nil by construction: no drill FEN but case 2
+carries a queen, and case-2 seed-5 field re-ran IDENTICAL to the
+pin. The frontier list above stands.
