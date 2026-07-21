@@ -40,6 +40,8 @@ class SearchStats:
     leaves: int = 0
     chance_nodes: int = 0
     truncated_replies: int = 0
+    probe_calls: int = 0
+    probe_hits: int = 0
     root_values: list = field(default_factory=list)
 
 
@@ -52,11 +54,21 @@ def best_move(
     coverage: float = 0.85,
     draw_contempt: float = 400.0,
     root_moves: list[chess.Move] | None = None,
+    probe=None,
 ) -> tuple[chess.Move | None, float, SearchStats]:
     """Pick our move by expectimax. ``root_moves`` restricts the root
     (the engine's misère-safety partition); None means all legal.
     ``topk`` caps replies per chance node, ``coverage`` is the minimum
-    probability mass a trimmed reply set must represent."""
+    probability mass a trimmed reply set must represent.
+
+    ``probe`` is the sub-root oracle hook: called at our-to-move nodes
+    with the board, it returns the smallest proven selfmate-in-n (or
+    None). A proven node scores as a near-terminal and is not expanded
+    — the exact forcing net enters steering before it is one root ply
+    away. The value is still filtered through the chance layer above,
+    so a net that only holds against part of the model's covered mass
+    is worth exactly that fraction: steering credit, never a claim.
+    Claims stay the root oracle's job."""
     stats = SearchStats()
     moves = list(root_moves) if root_moves is not None else list(
         board.legal_moves
@@ -70,7 +82,7 @@ def best_move(
         board.push(move)
         value = _node_value(
             board, us, model, depth - 1, 1, topk, coverage, draw_contempt,
-            stats,
+            stats, probe,
         )
         board.pop()
         stats.root_values.append((move, value))
@@ -169,6 +181,7 @@ def _node_value(
     coverage: float,
     contempt: float,
     stats: SearchStats,
+    probe=None,
 ) -> float:
     stats.nodes += 1
     if board.is_checkmate():
@@ -179,6 +192,14 @@ def _node_value(
         return -(MATE - ply)
     if board.is_stalemate() or adjudicate_draw(board) is not None:
         return -contempt
+    if probe is not None and board.turn == us:
+        stats.probe_calls += 1
+        proven_n = probe(board)
+        if proven_n is not None:
+            stats.probe_hits += 1
+            # A certificate here means mate lands within 2n further
+            # plies: score it like that terminal, sooner nets higher.
+            return MATE - ply - 2 * proven_n
     if depth <= 0:
         stats.leaves += 1
         return evaluate(board, us)
@@ -188,7 +209,7 @@ def _node_value(
             board.push(move)
             child = _node_value(
                 board, us, model, depth - 1, ply + 1, topk, coverage,
-                contempt, stats,
+                contempt, stats, probe,
             )
             board.pop()
             if child > value:
@@ -207,7 +228,7 @@ def _node_value(
         board.push(move)
         child = _node_value(
             board, us, model, depth - 1, ply + 1, topk, coverage, contempt,
-            stats,
+            stats, probe,
         )
         board.pop()
         value += prob * child

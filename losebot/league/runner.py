@@ -63,6 +63,9 @@ def run_league(
             oracle_note = (
                 f" oracle={oracle_hits}" if oracle_hits is not None else ""
             )
+            sub_hits = getattr(engine, "sub_probe_hits", None)
+            if sub_hits is not None:
+                oracle_note += f" sub={sub_hits}/{engine.sub_probe_calls}"
             log(
                 f"{family} g{index:02d} (focal={record.focal_seat}): "
                 f"{record.label} in {record.plies} plies "

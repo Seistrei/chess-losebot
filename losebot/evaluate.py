@@ -57,6 +57,7 @@ KING_TARGET_DISTANCE_PENALTY = 9
 OWN_KING_NEIGHBOR_BONUS = 6
 HERDING_DISTANCE_PENALTY = 8
 HERDING_ADJACENCY_BONUS = 120
+FLIGHT_SQUARE_PENALTY = 24
 CLOCK_PRESSURE = 1.5
 
 
@@ -131,6 +132,21 @@ def evaluate(board: chess.Board, us: chess.Color) -> float:
         v -= HERDING_DISTANCE_PENALTY * pawn_dist
         if pawn_dist == 1:
             v += HERDING_ADJACENCY_BONUS
+
+        # The box: every open flight square around our king is a move
+        # the mate net still has to take away. A square is closed by
+        # our own man standing on it (self-smother), by their coverage,
+        # or by the board edge — corners close five for free. This is
+        # the assembly gradient the herding terms point at but never
+        # price: fewer flights, nearer the mate.
+        if our_king is not None:
+            for nb in chess.SquareSet(chess.BB_KING_ATTACKS[our_king]):
+                piece = board.piece_at(nb)
+                if piece is not None and piece.color == us:
+                    continue
+                if board.is_attacked_by(them, nb):
+                    continue
+                v -= FLIGHT_SQUARE_PENALTY
 
     # We fear the draw clock; they do not.
     v -= CLOCK_PRESSURE * board.halfmove_clock

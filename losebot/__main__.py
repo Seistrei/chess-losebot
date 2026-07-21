@@ -37,8 +37,23 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "--coverage", type=float, default=0.85,
         help="minimum probability mass a trimmed reply set must cover",
     )
-    parser.add_argument("--probe-n", type=int, default=3)
-    parser.add_argument("--probe-cap", type=int, default=40_000)
+    parser.add_argument(
+        "--probe-n", type=int, default=4,
+        help="root oracle depth; iterative deepening self-regulates — "
+        "wide positions stop early on the cap, narrow ones reach n=4",
+    )
+    parser.add_argument("--probe-cap", type=int, default=50_000)
+    parser.add_argument(
+        "--sub-probe-n", type=int, default=2,
+        help="oracle depth for sub-root probes at steering our-nodes "
+        "(0 disables them)",
+    )
+    parser.add_argument("--sub-probe-cap", type=int, default=30_000)
+    parser.add_argument(
+        "--sub-probe-men", type=int, default=5,
+        help="sub-probes fire once the opponent has at most this many "
+        "non-king men (or any time our king is in check)",
+    )
 
 
 def _build_engine(args) -> ModelEngine:
@@ -49,6 +64,9 @@ def _build_engine(args) -> ModelEngine:
         coverage=args.coverage,
         probe_n=args.probe_n,
         probe_cap=args.probe_cap,
+        sub_probe_n=args.sub_probe_n,
+        sub_probe_cap=args.sub_probe_cap,
+        sub_probe_men=args.sub_probe_men,
     )
 
 
@@ -116,6 +134,9 @@ def _cmd_league(args) -> int:
             "coverage": args.coverage,
             "probe_n": args.probe_n,
             "probe_cap": args.probe_cap,
+            "sub_probe_n": args.sub_probe_n,
+            "sub_probe_cap": args.sub_probe_cap,
+            "sub_probe_men": args.sub_probe_men,
         }
 
     out_dir = Path(

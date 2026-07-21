@@ -31,6 +31,21 @@ from .outcomes import (
 FORCED_FIXTURE = "8/8/8/R7/8/3PPk1p/6RP/6BK w - - 0 1"
 FORCED_FIXTURE_N = 3  # smallest n the oracle must prove within
 
+# The same corner shell made EXACTLY selfmate-in-2: Black owns one spare
+# tempo (b4-b3) so every in-1 waiting proof fails, and the b2 KNIGHT is
+# the one blocker that neither captures the tempo pawn nor freezes it
+# preemptively (either would collapse the position back to in-1) while
+# stopping b3-b2 dead. Two own-moves deep, it sits past the root probe
+# at n=1 and past depth-3 terminal detection — the sub-probe's home turf.
+IN2_FIXTURE = "8/8/8/R7/1p6/3PPk1p/1N4RP/6BK w - - 0 1"
+
+# The dev-league sloppy g01 finale, distilled: Black (us) is in check
+# with one evasion, Rxa8+, whose only answer Qxa8 mates us — the
+# check-crossfire recapture device at SIX White non-king men. Past the
+# material gate, inside the check gate: exactly what the second gate
+# opener exists to see.
+CROSSFIRE_FIXTURE = "Q3rQ2/2pb4/K1k4p/1pPp4/3P3p/P4p2/7P/8 b - - 0 1"
+
 # Back-rank accident: White has Rb8# available plus many quiet moves
 # (and Rxa7 as the only capture) — the mate and the capture are what
 # mate-avoidant models and the engine's safety partition must refuse.
@@ -293,6 +308,120 @@ def test_evaluate_shape() -> None:
         bare < armed - 3000,
         f"bare={bare:.0f} armed={armed:.0f}",
     )
+    # Same material, same king-to-executioner distance: the boxed corner
+    # king (zero open flights) must outscore the open-center king.
+    boxed = evaluate(chess.Board("8/8/8/8/8/6pk/7P/6NK w - - 0 1"),
+                     chess.WHITE)
+    open_ = evaluate(chess.Board("8/8/8/8/4K3/6pk/7P/6N1 w - - 0 1"),
+                     chess.WHITE)
+    check(
+        "evaluate: closed flight squares beat open ones",
+        boxed > open_ + 150,
+        f"boxed={boxed:.0f} open={open_:.0f}",
+    )
+
+
+def test_sub_probe() -> None:
+    from .search import best_move
+
+    board = chess.Board(IN2_FIXTURE)
+    s1, _ = oracle.selfmate_status(board, 1, [200_000], {})
+    s2, move2 = oracle.selfmate_status(board, 2, [400_000], {})
+    check(
+        "oracle: in-2 fixture is exactly selfmate-in-2",
+        s1 is oracle.ProofStatus.DISPROVEN
+        and s2 is oracle.ProofStatus.PROVEN,
+        f"n1={s1.value} n2={s2.value} via {board.san(move2) if move2 else '-'}",
+    )
+
+    # The steering layer alone (no root oracle) must walk INTO the net:
+    # its chosen move leaves every non-mating reply provably lost at n=1.
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=3, topk=4, probe_n=1,
+        probe_cap=20_000,
+    )
+    move, value, stats = best_move(
+        board, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
+        probe=engine._make_sub_probe(chess.WHITE, {}),
+    )
+    entered = move is not None and stats.probe_hits > 0
+    if entered:
+        board.push(move)
+        for reply in list(board.legal_moves):
+            board.push(reply)
+            if board.is_checkmate():
+                board.pop()
+                continue
+            status, _ = oracle.selfmate_status(board, 1, [50_000], {})
+            board.pop()
+            if status is not oracle.ProofStatus.PROVEN:
+                entered = False
+                break
+        board.pop()
+    check(
+        "search: sub-probe steers into the net",
+        entered and value > 90_000,
+        f"move={move}, value={value:.0f}, hits={stats.probe_hits}",
+    )
+
+    # End-to-end handoff: root probe too shallow to see in-2 (probe_n=1),
+    # sub-probes carry steering in, then the root oracle closes.
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=3, topk=4, probe_n=1,
+        probe_cap=20_000,
+    )
+    from .league.play import play_game
+
+    final, outcome = play_game(
+        engine, ModelPlayer(make_model("zach"), seed=0), max_plies=12,
+        start_fen=IN2_FIXTURE,
+    )
+    check(
+        "engine: sub-probe steering converts past a starved root probe",
+        focal_label(outcome, chess.WHITE) == SELFMATE_FORCED
+        and len(final.move_stack) <= 6
+        and engine.sub_probe_hits > 0
+        and engine.forced_selfmates_found >= 1,
+        f"label={focal_label(outcome, chess.WHITE)}, "
+        f"plies={len(final.move_stack)}, subhits={engine.sub_probe_hits}",
+    )
+
+    # The material gate: a full board never opens it.
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
+        probe_cap=2_000,
+    )
+    engine.choose_move(chess.Board())
+    check(
+        "engine: sub-probe gate stays closed on a full board",
+        engine.sub_probe_calls == 0 and engine.sub_probe_nodes == 0,
+        f"calls={engine.sub_probe_calls}",
+    )
+
+    # The check gate: our king in check opens the probe past any
+    # material count, and the crossfire net proves at n=1.
+    engine = ModelEngine(belief=make_model("sloppy"))
+    board = chess.Board(CROSSFIRE_FIXTURE)
+    them_men = chess.popcount(board.occupied_co[chess.WHITE]) - 1
+    hook = engine._make_sub_probe(chess.BLACK, {})
+    check(
+        "engine: check gate opens past the material gate",
+        them_men > engine.sub_probe_men and hook(board) == 1,
+        f"their_men={them_men}, proven_n={hook(board)}",
+    )
+
+    # A starved sub-budget must degrade to plain steering, never crash.
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=3, topk=4, probe_n=1,
+        probe_cap=20_000, sub_probe_cap=1,
+    )
+    move = engine.choose_move(chess.Board(IN2_FIXTURE))
+    check(
+        "engine: starved sub-budget falls back to steering",
+        move in chess.Board(IN2_FIXTURE).legal_moves
+        and engine.sub_probe_exhaustions >= 1,
+        f"move={move}, exhaustions={engine.sub_probe_exhaustions}",
+    )
 
 
 def test_engine_safety_and_oracle() -> None:
@@ -304,6 +433,21 @@ def test_engine_safety_and_oracle() -> None:
     check(
         "engine: refuses the one-ply accident mate",
         move.uci() != "b1b8",
+        f"chose {move.uci()}",
+    )
+    # Rxa5 would strip the last mating man; the partition must refuse
+    # while alternatives exist.
+    bare_fen = "k7/8/8/n7/8/8/8/R3K3 w - - 0 1"
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
+        probe_cap=4_000,
+    )
+    board = chess.Board(bare_fen)
+    move = engine.choose_move(board)
+    check(
+        "engine: refuses to bare their king",
+        chess.Move.from_uci("a1a5") in board.legal_moves
+        and move.uci() != "a1a5",
         f"chose {move.uci()}",
     )
     engine = ModelEngine(
@@ -360,6 +504,7 @@ def run() -> int:
         test_reply_support,
         test_report_rollups,
         test_evaluate_shape,
+        test_sub_probe,
         test_engine_safety_and_oracle,
         test_league_smoke,
     ):
