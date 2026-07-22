@@ -252,10 +252,40 @@ promotion) is the concrete target shape.
 ### Artifact policy (2026-07-21)
 
 Adopted with the subprobe merge: git keeps the citable minimum —
-every forced-selfmate PGN (the trophies; four exist as of today) and
-report.json for runs a log entry pins as a table of record. Draw
-PGNs and dev-exploration runs (the dev-* directories above included)
-stay on disk, out of git: the process-stable seed makes every run
-regenerable bit-for-bit from the committed code plus the config its
-report records, so bulk artifacts are redundant evidence. The two
-baseline directories predate the policy and stay tracked as pushed.
+every PINNED-run forced-selfmate PGN (the trophies; four tracked as
+of today) and report.json for runs a log entry pins as a table of
+record. Draw PGNs and dev-exploration runs stay on disk, out of git
+— dev-* wholesale, trophies included: the r1-r3 duplicates of the
+pinned sloppy g01 trophy left with their runs, and by gitignore
+mechanics nothing under an ignored directory can be re-included, so
+a NOVEL dev trophy will never surface in git status on its own.
+Promotion is therefore an explicit step: re-run the config a dev
+report records into a pinned directory before citing its trophy.
+The process-stable seed makes every run regenerable bit-for-bit
+from the committed code plus the config its report records, so bulk
+artifacts are redundant evidence. The two baseline directories
+predate the policy and stay tracked as pushed.
+
+### Sub-probe fairness + honest unknowns (2026-07-21, review fixes)
+
+Review caught the sub-probe cap being first-come-first-served
+across root candidates: the root order front-loads captures and
+checks, those branches drank the 30k, and later branches steered on
+the bare heuristic — reversing equal-priority root moves could
+change the chosen move. The cap is now SPLIT EVENLY per root
+candidate (search takes a probe factory, minted once per branch;
+the shared memo still ferries proofs, so later branches probe
+cheaper, never blinder), and the root sort is now total (priority
+class, then UCI) so the argmax tie winner is position-intrinsic
+too: the reversal repro returns the identical move with
+bit-identical root values and gauges. Second catch: a probe call
+whose slice expired returned None exactly like a refutation. New
+gauge
+sub_probe_unknowns counts gated calls that ended without an answer
+(share dry, or slice died mid-proof); league lines now print it as
+unk=. A sub=0/N null is only evidence when unk is low — the pinned
+league's "sub=0/N across 69 of 70" reading predates the gauge, so
+re-run before leaning on it again. Engine behavior changed:
+2.0.0a0 -> 2.0.0a1. The pinned subprobe-model tables are a 2.0.0a0
+record (their report.json says so) and regenerate from that
+version's commit, not from HEAD.

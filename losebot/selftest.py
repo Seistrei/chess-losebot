@@ -342,7 +342,9 @@ def test_sub_probe() -> None:
     )
     move, value, stats = best_move(
         board, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
-        probe=engine._make_sub_probe(chess.WHITE, {}),
+        probe_factory=engine._make_sub_probe(
+            chess.WHITE, {}, len(list(board.legal_moves))
+        ),
     )
     entered = move is not None and stats.probe_hits > 0
     if entered:
@@ -403,14 +405,16 @@ def test_sub_probe() -> None:
     engine = ModelEngine(belief=make_model("sloppy"))
     board = chess.Board(CROSSFIRE_FIXTURE)
     them_men = chess.popcount(board.occupied_co[chess.WHITE]) - 1
-    hook = engine._make_sub_probe(chess.BLACK, {})
+    hook = engine._make_sub_probe(chess.BLACK, {}, 1)()
     check(
         "engine: check gate opens past the material gate",
         them_men > engine.sub_probe_men and hook(board) == 1,
         f"their_men={them_men}, proven_n={hook(board)}",
     )
 
-    # A starved sub-budget must degrade to plain steering, never crash.
+    # A starved sub-budget must degrade to plain steering, never crash
+    # — and the no-answer calls must be ledgered as UNKNOWN, not pass
+    # for refutations.
     engine = ModelEngine(
         belief=make_model("sloppy"), depth=3, topk=4, probe_n=1,
         probe_cap=20_000, sub_probe_cap=1,
@@ -419,8 +423,36 @@ def test_sub_probe() -> None:
     check(
         "engine: starved sub-budget falls back to steering",
         move in chess.Board(IN2_FIXTURE).legal_moves
-        and engine.sub_probe_exhaustions >= 1,
-        f"move={move}, exhaustions={engine.sub_probe_exhaustions}",
+        and engine.sub_probe_exhaustions >= 1
+        and engine.sub_probe_unknowns >= 1,
+        f"move={move}, exhaustions={engine.sub_probe_exhaustions}, "
+        f"unknowns={engine.sub_probe_unknowns}",
+    )
+
+    # Fairness: the cap is split per root candidate, not first-come.
+    # With two roots and a cap of two, EACH branch drains its own
+    # one-node share — two exhaustions, one node spent in each. Under
+    # the old shared budget the first branch drank both nodes (one
+    # exhaustion) and the second steered blind, so the chosen move
+    # could turn on root order.
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=2, topk=4, sub_probe_cap=2,
+    )
+    board = chess.Board(IN2_FIXTURE)
+    pool = [chess.Move.from_uci("a5a6"), chess.Move.from_uci("a5a7")]
+    best_move(
+        board, us=chess.WHITE, model=make_model("sloppy"), depth=2, topk=4,
+        root_moves=pool,
+        probe_factory=engine._make_sub_probe(chess.WHITE, {}, len(pool)),
+    )
+    check(
+        "engine: sub-probe budget drains per branch, not first-come",
+        engine.sub_probe_exhaustions == 2
+        and engine.sub_probe_nodes == 2
+        and engine.sub_probe_hits == 0
+        and engine.sub_probe_unknowns >= 2,
+        f"exhaustions={engine.sub_probe_exhaustions}, "
+        f"nodes={engine.sub_probe_nodes}, unk={engine.sub_probe_unknowns}",
     )
 
 

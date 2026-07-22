@@ -15,13 +15,14 @@ outcomes too, but the partition makes "never blunder the objective in
 one ply" structural instead of numeric.
 
 The two layers meet below the root: steering's our-nodes carry a
-budgeted SUB-PROBE (same oracle, smaller n, own cap) gated to stripped
-positions — opponent down to a few men, where nets are near and probes
-are cheap. The root oracle answers "is the finish forced NOW"; the
-sub-probe lets steering see finishes forming up to depth + sub_probe_n
-own-moves out, weighted by the model's chance of allowing them. One
-memo serves both: its keys carry position, clock, repetition state and
-n, so certificates proven anywhere in the move's thinking transfer.
+budgeted SUB-PROBE (same oracle, smaller n, own cap split evenly
+across root candidates) gated to stripped positions — opponent down
+to a few men, where nets are near and probes are cheap. The root
+oracle answers "is the finish forced NOW"; the sub-probe lets
+steering see finishes forming up to depth + sub_probe_n own-moves
+out, weighted by the model's chance of allowing them. One memo serves
+both: its keys carry position, clock, repetition state and n, so
+certificates proven anywhere in the move's thinking transfer.
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ class ModelEngine:
         self.search_nodes = 0
         self.sub_probe_calls = 0
         self.sub_probe_hits = 0
+        self.sub_probe_unknowns = 0
         self.sub_probe_nodes = 0
         self.sub_probe_exhaustions = 0
 
@@ -97,7 +99,7 @@ class ModelEngine:
             coverage=self.coverage,
             draw_contempt=self.draw_contempt,
             root_moves=pool,
-            probe=self._make_sub_probe(board.turn, memo),
+            probe_factory=self._make_sub_probe(board.turn, memo, len(pool)),
         )
         self.search_nodes += stats.nodes
         return move if move is not None else pool[0]
@@ -119,11 +121,19 @@ class ModelEngine:
             self.forced_selfmates_found += 1
         return found
 
-    def _make_sub_probe(self, us: chess.Color, memo: dict):
-        """Sub-root probe hook for the search, or None when disabled.
+    def _make_sub_probe(self, us: chess.Color, memo: dict, branches: int):
+        """Sub-root probe factory for the search, or None when disabled.
 
-        One budget for the whole move's steering, sliced per call so a
-        single barren node cannot eat it. Two gates, either opens:
+        The search calls the factory once per root candidate, and each
+        branch gets an EQUAL SHARE of ``sub_probe_cap``, sliced per
+        call so a single barren node cannot eat it. One budget shared
+        across the root was order-dependent: the first branches (the
+        root order front-loads captures and checks) drank the cap and
+        the rest steered on the bare heuristic, so the chosen move
+        could turn on move-generation order among equal-priority
+        roots. Equal shares make the root comparison fair; the shared
+        memo still ferries proofs between branches, so later branches
+        probe cheaper, never blinder. Two gates, either opens:
         material — the opponent stripped to ``sub_probe_men`` non-king
         men, where zugzwang nets live and probes are cheap; or OUR KING
         IN CHECK — the forced-recapture devices (both of the project's
@@ -132,41 +142,64 @@ class ModelEngine:
         The root probe's memo is reused; its keys are complete
         (position, clock, repetition state, n, side), so sharing is
         exact.
+
+        A gated call that ends without a definitive answer — branch
+        share already dry, or the slice expiring mid-proof — counts in
+        ``sub_probe_unknowns``: its None means UNKNOWN, not refuted,
+        and a league line's sub=0/N reads entirely differently when
+        unk is N rather than 0.
         """
         if self.sub_probe_n <= 0 or self.sub_probe_cap <= 0:
             return None
         them = not us
-        remaining = [self.sub_probe_cap]
+        # Floor of one node so a cap smaller than the pool still
+        # probes (and audibly drains) instead of silently disabling.
+        share = max(1, self.sub_probe_cap // max(1, branches))
 
-        def probe(board: chess.Board) -> int | None:
-            if remaining[0] <= 0:
-                return None
-            if (chess.popcount(board.occupied_co[them]) - 1
-                    > self.sub_probe_men and not board.is_check()):
-                return None
-            self.sub_probe_calls += 1
-            slice_budget = [min(remaining[0], self.sub_probe_slice)]
-            granted = slice_budget[0]
-            found_n = None
-            for n in range(1, self.sub_probe_n + 1):
-                status, _move = oracle.selfmate_status(
-                    board, n, slice_budget, memo
-                )
-                if status is oracle.ProofStatus.PROVEN:
-                    found_n = n
-                    break
-                if slice_budget[0] <= 0:
-                    break
-            spent = granted - slice_budget[0]
-            remaining[0] -= spent
-            self.sub_probe_nodes += spent
-            if remaining[0] <= 0:
-                self.sub_probe_exhaustions += 1
-            if found_n is not None:
-                self.sub_probe_hits += 1
-            return found_n
+        def branch_probe():
+            remaining = [share]
 
-        return probe
+            def probe(board: chess.Board) -> int | None:
+                if (chess.popcount(board.occupied_co[them]) - 1
+                        > self.sub_probe_men and not board.is_check()):
+                    return None
+                self.sub_probe_calls += 1
+                if remaining[0] <= 0:
+                    self.sub_probe_unknowns += 1
+                    return None
+                slice_budget = [min(remaining[0], self.sub_probe_slice)]
+                granted = slice_budget[0]
+                found_n = None
+                truncated = False
+                for n in range(1, self.sub_probe_n + 1):
+                    status, _move = oracle.selfmate_status(
+                        board, n, slice_budget, memo
+                    )
+                    if status is oracle.ProofStatus.PROVEN:
+                        found_n = n
+                        break
+                    if status is oracle.ProofStatus.UNKNOWN:
+                        truncated = True
+                        break
+                    if slice_budget[0] <= 0:
+                        # Refuted at this n just as the slice died:
+                        # deeper n were never asked.
+                        truncated = n < self.sub_probe_n
+                        break
+                spent = granted - slice_budget[0]
+                remaining[0] -= spent
+                self.sub_probe_nodes += spent
+                if remaining[0] <= 0:
+                    self.sub_probe_exhaustions += 1
+                if truncated:
+                    self.sub_probe_unknowns += 1
+                if found_n is not None:
+                    self.sub_probe_hits += 1
+                return found_n
+
+            return probe
+
+        return branch_probe
 
     def _safe_pool(self, board: chess.Board,
                    legal: list[chess.Move]) -> list[chess.Move]:

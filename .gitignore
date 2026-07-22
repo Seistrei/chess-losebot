@@ -5,10 +5,14 @@ __pycache__/
 lichess/lichess.env
 lichess/game_records/
 
-# League artifacts: landmarks and pinned reports only. Forced-selfmate
-# PGNs are the rare citable trophies; pinned runs keep report.json;
-# everything else regenerates bit-for-bit (process-stable seeds), so
-# dev-exploration runs and draw PGNs stay out of git.
+# League artifacts: landmarks and pinned reports only. In pinned run
+# dirs the negation keeps forced-selfmate PGNs (the rare citable
+# trophies) while draw PGNs stay out; report.json is never ignored.
+# dev-* exploration runs stay out WHOLESALE — trophies included,
+# deliberately: git cannot re-include files under an ignored
+# directory, so a dev trophy never appears in git status and becomes
+# citable only by promotion (re-run its recorded config into a pinned
+# dir; process-stable seeds reproduce it bit-for-bit).
 games/league/dev-*/
 games/league/*/*.pgn
 !games/league/*/*selfmate-forced*.pgn

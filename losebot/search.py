@@ -54,31 +54,40 @@ def best_move(
     coverage: float = 0.85,
     draw_contempt: float = 400.0,
     root_moves: list[chess.Move] | None = None,
-    probe=None,
+    probe_factory=None,
 ) -> tuple[chess.Move | None, float, SearchStats]:
     """Pick our move by expectimax. ``root_moves`` restricts the root
     (the engine's misère-safety partition); None means all legal.
     ``topk`` caps replies per chance node, ``coverage`` is the minimum
     probability mass a trimmed reply set must represent.
 
-    ``probe`` is the sub-root oracle hook: called at our-to-move nodes
-    with the board, it returns the smallest proven selfmate-in-n (or
-    None). A proven node scores as a near-terminal and is not expanded
-    — the exact forcing net enters steering before it is one root ply
-    away. The value is still filtered through the chance layer above,
-    so a net that only holds against part of the model's covered mass
-    is worth exactly that fraction: steering credit, never a claim.
-    Claims stay the root oracle's job."""
+    ``probe_factory`` mints the sub-root oracle hook, once per root
+    candidate. Each branch's probe is called at our-to-move nodes with
+    the board and returns the smallest proven selfmate-in-n (or None).
+    Minting per branch is what keeps the root argmax fair: one probe
+    budget shared across the root let early candidates drink it and
+    left later ones on the bare heuristic, so the chosen move depended
+    on move-generation order among equal-priority roots. A proven node
+    scores as a near-terminal and is not expanded — the exact forcing
+    net enters steering before it is one root ply away. The value is
+    still filtered through the chance layer above, so a net that only
+    holds against part of the model's covered mass is worth exactly
+    that fraction: steering credit, never a claim. Claims stay the
+    root oracle's job."""
     stats = SearchStats()
     moves = list(root_moves) if root_moves is not None else list(
         board.legal_moves
     )
     if not moves:
         return None, -MATE, stats
-    moves.sort(key=lambda m: _root_order(board, m))
+    # The UCI string makes the sort total: the root walk — and with it
+    # the argmax winner among value ties — is a function of the
+    # position, never of move-generation order.
+    moves.sort(key=lambda m: (_root_order(board, m), m.uci()))
     best: chess.Move | None = None
     best_value = -float("inf")
     for move in moves:
+        probe = probe_factory() if probe_factory is not None else None
         board.push(move)
         value = _node_value(
             board, us, model, depth - 1, 1, topk, coverage, draw_contempt,

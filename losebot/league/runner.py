@@ -65,7 +65,12 @@ def run_league(
             )
             sub_hits = getattr(engine, "sub_probe_hits", None)
             if sub_hits is not None:
-                oracle_note += f" sub={sub_hits}/{engine.sub_probe_calls}"
+                # unk = gated calls whose None meant UNKNOWN (budget),
+                # not refuted: sub=0/N is only a null when unk is low.
+                oracle_note += (
+                    f" sub={sub_hits}/{engine.sub_probe_calls}"
+                    f" unk={getattr(engine, 'sub_probe_unknowns', 0)}"
+                )
             log(
                 f"{family} g{index:02d} (focal={record.focal_seat}): "
                 f"{record.label} in {record.plies} plies "
