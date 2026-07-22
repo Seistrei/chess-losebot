@@ -31,6 +31,10 @@ class GameRecord:
     plies: int
     seconds: float
     final_fen: str
+    # Engine gauges() snapshot (probe/search telemetry), when the
+    # engine exposes one. Persisted so report.json can support probe
+    # diagnoses — console lines and ordinary PGNs are not retained.
+    probes: dict | None = None
 
     @property
     def focal_seat(self) -> str:
@@ -62,6 +66,7 @@ def record_game(
     white_name: str,
     black_name: str,
     seconds: float,
+    probes: dict | None = None,
 ) -> GameRecord:
     return GameRecord(
         family=family,
@@ -76,6 +81,7 @@ def record_game(
         plies=len(board.move_stack),
         seconds=seconds,
         final_fen=board.fen(),
+        probes=probes,
     )
 
 

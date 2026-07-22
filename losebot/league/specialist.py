@@ -48,5 +48,10 @@ class SpecialistPlayer:
     def forced_selfmates_found(self):
         return self.bot.forced_selfmates_found
 
+    def gauges(self) -> dict[str, int]:
+        """The one probe counter the frozen engine exposes, so
+        specialist league records persist it like the model's."""
+        return {"forced_selfmates_found": self.bot.forced_selfmates_found}
+
     def choose_move(self, board: chess.Board) -> chess.Move:
         return self.bot.choose_move(board)

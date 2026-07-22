@@ -327,3 +327,28 @@ reordered by both findings at once: PROBE BUDGET SCALING first
 (raise sub_probe_cap / concentrate the gate; the fairness jump is
 itself evidence that budget binds), selective depth second, corpus
 fit unchanged behind them.
+
+### The cap becomes a ceiling and the unknowns enter the record (2026-07-21, review fixes)
+
+Two catches against the fairness commit. First: the share floor —
+max(1, cap // branches) — turned sub_probe_cap into a per-branch
+MINIMUM whenever branches outnumbered nodes: a cap of 1 over a
+30-move root would spend 30. The floor is gone; shares are the bare
+floor division, zero when the cap cannot cover the pool, and a
+born-dry share's gated calls ledger UNKNOWN exactly as before — the
+starvation audibility that motivated the floor rides unk, and the
+cap holds as a true total. No pinned run is touched: at 30k over
+20-40 branches the floor never engaged (shares 750-1500), so a1
+trajectories are bit-identical; only the selftest's cap=1 corner
+changes meaning (it now asserts zero spend, unknowns == calls, and
+that born-dry shares never count as exhaustions). Second: the a1
+entry's own evidence — sub=0/9616 unk=6931 — lived ONLY in console
+lines, which the artifact policy deliberately does not retain: the
+diagnosis that overturned r2 was unreproducible from the pinned
+report. Engines now expose gauges() (the model's eleven counters;
+the specialist wrapper's one) and the runner snapshots it per game
+onto record.probes in report.json — the console line derives from
+the same dict, so log and record cannot diverge. Records schema +
+starvation-corner semantics: 2.0.0a1 -> 2.0.0a2. The a1 tables
+remain the table of record; from a2 on, a sub=/unk= claim is
+checkable from report.json alone.

@@ -47,6 +47,12 @@ def run_league(
             board, outcome, seconds = timed_game(
                 white, black, max_plies=max_plies
             )
+            # One gauges() snapshot feeds both the console line and
+            # the persisted record, so the two cannot tell different
+            # stories — and the report carries the probe diagnosis
+            # (sub=, unk=) that console transcripts do not survive to
+            # support.
+            gauges = engine.gauges() if hasattr(engine, "gauges") else None
             record = record_game(
                 board,
                 outcome,
@@ -57,20 +63,23 @@ def run_league(
                 white_name=white.name,
                 black_name=black.name,
                 seconds=seconds,
+                probes=gauges,
             )
             records.append(record)
-            oracle_hits = getattr(engine, "forced_selfmates_found", None)
-            oracle_note = (
-                f" oracle={oracle_hits}" if oracle_hits is not None else ""
-            )
-            sub_hits = getattr(engine, "sub_probe_hits", None)
-            if sub_hits is not None:
-                # unk = gated calls whose None meant UNKNOWN (budget),
-                # not refuted: sub=0/N is only a null when unk is low.
-                oracle_note += (
-                    f" sub={sub_hits}/{engine.sub_probe_calls}"
-                    f" unk={getattr(engine, 'sub_probe_unknowns', 0)}"
+            oracle_note = ""
+            if gauges:
+                oracle_note = (
+                    f" oracle={gauges.get('forced_selfmates_found', 0)}"
                 )
+                if "sub_probe_calls" in gauges:
+                    # unk = gated calls whose None meant UNKNOWN
+                    # (budget), not refuted: sub=0/N is only a null
+                    # when unk is low.
+                    oracle_note += (
+                        f" sub={gauges['sub_probe_hits']}"
+                        f"/{gauges['sub_probe_calls']}"
+                        f" unk={gauges['sub_probe_unknowns']}"
+                    )
             log(
                 f"{family} g{index:02d} (focal={record.focal_seat}): "
                 f"{record.label} in {record.plies} plies "

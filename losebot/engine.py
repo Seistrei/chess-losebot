@@ -62,18 +62,30 @@ class ModelEngine:
         self.sub_probe_men = sub_probe_men
         self.draw_contempt = draw_contempt
         self.name = f"losebot({belief.name})"
-        # Gauges.
-        self.moves_played = 0
-        self.oracle_moves = 0
-        self.forced_selfmates_found = 0
-        self.probe_nodes = 0
-        self.probe_budget_exhaustions = 0
-        self.search_nodes = 0
-        self.sub_probe_calls = 0
-        self.sub_probe_hits = 0
-        self.sub_probe_unknowns = 0
-        self.sub_probe_nodes = 0
-        self.sub_probe_exhaustions = 0
+        for gauge in self.GAUGES:
+            setattr(self, gauge, 0)
+
+    #: Per-game telemetry. The league builds a fresh engine per game,
+    #: so a game's gauges ARE the engine's; the runner snapshots them
+    #: onto the game record, because console lines and ordinary PGNs
+    #: are not retained and the pinned report must carry its own
+    #: evidence (the a1 starvation diagnosis lived only in log lines).
+    GAUGES = (
+        "moves_played",
+        "oracle_moves",
+        "forced_selfmates_found",
+        "probe_nodes",
+        "probe_budget_exhaustions",
+        "search_nodes",
+        "sub_probe_calls",
+        "sub_probe_hits",
+        "sub_probe_unknowns",
+        "sub_probe_nodes",
+        "sub_probe_exhaustions",
+    )
+
+    def gauges(self) -> dict[str, int]:
+        return {gauge: getattr(self, gauge) for gauge in self.GAUGES}
 
     def choose_move(self, board: chess.Board) -> chess.Move:
         legal = list(board.legal_moves)
@@ -133,7 +145,10 @@ class ModelEngine:
         could turn on move-generation order among equal-priority
         roots. Equal shares make the root comparison fair; the shared
         memo still ferries proofs between branches, so later branches
-        probe cheaper, never blinder. Two gates, either opens:
+        probe cheaper, never blinder. The cap is a TOTAL: shares are
+        the bare floor division, so a cap smaller than the root pool
+        rounds every share to zero and no node is ever spent past the
+        configured budget. Two gates, either opens:
         material — the opponent stripped to ``sub_probe_men`` non-king
         men, where zugzwang nets live and probes are cheap; or OUR KING
         IN CHECK — the forced-recapture devices (both of the project's
@@ -152,9 +167,12 @@ class ModelEngine:
         if self.sub_probe_n <= 0 or self.sub_probe_cap <= 0:
             return None
         them = not us
-        # Floor of one node so a cap smaller than the pool still
-        # probes (and audibly drains) instead of silently disabling.
-        share = max(1, self.sub_probe_cap // max(1, branches))
+        # Bare floor division — a zero share when branches outnumber
+        # the cap. Starvation stays audible without a one-node floor:
+        # a dry share's gated calls all ledger as unknowns, while a
+        # floor would quietly spend up to branches-many nodes over the
+        # configured total.
+        share = self.sub_probe_cap // max(1, branches)
 
         def branch_probe():
             remaining = [share]

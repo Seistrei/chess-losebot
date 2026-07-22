@@ -412,20 +412,25 @@ def test_sub_probe() -> None:
         f"their_men={them_men}, proven_n={hook(board)}",
     )
 
-    # A starved sub-budget must degrade to plain steering, never crash
-    # — and the no-answer calls must be ledgered as UNKNOWN, not pass
-    # for refutations.
+    # A cap smaller than the root pool is a TOTAL, not a per-branch
+    # floor: every share rounds to zero, not one node is spent, and
+    # every gated call is ledgered UNKNOWN (born-dry shares never
+    # count as drained) — steering degrades to the bare heuristic
+    # without crashing and without overspending the configured cap.
     engine = ModelEngine(
         belief=make_model("sloppy"), depth=3, topk=4, probe_n=1,
         probe_cap=20_000, sub_probe_cap=1,
     )
     move = engine.choose_move(chess.Board(IN2_FIXTURE))
     check(
-        "engine: starved sub-budget falls back to steering",
+        "engine: starved sub-budget stays capped, ledgers unknowns",
         move in chess.Board(IN2_FIXTURE).legal_moves
-        and engine.sub_probe_exhaustions >= 1
-        and engine.sub_probe_unknowns >= 1,
-        f"move={move}, exhaustions={engine.sub_probe_exhaustions}, "
+        and engine.sub_probe_calls > 0
+        and engine.sub_probe_nodes == 0
+        and engine.sub_probe_exhaustions == 0
+        and engine.sub_probe_unknowns == engine.sub_probe_calls,
+        f"move={move}, calls={engine.sub_probe_calls}, "
+        f"nodes={engine.sub_probe_nodes}, "
         f"unknowns={engine.sub_probe_unknowns}",
     )
 
@@ -517,6 +522,26 @@ def test_league_smoke() -> None:
             and summary["overall"]["games"] == 2
             and len(pgns) == 2,
             f"labels={[r.label for r in records]}",
+        )
+        # The probe gauges must survive into report.json: the pinned
+        # report is the only artifact retained, so a sub=/unk=
+        # diagnosis has to be reproducible from it alone.
+        import json
+
+        from .league.report import write_json
+
+        payload = json.loads(
+            write_json(summary, records, {}, out).read_text(
+                encoding="utf-8"
+            )
+        )
+        probes = payload["games"][0]["probes"]
+        check(
+            "league: probe gauges persist per game into the report",
+            records[0].probes is not None
+            and records[0].probes["moves_played"] > 0
+            and probes == records[0].probes,
+            f"unk={probes and probes.get('sub_probe_unknowns')}",
         )
     player = ModelPlayer(make_model("sloppy"), seed=7)
     sampled = player.choose_move(chess.Board())
