@@ -289,3 +289,41 @@ re-run before leaning on it again. Engine behavior changed:
 2.0.0a0 -> 2.0.0a1. The pinned subprobe-model tables are a 2.0.0a0
 record (their report.json says so) and regenerate from that
 version's commit, not from HEAD.
+
+### The a1 re-pin: fair shares double the take, and the unknowns flip the diagnosis (2026-07-21)
+
+Re-run of the full league on 2.0.0a1 (the fairness + unknowns
+commit), superseding the a0 subprobe-model tables as the model table
+of record (a0 stays citable as its version's record; artifacts:
+games/league/subprobe-model-a1/).
+
+```
+family       split      n  forced mercy st-them st-us insuf fifty rep maxply
+sloppy       dev       10       0     0       0     0     1     1   0      8
+squat        dev       10       1     0       0     0     0     0   1      8
+zach         dev       10       2     0       0     0     0     0   1      7
+human-held   held-out  10       1     0       0     2     1     1   2      3
+random       held-out  10       0     1       1     0     0     0   1      7
+sloppy-held  held-out  10       0     0       0     1     3     1   0      5
+squat-held   held-out  10       0     0       0     0     0     0   1      9
+forced — held-out: 1/40 (2%); dev: 3/30 (10%); overall: 4/70 (6%)
+worst held-out: sloppy-held (0%)
+```
+
+TWO FINDINGS, BOTH LOAD-BEARING. First: fair shares alone DOUBLED
+the take (2/70 -> 4/70; dev 1/30 -> 3/30 with the model stack's
+first squat conversion and zach doubled; held-out blood moved to
+human-held). The a0 budget was being drunk by the capture-first
+front of the root order — the quiet box-building candidates, where
+nets actually form, steered blind. Giving them eyes was worth two
+conversions immediately. Second: the unk gauge says MOST gated probe
+calls end starved, not refuted — game lines run sub=0/9616
+unk=6931, sub=1/6174 unk=3813 (a 30k cap split across ~20-30 root
+branches is ~1-1.5k nodes per branch, an eighth of one slice). The
+merge entry's r2 diagnosis — "the certifier works; steering never
+assembles anything for it to certify" — is hereby OVERTURNED as
+unproven: we never gave the certifier the budget to say. Next lever
+reordered by both findings at once: PROBE BUDGET SCALING first
+(raise sub_probe_cap / concentrate the gate; the fairness jump is
+itself evidence that budget binds), selective depth second, corpus
+fit unchanged behind them.
