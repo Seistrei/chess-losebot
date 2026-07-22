@@ -371,3 +371,101 @@ is now a number in the pinned report: **325,802 of 441,116 gated
 sub-probe calls (74%) ended UNKNOWN** against 12 hits. Budget
 starvation is a fact of the record, not an anecdote — the
 budget-scaling lever keeps its place at the head of the queue.
+
+## Funding the certifier: dev says refuted, held-out says converted (2026-07-22)
+
+The a2 record's lever — 74% of gated sub-probe calls starved, fund
+the certifier before building anything new — went through a
+four-config dev sweep and one pinned league. The sweep returned the
+honest-failure signature; the pin overturned it where it counts.
+
+DEV SWEEP (zach/sloppy/squat, 10 games/family, baseline seeds, vs the
+a2 dev rows: forced 3/30, unk 77.8%, 6 hits; artifacts
+games/league/dev-fund-*/, untracked dev runs, regenerable from HEAD +
+config):
+
+```
+config          forced  hits  unk%   nodes/call  diverged-vs-a2
+30k men5 (a2)     3/30     6  77.8         252   —
+30k men3          3/30     6  69.7         247   0 of 30
+100k men3         3/30     6  54.9         682   0 of 30
+100k men5         3/30    10  64.2         665   1 of 30
+300k men5         3/30    10  32.4        1474   2 of 30
+```
+
+Four dev findings. (1) THE GATE AXIS IS A COST KNOB, NOT A PLAY KNOB:
+both men3 runs are bit-identical to a2 — only HITS feed steering
+(refuted and unknown both hand the search the same None), a tighter
+gate can only lose hits, and the ≤3-men/check band was already
+saturated at 6. (2) THE 4-5 MEN BAND HOLDS REAL PROOFS: at men5 100k
+squat gained 4 hits — coverage beats concentration, the gate stays at
+5. (3) DEV HITS SATURATE AT 10 BY 100k: 300k's extra 200k nodes
+bought zero new proofs while halving unknowns again — sloppy's gate
+at 5.5% unknown is essentially fully funded and still proves nothing
+new. (4) The only dev play effect at any budget: two already-forced
+games (zach g01, squat g00) convert two plies sooner. Budget up,
+unknowns down, forced flat — on dev, starvation was real but NOT
+binding; funded calls refute. (Sweep wall numbers ran under 4-way
+container load and are not citable; the men3 games, bit-identical to
+a2, clocked +70% — cost claims below come from the solo pin.)
+
+### Pinned league (2026-07-22, engine model, funded certifier)
+
+belief=sloppy, depth 3, topk 6, coverage 0.85, probe n<=4 cap 50k,
+sub-probe n<=2 CAP 100k (was 30k) slice 8k men<=5|check; 10
+games/family; artifacts: games/league/funded-100k/. Chosen by dev
+evidence: hit saturation at a third of 300k's wall cost.
+
+```
+family       split      n  forced mercy st-them st-us insuf fifty rep maxply
+sloppy       dev       10       0     0       0     0     1     1   0      8
+squat        dev       10       1     0       0     0     0     0   1      8
+zach         dev       10       2     0       0     0     0     0   1      7
+human-held   held-out  10       1     0       0     2     1     1   2      3
+random       held-out  10       0     2       1     0     0     0   0      7
+sloppy-held  held-out  10       2     0       0     0     3     1   0      4
+squat-held   held-out  10       0     0       0     0     0     0   1      9
+forced — held-out: 3/40 (7.5%); dev: 3/30 (10%); overall: 6/70 (9%)
+worst held-out: squat-held (0%)
+```
+
+THE ANCHOR'S RATE IS PASSED. Held-out moved 1/40 -> 3/40 (7.5%),
+past the specialist's 1/16 (6.25%) for the first time, and the two
+new conversions are exactly the lever's mechanism paying out:
+sloppy-held g04, a 240-ply MAX-PLIES WALL in a2, now converts by
+force in 116 plies off one previously-starved hit; sloppy-held g08, a
+STALEMATE-US BLUNDER in a2, now converts in 74 plies — the fastest
+organic forced selfmate on the project's record — off two new hits.
+Both close identically: king to d1, the greedy family fed until the
+board is stripped, and ...e2# under zugzwang — the same net, built
+twice, against a held-out family no kernel models. Third divergence:
+random g07's repetition draw became a mercy mate (ledgered as luck,
+as always). Fourth: squat g00's known 2-ply speedup. All 66 other
+games identical to a2, and the dev rows reproduce the sweep's
+cap100k run gauge-for-gauge across separate containers — determinism
+holds through a config change, again.
+
+THE DIAGNOSIS, BOTH HALVES NOW MEASURED. On dev families the a1
+starvation reading did not survive: fed to 5.5% unknown, the
+certifier returns refutations, and the r2 verdict — steering never
+assembles nets — stands re-confirmed there. On held-out it was the
+binding constraint: sloppy-held's provable nets existed at 30k and
+starved (3 hits, 63.5% unk); at 100k (7 hits, 43.5% unk) they
+certify and CONVERT. One number for the asymmetry: the funded run's
+24 hits against a2's 12, with every marginal hit on the two families
+(squat, sloppy-held) whose games sit longest in the 4-5-men band.
+Starvation survives as a live secondary fact — squat still 78.5%
+unknown, squat-held 59.4% at 100k — but the dev-side evidence says
+feeding it further buys refutations, not nets.
+
+Cost and config of record: 73.7s/game solo, 86 min the full league
+(a2: 51.7s/game, 60 min) — +42% wall for the funded certifier.
+cap 100k men 5 is the working configuration from here; the CLI
+default stays 30k in code this session (the pinned report's engine
+block is the config of record, per policy). Next lever unchanged
+from the a1 entry's queue, now sharpened by the split verdict:
+SELECTIVE DEPTH for the dev-shaped walls (squat/zach max-plies
+games, the r1 near-miss shape — king frozen into pawn_last, pawns
+released), graded by a certifier that funding has now made honest.
+Milestones stand at 60/80/90% held-out; 7.5% is the first rung
+above the anchor, not the wall's top.
