@@ -352,3 +352,22 @@ the same dict, so log and record cannot diverge. Records schema +
 starvation-corner semantics: 2.0.0a1 -> 2.0.0a2. The a1 tables
 remain the table of record; from a2 on, a sub=/unk= claim is
 checkable from report.json alone.
+
+### The a2 audit pin: same table to the ply, and the starvation number enters the record (2026-07-21)
+
+Re-run on 2.0.0a2 (cap-is-a-ceiling + persisted gauges; league-config
+behavior identical by construction — the one-node floor never fired
+at cap 30k). The prediction attached to the launch held EXACTLY:
+**all 70 games identical to the a1 pin — label, plies, and final FEN,
+game for game** — the first end-to-end verification that the stack's
+determinism claims (process-stable subset seeds, total root order,
+per-game RNG) survive a full league under a code change that should
+not move play. Tables of record therefore UNCHANGED from the a1
+entry (held-out 1/40, dev 3/30, worst held-out sloppy-held 0%);
+subprobe-model-a2/ supersedes -a1/ as the citable artifact because
+its report now carries what the diagnosis needs: per-game probe
+gauges in every row. The starvation reading, previously console-only,
+is now a number in the pinned report: **325,802 of 441,116 gated
+sub-probe calls (74%) ended UNKNOWN** against 12 hits. Budget
+starvation is a fact of the record, not an anecdote — the
+budget-scaling lever keeps its place at the head of the queue.
