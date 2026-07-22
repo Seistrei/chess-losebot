@@ -475,3 +475,88 @@ above the anchor, not the wall's top.
 sub_probe_cap 30k -> 100k in engine and CLI defaults: the funded-100k
 table of record's config IS now the default config, no flags needed.
 Behavior at defaults changes accordingly; 2.0.0a2 -> 2.0.0a3.
+
+## Selective depth: the horizon was never the wall — the belief was (2026-07-22)
+
+The a1-queue's second lever went in as three orthogonal, default-off
+knobs (2.0.0a3 -> 2.0.0a4, selftest 34 -> 38): FORCED-SEQUENCE
+EXTENSION (a node in check or down to one legal reply spends a
+per-line extension budget instead of depth — check chains and
+only-reply boxes deepen without widening; the budget is the
+perpetual-check bound, and the suite proves it binds), DEEP ROOTS
+(root-gated deepening when THEIR side is stripped to deep_men non-king
+men or king+pawns of any count, optional topk narrowing), and a
+NODE CAP (per-move clamp, degrade-to-leaf instead of stalling; never
+fired at 400k in any arm — every cost below is shape, not pathology).
+Three dev arms, 10 games/family, baseline seeds (artifacts
+games/league/dev-seldepth-{base,ext,deep}/, untracked, regenerable
+from HEAD + the report's engine block):
+
+```
+arm    config                        forced  hits  unk%     snodes  div-vs-funded
+base   a4 defaults (=funded-100k)      3/30    10  64.2      13.6M   0 of 30
+ext    forced_ext 6, node_cap 400k     3/30   644  99.1      66.7M  30 of 30
+deep   depth4 topk3 men3, cap 400k     1/30    60  98.0      23.0M  30 of 30
+```
+
+BASE: the a4 hot-path refactor reproduces the funded-100k dev rows to
+the ply, gauge for gauge — flags off is bit-identical, so the arms'
+changes are the levers' alone. DEEP is refuted twice over: topk 3
+narrowing gutted steering against the diffuse family (zach hits 6 ->
+0, both conversions lost), and deepening is structurally ANTI-probe —
+gated calls per game exploded up to 109x (zach g01: 4.5k -> 492k)
+while each branch's share was drunk by the shallowest nodes, leaving
+the frontier the depth was bought for blind (98%+ unknown). EXT is
+the interesting verdict: forced count identical at 3/30 but the
+three are different games — g01's conversion halved to 65 plies on
+the same seed, g03 and g04 are NEW organic devices of exactly the
+targeted shapes (g03: 40.f7+ Qxf7+ 41.gxf7#, the crossfire recapture
+through a check-on-check chain; g04: 62.Rg1+ Kf2 63.Qb8 fxe2#, a
+donated knight cashed by a QUIET tempo move under zugzwang — the
+first waiting-move net on the model stack's record), while zach g09
+and squat g00 un-converted and sloppy g01 walked into a stalemate-us.
+The relocations are opening chaos, not mechanism: every ext game
+diverges from base by ply 4 on a 3-point eval flutter (Bb5 vs Bc4),
+200 plies upstream of any endgame. At n=10/family the game-for-game
+ledger is noise; the honest units are the aggregate (flat) and the
+device inventory (+2, both real). Cost: 4.9x search nodes for six
+extension plies. Neither arm meets "dev forced off 3/30"; no pinned
+league was run, and funded-100k REMAINS the table of record — a
+re-pin of the incumbent config would only have reproduced it
+bit-for-bit (the base arm just did, for the dev half).
+
+### The phantom net: 629 hits, zero arrivals, one mirage (2026-07-22)
+
+The sweep's real yield. Ext squat g03 logged 629 sub-probe hits —
+ALL of squat's hits — against zero root-oracle closures in a 240-ply
+max-plies wall. Replaying its endgame with the live engine: a perfect
+two-ply oscillation, plies 145/149/153/... seeing 8-36 hits with the
+argmax at 52,940-75,131 (0.53 x MATE, then 0.75 x at two men) while
+the plies between see zero hits at eval scale (~550). The engine
+shuffles Ba6/Bb7/Rb7 forever, paid half a mate per offer for a net
+the oracle really did prove — behind a king-wander reply the BELIEF
+(sloppy, ~0.5 mass) expects and the OPPONENT (squat, home 1.0) never
+plays. Fifty-plus consecutive untaken coin-flips is not variance;
+believed-p vs true-p is the whole story. And it is CONFIG-INDEPENDENT:
+the flat searcher at the same positions sees the same 19-22 hits at
+the same 52.9k values with ext 0 — the hits fire at ply-2 our-nodes
+that depth 3 already probes. Selective depth neither causes nor cures
+it; ext g03 merely wandered into mirage territory while base g03's
+ply-4 flutter steered elsewhere. Two standing facts snap into focus:
+squat/zach max-plies walls (phantom EV outbids every real assembly
+plan, so steering shuffles), and the funded pin's sloppy-held
+conversions (the SAME mechanism with honest odds — belief matched
+opponent, the offers landed, the nets cashed). The plumbing prices
+exactly what it is told; what it is told about squat is wrong.
+
+Queue reorder, forced by the mechanism: the CORPUS FIT is promoted
+ahead of value plumbing — an online posterior over urge parameters
+from the game's observed moves kills a phantom's wander-mass in a
+handful of observations and leaves honest mirages untouched, whereas
+any static discount on chance-mass certificates taxes the true and
+the false alike (sloppy-held's conversions were the true). Value
+plumbing drops to third; selective depth goes to the bench with its
+knobs in the tree (the extension's two new devices and the halved
+conversion say it will matter again once the odds are honest).
+Milestones unchanged: held-out 60/80/90%, worst family named, the
+live bar still "the corner poses and the mate lands BY FORCE."
