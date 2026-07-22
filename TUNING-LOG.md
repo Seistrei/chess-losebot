@@ -469,3 +469,9 @@ games, the r1 near-miss shape — king frozen into pawn_last, pawns
 released), graded by a certifier that funding has now made honest.
 Milestones stand at 60/80/90% held-out; 7.5% is the first rung
 above the anchor, not the wall's top.
+
+### The default catches up to the record (2026-07-22)
+
+sub_probe_cap 30k -> 100k in engine and CLI defaults: the funded-100k
+table of record's config IS now the default config, no flags needed.
+Behavior at defaults changes accordingly; 2.0.0a2 -> 2.0.0a3.

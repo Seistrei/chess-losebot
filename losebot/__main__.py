@@ -48,7 +48,7 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         help="oracle depth for sub-root probes at steering our-nodes "
         "(0 disables them)",
     )
-    parser.add_argument("--sub-probe-cap", type=int, default=30_000)
+    parser.add_argument("--sub-probe-cap", type=int, default=100_000)
     parser.add_argument(
         "--sub-probe-men", type=int, default=5,
         help="sub-probes fire once the opponent has at most this many "

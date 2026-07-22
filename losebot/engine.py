@@ -45,7 +45,7 @@ class ModelEngine:
         probe_n: int = 4,
         probe_cap: int = 50_000,
         sub_probe_n: int = 2,
-        sub_probe_cap: int = 30_000,
+        sub_probe_cap: int = 100_000,
         sub_probe_slice: int = 8_000,
         sub_probe_men: int = 5,
         draw_contempt: float = 400.0,
