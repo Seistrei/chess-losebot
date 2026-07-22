@@ -54,6 +54,32 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         help="sub-probes fire once the opponent has at most this many "
         "non-king men (or any time our king is in check)",
     )
+    parser.add_argument(
+        "--forced-ext", type=int, default=0,
+        help="forced-sequence extension budget per line: plies in "
+        "check or with a single legal reply spend this instead of "
+        "depth (0 disables)",
+    )
+    parser.add_argument(
+        "--deep-depth", type=int, default=0,
+        help="steering depth in stripped positions (0 keeps --depth "
+        "everywhere)",
+    )
+    parser.add_argument(
+        "--deep-men", type=int, default=3,
+        help="deep-depth gate: opponent at most this many non-king "
+        "men, or reduced to king+pawns of any count",
+    )
+    parser.add_argument(
+        "--deep-topk", type=int, default=0,
+        help="reply cap while deepened (0 keeps --topk; stripped "
+        "distributions concentrate, so narrower often buys the depth)",
+    )
+    parser.add_argument(
+        "--node-cap", type=int, default=0,
+        help="per-move steering node clamp: past it the search "
+        "answers from the leaf eval instead of stalling (0 disables)",
+    )
 
 
 def _build_engine(args) -> ModelEngine:
@@ -67,6 +93,11 @@ def _build_engine(args) -> ModelEngine:
         sub_probe_n=args.sub_probe_n,
         sub_probe_cap=args.sub_probe_cap,
         sub_probe_men=args.sub_probe_men,
+        forced_ext=args.forced_ext,
+        deep_depth=args.deep_depth,
+        deep_men=args.deep_men,
+        deep_topk=args.deep_topk,
+        node_cap=args.node_cap,
     )
 
 
@@ -137,6 +168,11 @@ def _cmd_league(args) -> int:
             "sub_probe_n": args.sub_probe_n,
             "sub_probe_cap": args.sub_probe_cap,
             "sub_probe_men": args.sub_probe_men,
+            "forced_ext": args.forced_ext,
+            "deep_depth": args.deep_depth,
+            "deep_men": args.deep_men,
+            "deep_topk": args.deep_topk,
+            "node_cap": args.node_cap,
         }
 
     out_dir = Path(

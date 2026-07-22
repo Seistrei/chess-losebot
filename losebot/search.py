@@ -42,6 +42,8 @@ class SearchStats:
     truncated_replies: int = 0
     probe_calls: int = 0
     probe_hits: int = 0
+    extensions: int = 0
+    clamped: int = 0
     root_values: list = field(default_factory=list)
 
 
@@ -55,6 +57,8 @@ def best_move(
     draw_contempt: float = 400.0,
     root_moves: list[chess.Move] | None = None,
     probe_factory=None,
+    forced_ext: int = 0,
+    node_cap: int = 0,
 ) -> tuple[chess.Move | None, float, SearchStats]:
     """Pick our move by expectimax. ``root_moves`` restricts the root
     (the engine's misère-safety partition); None means all legal.
@@ -73,7 +77,21 @@ def best_move(
     still filtered through the chance layer above, so a net that only
     holds against part of the model's covered mass is worth exactly
     that fraction: steering credit, never a claim. Claims stay the
-    root oracle's job."""
+    root oracle's job.
+
+    ``forced_ext`` is the forced-sequence extension budget per root
+    line: a node whose side is in check or down to a single legal move
+    is a forced ply and spends this budget instead of depth. Both
+    organic device families run through exactly such plies — check
+    chains (the recapture donations) and only-reply boxes (the closing
+    zugzwang) — and neither widens the tree when extended, so the
+    horizon stretches precisely where the branching has already
+    collapsed. The budget is what keeps a perpetual-check line from
+    recursing forever. ``node_cap`` bounds one call's total expansion:
+    past it every node evaluates in place (counted in
+    ``stats.clamped``), degrading toward the shallow answer instead of
+    stalling the move clock. Zero disables either; both off is
+    bit-identical to the pre-extension search."""
     stats = SearchStats()
     moves = list(root_moves) if root_moves is not None else list(
         board.legal_moves
@@ -91,7 +109,7 @@ def best_move(
         board.push(move)
         value = _node_value(
             board, us, model, depth - 1, 1, topk, coverage, draw_contempt,
-            stats, probe,
+            stats, probe, forced_ext, node_cap,
         )
         board.pop()
         stats.root_values.append((move, value))
@@ -180,6 +198,14 @@ def _root_order(board: chess.Board, move: chess.Move) -> int:
     return 3
 
 
+def _single_reply(board: chess.Board) -> bool:
+    """Exactly one legal move, decided without generating the rest."""
+    gen = iter(board.legal_moves)
+    if next(gen, None) is None:
+        return False  # terminal — the caller's entry checks own it
+    return next(gen, None) is None
+
+
 def _node_value(
     board: chess.Board,
     us: chess.Color,
@@ -191,6 +217,8 @@ def _node_value(
     contempt: float,
     stats: SearchStats,
     probe=None,
+    ext_left: int = 0,
+    node_cap: int = 0,
 ) -> float:
     stats.nodes += 1
     if board.is_checkmate():
@@ -209,7 +237,26 @@ def _node_value(
             # A certificate here means mate lands within 2n further
             # plies: score it like that terminal, sooner nets higher.
             return MATE - ply - 2 * proven_n
-    if depth <= 0:
+    # Forced-sequence extension: a side in check or down to one legal
+    # move is not spending real depth — the branching has already
+    # collapsed. Its ply costs extension budget instead, so check
+    # chains and only-reply boxes stay inside the horizon while quiet
+    # width still pays full price. ext_left bounds the free plies per
+    # line (a perpetual check must not recurse past it).
+    extended = ext_left > 0 and (board.is_check() or _single_reply(board))
+    if extended:
+        stats.extensions += 1
+        child_depth, child_ext = depth, ext_left - 1
+    else:
+        child_depth, child_ext = depth - 1, ext_left
+    if node_cap and stats.nodes >= node_cap:
+        # Budget clamp: answer from here with the leaf eval rather
+        # than stall the move clock. Degrades exactly where the tree
+        # was too wide for the configured budget.
+        stats.clamped += 1
+        stats.leaves += 1
+        return evaluate(board, us)
+    if depth <= 0 and not extended:
         stats.leaves += 1
         return evaluate(board, us)
     if board.turn == us:
@@ -217,8 +264,8 @@ def _node_value(
         for move in board.legal_moves:
             board.push(move)
             child = _node_value(
-                board, us, model, depth - 1, ply + 1, topk, coverage,
-                contempt, stats, probe,
+                board, us, model, child_depth, ply + 1, topk, coverage,
+                contempt, stats, probe, child_ext, node_cap,
             )
             board.pop()
             if child > value:
@@ -236,8 +283,8 @@ def _node_value(
     for move, prob in dist:
         board.push(move)
         child = _node_value(
-            board, us, model, depth - 1, ply + 1, topk, coverage, contempt,
-            stats, probe,
+            board, us, model, child_depth, ply + 1, topk, coverage, contempt,
+            stats, probe, child_ext, node_cap,
         )
         board.pop()
         value += prob * child

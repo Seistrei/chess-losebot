@@ -23,6 +23,18 @@ steering see finishes forming up to depth + sub_probe_n own-moves
 out, weighted by the model's chance of allowing them. One memo serves
 both: its keys carry position, clock, repetition state and n, so
 certificates proven anywhere in the move's thinking transfer.
+
+Steering depth is SELECTIVE, because flat depth everywhere is
+unaffordable and nets assemble where branching collapses: forced
+plies (check or a single legal reply) can spend an extension budget
+instead of depth (``forced_ext``), and moves whose root position has
+the opponent stripped — few non-king men, or king+pawns of any count,
+the squat shape — search deeper outright (``deep_depth`` under the
+``deep_men`` gate, optionally narrowed to ``deep_topk``). A per-move
+``node_cap`` clamps whatever the two of them grow: past it the search
+answers from the leaf eval instead of stalling the move clock. All
+three default off; the flags are dev levers until a pinned league
+promotes them.
 """
 
 from __future__ import annotations
@@ -48,6 +60,11 @@ class ModelEngine:
         sub_probe_cap: int = 100_000,
         sub_probe_slice: int = 8_000,
         sub_probe_men: int = 5,
+        forced_ext: int = 0,
+        deep_depth: int = 0,
+        deep_men: int = 3,
+        deep_topk: int = 0,
+        node_cap: int = 0,
         draw_contempt: float = 400.0,
     ):
         self.belief = belief
@@ -60,6 +77,11 @@ class ModelEngine:
         self.sub_probe_cap = sub_probe_cap
         self.sub_probe_slice = sub_probe_slice
         self.sub_probe_men = sub_probe_men
+        self.forced_ext = forced_ext
+        self.deep_depth = deep_depth
+        self.deep_men = deep_men
+        self.deep_topk = deep_topk
+        self.node_cap = node_cap
         self.draw_contempt = draw_contempt
         self.name = f"losebot({belief.name})"
         for gauge in self.GAUGES:
@@ -82,6 +104,9 @@ class ModelEngine:
         "sub_probe_unknowns",
         "sub_probe_nodes",
         "sub_probe_exhaustions",
+        "deep_moves",
+        "ext_nodes",
+        "clamped_nodes",
     )
 
     def gauges(self) -> dict[str, int]:
@@ -102,19 +127,48 @@ class ModelEngine:
             return proven
 
         pool = self._safe_pool(board, legal)
+        depth, topk = self.depth, self.topk
+        if self.deep_depth > depth and self._deep_position(board):
+            # Assembly depth, paid only where branching has collapsed:
+            # the stripped regimes are where boxes form and where the
+            # game's tail actually lives.
+            self.deep_moves += 1
+            depth = self.deep_depth
+            if self.deep_topk:
+                topk = self.deep_topk
         move, _value, stats = best_move(
             board,
             us=board.turn,
             model=self.belief,
-            depth=self.depth,
-            topk=self.topk,
+            depth=depth,
+            topk=topk,
             coverage=self.coverage,
             draw_contempt=self.draw_contempt,
             root_moves=pool,
             probe_factory=self._make_sub_probe(board.turn, memo, len(pool)),
+            forced_ext=self.forced_ext,
+            node_cap=self.node_cap,
         )
         self.search_nodes += stats.nodes
+        self.ext_nodes += stats.extensions
+        self.clamped_nodes += stats.clamped
         return move if move is not None else pool[0]
+
+    def _deep_position(self, board: chess.Board) -> bool:
+        """The deep-depth gate: is the opponent stripped enough?
+
+        Two shapes open it: at most ``deep_men`` non-king men — the
+        classic endgame collapse — or king+pawns of ANY count, the
+        squat family's pawn_last shape (four pawns and a frozen king
+        is still a narrow, box-ready position; it was the r1
+        near-miss). Their piece count, not ours: their men are what
+        multiply the chance layer, and the eval's conversion terms
+        only speak in these regimes anyway.
+        """
+        them_occ = board.occupied_co[not board.turn]
+        if chess.popcount(them_occ) - 1 <= self.deep_men:
+            return True
+        return not (them_occ & ~board.pawns & ~board.kings)
 
     def _probe(self, board: chess.Board, memo: dict) -> chess.Move | None:
         """Iterative-deepening oracle probe under one shared budget."""

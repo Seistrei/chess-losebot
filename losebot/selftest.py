@@ -46,6 +46,13 @@ IN2_FIXTURE = "8/8/8/R7/1p6/3PPk1p/1N4RP/6BK w - - 0 1"
 # opener exists to see.
 CROSSFIRE_FIXTURE = "Q3rQ2/2pb4/K1k4p/1pPp4/3P3p/P4p2/7P/8 b - - 0 1"
 
+# Selective-depth fixture: White owns two free tempi (a3, a4) while
+# Black is frozen to single replies — 1...h3 forced, then 2...hxg2#
+# forced, mate at ply 4, one past flat depth 3's horizon. Every
+# extended ply is an only-reply ply: the forced-sequence extension
+# must carry steering to the mate with no oracle in the loop.
+EXT_FIXTURE = "8/8/8/8/7p/3QPk2/P5RP/6BK w - - 0 1"
+
 # Back-rank accident: White has Rb8# available plus many quiet moves
 # (and Rxa7 as the only capture) — the mate and the capture are what
 # mate-avoidant models and the engine's safety partition must refuse.
@@ -461,6 +468,78 @@ def test_sub_probe() -> None:
     )
 
 
+def test_selective_depth() -> None:
+    from .search import best_move
+
+    board = chess.Board(EXT_FIXTURE)
+    _move, flat, _stats = best_move(
+        board, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
+    )
+    move, ext, stats = best_move(
+        board, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
+        forced_ext=4,
+    )
+    check(
+        "search: forced-sequence extension pierces the horizon",
+        flat < 90_000 and ext > 90_000 and stats.extensions > 0
+        and move is not None and move.uci() in ("a2a3", "a2a4"),
+        f"flat={flat:.0f} ext={ext:.0f} extensions={stats.extensions}",
+    )
+    # The budget is a hard per-line bound: from depth 2 the mate needs
+    # two free plies, so one extension must NOT be enough (a perpetual
+    # check would otherwise recurse forever on the house).
+    _move, v1, _stats = best_move(
+        board, us=chess.WHITE, model=make_model("sloppy"), depth=2, topk=4,
+        forced_ext=1,
+    )
+    _move, v2, _stats = best_move(
+        board, us=chess.WHITE, model=make_model("sloppy"), depth=2, topk=4,
+        forced_ext=2,
+    )
+    check(
+        "search: extension budget is a hard per-line bound",
+        v1 < 90_000 and v2 > 90_000,
+        f"ext1={v1:.0f} ext2={v2:.0f}",
+    )
+    # The node cap clamps mid-tree, still answers with a legal move,
+    # and the overshoot is bounded by the already-open frontier.
+    start = chess.Board()
+    move, _value, stats = best_move(
+        start, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
+        node_cap=60,
+    )
+    check(
+        "search: node cap clamps to a legal answer",
+        move in start.legal_moves and stats.clamped > 0
+        and stats.nodes < 300,
+        f"nodes={stats.nodes} clamped={stats.clamped}",
+    )
+    # The deep gate reads THEIR strip: few men, or king+pawns of any
+    # count (the squat pawn_last shape) — never a mixed-piece four.
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
+        probe_cap=2_000, sub_probe_cap=2_000, deep_depth=3,
+    )
+    queen = chess.Board("8/8/8/3k4/2q5/8/3K4/8 w - - 0 1")
+    gate_ok = (
+        engine._deep_position(queen)
+        and engine._deep_position(
+            chess.Board("8/8/8/3k4/1ppppp2/8/3K4/8 w - - 0 1")
+        )
+        and not engine._deep_position(
+            chess.Board("8/8/8/3k4/1nbrp3/8/3K4/8 w - - 0 1")
+        )
+    )
+    engine.choose_move(queen)
+    deep_on_strip = engine.deep_moves
+    engine.choose_move(chess.Board())
+    check(
+        "engine: deep depth gates on the strip, and only there",
+        gate_ok and deep_on_strip == 1 and engine.deep_moves == 1,
+        f"gate={gate_ok}, deep_moves={engine.deep_moves}",
+    )
+
+
 def test_engine_safety_and_oracle() -> None:
     engine = ModelEngine(
         belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
@@ -562,6 +641,7 @@ def run() -> int:
         test_report_rollups,
         test_evaluate_shape,
         test_sub_probe,
+        test_selective_depth,
         test_engine_safety_and_oracle,
         test_league_smoke,
     ):
