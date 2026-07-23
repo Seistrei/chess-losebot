@@ -587,3 +587,161 @@ flags-off stays bit-identical); the dev-seldepth ext/deep arms
 recorded node_cap 400000 and are a 2.0.0a4 record — regenerate them
 from that commit, not HEAD, because per-branch shares can trip
 where their never-reached global total did not.
+
+## The belief becomes an inference: the posterior reads every opponent, and the phantom dies on schedule (2026-07-23)
+
+The phantom-net entry's queue reorder went through whole: opponent
+inference from observed moves, built, graded on dev, and pinned.
+What landed (selftest 39 -> 50, 2.0.0a5 -> 2.0.0a6):
+
+- models/posterior.py: a log-space Bayesian POSTERIOR over seven
+  dev-pure urge hypotheses (sloppy, half-strength sloppy, zach, the
+  squat premise on both corners, and squat grafted with sloppy's own
+  greed numbers), updated after every observed opponent move via the
+  family's exact distribution() likelihoods — the reason those
+  likelihoods exist. Chance nodes price the MAP hypothesis (--infer
+  map) or the pruned posterior mixture (--infer mix) instead of a
+  config constant. Epsilon-uniform smoothing (1e-3) makes an
+  off-model move four orders of magnitude of evidence, never a death
+  sentence; pruning benches a hypothesis without deleting it.
+  Inference reads ONLY the observed moves of the current game — no
+  family name, no held-out parameter — and the frozen-preset
+  protocol stands untouched. Updates are pure functions of the
+  observed sequence; the suite replays an inferring game twice and
+  demands bit-identical trajectories, and the pin below reproduced
+  the dev arm's 30 games to the ply across the mount/bake boundary.
+  Diagnostics (MAP + weight, moves-to-collapse, live count, full
+  weight vector) ride gauges() into report.json per game.
+
+- models/fit.py + the fit CLI: the OFFLINE half, v2 groundwork.
+  Coordinate descent over a value grid on the same smoothed exact
+  likelihood; stdlib only, deterministic, forced replies skipped as
+  weightless. Licence to operate proven in-suite: kernel games with
+  known truths fit back EXACTLY (squat -> home=1.0 + pawn hostage +
+  king corner at truth-equal NLL; zach -> the all-zero shuffle).
+  First human corpus run (the eight Iptychs live games, 768
+  observations): from zeros, descent stalls in the mercy=1.0 flat —
+  uniform noise, 1.9663 nats/move, and mercy=1.0 is the random
+  preset's exact point, arrived at independently from data. From the
+  sloppy start it finds real structure: mercy .70, greed .95, trade
+  .45, hunt .90, push .30, promote .10, check 0.0 at 1.8541
+  nats/move, beating uniform by .11 and hand-seeded sloppy by .64.
+  Two readings: the family explains kernels perfectly and real
+  humans mostly as noise (the 70% mercy residue is a
+  misspecification measurement), and the structured remainder is
+  sharp enough to correct sloppy on two axes — the human hunts and
+  grabs with near-certainty and never once sought a check. The
+  fitted-human hypothesis waits for a future session's own dev
+  evidence; nothing here nudged a preset.
+
+THE ACCEPTANCE PROBE, ON THE MIRAGE'S OWN BOARDS. Replaying ext
+g03's recorded oscillation plies against both engines (artifact
+untracked, regenerable from its 2.0.0a4 config):
+
+```
+ply   fixed-sloppy (funded config)       infer (posterior, same board)
+145   Rb5=52959   sub=21/126  phantom    Rb3=99996  sub=1/49  honest net
+147   Rb3+=544    sub=0/98    eval scale Rd1=537    sub=0/51  eval scale
+149   Rb5=52958   sub=21/126  phantom    Rb3=99996  sub=1/49  honest net
+151   Rb3+=543    sub=0/97    eval scale Rd1=531    sub=0/50  eval scale
+153   Rb5=52957   sub=22/131  phantom    Rb3=99996  sub=1/50  honest net
+```
+
+The fixed belief reproduces the mirage to the node — half-a-mate
+argmaxes on 21-22 certificates the squatter will never let stand.
+The posterior at the same boards, collapsed by the same 145 observed
+plies, answers at eval scale or with ONE certificate at near-full
+MATE: a net that holds under the squatter's actual reply. The
+phantom is not discounted; it is repriced to what it always was.
+Full-game replay of the g03 seed point-collapses onto squat-k at
+observation 12 and STILL walls at max-plies with zero certificates —
+the two layers separate exactly as the bench note predicted: pricing
+was the mirage, and assembly is the constraint that remains.
+
+DEV ARMS (map vs mix, 10 games/family, baseline seeds; artifacts
+dev-infer-{map,mix}/, untracked; vs funded's dev 3/30):
+
+```
+arm   sloppy  squat  zach  total  notes
+map      0      1      1   2/30   squat g00 156 -> 78 plies; zach -> g08 (118, 2 certs)
+mix      1      0      0   1/30   sloppy g07 NEW: 75 plies, 3 certs; 3 st-us blunders
+```
+
+Neither arm holds the dev bar, and the ledger says relocation, not
+mechanism: inference identified the true family in ALL 60 games
+(zero misreads, median collapse ~10 observations), the phantom hits
+are GONE (funded's squat walls accumulated mirage certificates; the
+honest walls run sub=0), and with them went the capital they had
+bought — funded's zach pair were real devices reached through
+misprized approach paths, and honest beliefs do not walk those
+paths. What honest play landed is better per device: the same-seed
+squat conversion in HALF the plies, and a 75-ply sloppy net under
+three root certificates. MAP took the pin on aggregate, the cleaner
+sloppy row, and cost.
+
+### Pinned league (2026-07-23, engine model, posterior-map)
+
+Defaults (= funded-100k config) + --infer map; 10 games/family;
+epsilon 1e-3, prune 1e-3, seven hypotheses recorded in the report's
+engine block; artifacts: games/league/posterior-map/.
+
+```
+family       split      n  forced mercy st-them st-us insuf fifty rep maxply
+sloppy       dev       10       0     0       0     0     3     0   0      7
+squat        dev       10       1     0       0     0     0     0   0      9
+zach         dev       10       1     0       0     0     0     0   0      9
+human-held   held-out  10       0     1       0     1     0     0   0      8
+random       held-out  10       1     0       0     0     1     0   0      8
+sloppy-held  held-out  10       2     0       0     1     2     2   0      3
+squat-held   held-out  10       0     0       0     0     0     0   0     10
+forced — held-out: 3/40 (7.5%); dev: 2/30 (7%); overall: 5/70 (7%)
+worst held-out: human-held (0%)
+```
+
+THE CRITERIA SPLIT, AND BOTH HALVES ARE THE FINDING. Held-out HELD
+at 3/40 — the anchor-passing rate, kept by an engine whose beliefs
+are now earned rather than configured: sloppy-held's conversions
+survived inference (g08's 74-ply record game intact, g04's
+conversion relocated to g02 at 90 plies), and random g01 is a NEW
+forced device class — a ten-check HERD CHAIN driving the noise king
+across the board into c6, sealed by the quiet 76...Ne4 into a
+position where every legal reply mates, closed under a root
+certificate. Against uniform noise the check chain is the only
+forcing instrument there is, and steering found it organically.
+squat-held stayed at 0% — the prize not taken — but for the first
+time the zero is DIAGNOSED rather than ambient: all ten games read
+map=squat-greedy-q@1.00 (collapse 5-31 observations — the mirrored
+corner and the greed graft both earned their hypothesis seats; the
+posterior derived "greedy squatter, queen corner" from observation
+alone) and the funded engine's sub-probe hits on those walls are
+simply gone (46 hits / 402,627 calls league-wide, unk 47.7%, 9 root
+certificates). Before this session, squat-held's zero could have
+been belief error or construction gap; now it is measured: the
+belief is right and the constructor is absent. The same signature
+covers dev squat/zach — walls with correct beliefs and nothing for
+the certifier to certify.
+
+The posterior read every held-out family correctly from moves
+alone: sloppy-held -> sloppy 10/10, human-held -> sloppy-mild 7/10
+(the half-strength interpolation exists for exactly that region),
+squat-held -> squat-greedy-q 10/10, random -> sloppy-mild 10/10 at
+weight 1.00 — the flattest structured hypothesis standing in for
+noise the set cannot name; a mercy-bearing hypothesis (the fitter's
+human point) is the obvious future seat. And honesty is CHEAPER:
+49.3s/game solo, 58 min the full league, against funded's 73.7 —
+the phantom oscillations were burning probe budget on certificates
+that never cash, forever.
+
+Tables of record: funded-100k REMAINS the record at defaults, and
+defaults do not move (the precedent flips defaults when a pin beats
+the record; this pin ties held-out, trades composition, and cedes
+one dev game). posterior-map is pinned as the INFERENCE record: the
+config, the diagnostics schema, and the trophies are citable from
+its report alone. Queue, forced by the diagnosis: SELECTIVE DEPTH
+x HONEST ODDS first — the benched deep/ext knobs re-armed on
+--infer map, aimed at walls that are now proven assembly-bound
+(squat, squat-held, zach: correct beliefs, sub=0); hypothesis-set
+growth second (the mercy family for random/human-held, the
+fitted-human point, both through dev evidence); value plumbing
+third, unchanged. Milestones stand at 60/80/90% held-out; the live
+bar stays "the corner poses and the mate lands BY FORCE."

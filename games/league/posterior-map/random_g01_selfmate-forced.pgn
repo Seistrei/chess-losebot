@@ -1,0 +1,10 @@
+[Event "Misere league"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "random"]
+[Black "losebot(infer-map)"]
+[Result "1-0"]
+[Termination "checkmate; focal=black; selfmate-forced"]
+
+1. d4 e6 2. h4 Bb4+ 3. Nc3 Bxc3+ 4. Qd2 Bxd2+ 5. Kd1 Qxh4 6. d5 Qxh1 7. f4 Qxg1 8. d6 Qxf1+ 9. Kxd2 Qxc1+ 10. Kxc1 Nf6 11. b4 c6 12. g3 Ne4 13. Rb1 Nc3 14. a3 Kd8 15. b5 c5 16. Rb3 c4 17. e3 Ne2+ 18. Kb1 Na6 19. e4 Rb8 20. a4 Nc5 21. Rc3 Nxc3+ 22. Ka1 Nb3+ 23. cxb3 Na2 24. e5 Re8 25. b6 a5 26. Kb2 h6 27. Kb1 f5 28. bxc4 Nb4 29. g4 Na6 30. c5 fxg4 31. Kc1 h5 32. f5 g3 33. Kb2 exf5 34. e6 Rxe6 35. Ka2 Re8 36. Kb3 f4 37. Ka2 g2 38. Kb2 g1=Q 39. Ka2 Qb1+ 40. Kxb1 f3 41. Kc2 f2 42. Kb2 f1=Q 43. c6 Nb4 44. Kb3 Qc1 45. cxd7 Qc2+ 46. Ka3 Qc1+ 47. Kb3 Qc2+ 48. Ka3 Qe2 49. dxe8=R+ Qxe8 50. d7 Nc2+ 51. Ka2 Nb4+ 52. Kb2 Qe5+ 53. Kb3 Qc7 54. dxc8=Q+ Kxc8 55. Kb2 Ra8 56. bxc7 Ra6 57. Kc3 Rc6+ 58. Kd2 Rc2+ 59. Kd1 b5 60. axb5 Rb2 61. b6 Rb1+ 62. Kd2 Rb2+ 63. Kc1 Nd3+ 64. Kd1 Nf2+ 65. Kc1 Nd3+ 66. Kd1 Nf2+ 67. Kc1 Rb1+ 68. Kc2 Rc1+ 69. Kb2 Nd3+ 70. Kb3 a4+ 71. Kxa4 Rc4+ 72. Kb5 Rb4+ 73. Ka6 Nc5+ 74. Ka5 Ra4+ 75. Kb5 Ra5+ 76. Kc6 Ne4 77. b7# 1-0
