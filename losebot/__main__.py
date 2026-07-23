@@ -80,6 +80,13 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         help="per-move steering node clamp: past it the search "
         "answers from the leaf eval instead of stalling (0 disables)",
     )
+    parser.add_argument(
+        "--infer", default="off", choices=("off", "map", "mix"),
+        help="online opponent inference from observed moves: steer "
+        "against the MAP hypothesis or the posterior mixture instead "
+        "of the fixed --belief (which still names the zero-evidence "
+        "start point via hypothesis order)",
+    )
 
 
 def _build_engine(args) -> ModelEngine:
@@ -98,6 +105,7 @@ def _build_engine(args) -> ModelEngine:
         deep_men=args.deep_men,
         deep_topk=args.deep_topk,
         node_cap=args.node_cap,
+        infer=args.infer,
     )
 
 
@@ -128,6 +136,15 @@ def _cmd_play(args) -> int:
         f"[{seconds:.1f}s]; oracle certificates: "
         f"{engine.forced_selfmates_found}; final: {record.final_fen}"
     )
+    if engine.posterior is not None:
+        diag = engine.posterior.diagnostics()
+        print(
+            f"posterior: map={diag['posterior_map']}"
+            f"@{diag['posterior_map_weight']:.4f} "
+            f"collapse@{diag['posterior_collapse_at']} "
+            f"obs={diag['posterior_observations']} "
+            f"weights={diag['posterior_weights']}"
+        )
     if args.pgn_dir:
         path = save_pgn(board, record, Path(args.pgn_dir))
         print(f"pgn: {path}")
@@ -173,7 +190,19 @@ def _cmd_league(args) -> int:
             "deep_men": args.deep_men,
             "deep_topk": args.deep_topk,
             "node_cap": args.node_cap,
+            "infer": args.infer,
         }
+        if args.infer != "off":
+            from .models.posterior import EPSILON, HYPOTHESES, PRUNE
+
+            # The inference config of record: the report must be able
+            # to say WHICH hypothesis set the posterior ran over, or
+            # a future set change silently redefines every number.
+            engine_desc["infer_epsilon"] = EPSILON
+            engine_desc["infer_prune"] = PRUNE
+            engine_desc["infer_hypotheses"] = [
+                name for name, _params in HYPOTHESES
+            ]
 
     out_dir = Path(
         args.out

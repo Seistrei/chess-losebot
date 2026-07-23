@@ -17,4 +17,4 @@ package: it is the benchmark's teacher and the lichess bridge's
 current driver, no longer the primary line of development.
 """
 
-__version__ = "2.0.0a5"
+__version__ = "2.0.0a6"

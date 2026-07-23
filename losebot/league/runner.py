@@ -80,6 +80,15 @@ def run_league(
                         f"/{gauges['sub_probe_calls']}"
                         f" unk={gauges['sub_probe_unknowns']}"
                     )
+                if "posterior_map" in gauges:
+                    # Who the engine ended up believing, at what
+                    # confidence, and how many observed moves the
+                    # collapse took (0 = never crossed 0.95).
+                    oracle_note += (
+                        f" map={gauges['posterior_map']}"
+                        f"@{gauges['posterior_map_weight']:.2f}"
+                        f" c@{gauges['posterior_collapse_at']}"
+                    )
             log(
                 f"{family} g{index:02d} (focal={record.focal_seat}): "
                 f"{record.label} in {record.plies} plies "

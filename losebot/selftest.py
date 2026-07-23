@@ -17,7 +17,14 @@ from .engine import ModelEngine
 from .evaluate import evaluate
 from .league.families import ALL_FAMILIES
 from .league.runner import run_league
-from .models import ModelPlayer, UrgeModel, UrgeParams, make_model
+from .models import (
+    HypothesisPosterior,
+    MixtureModel,
+    ModelPlayer,
+    UrgeModel,
+    UrgeParams,
+    make_model,
+)
 from .outcomes import (
     SELFMATE_FORCED,
     SELFMATE_MERCY,
@@ -57,6 +64,19 @@ EXT_FIXTURE = "8/8/8/8/7p/3QPk2/P5RP/6BK w - - 0 1"
 # (and Rxa7 as the only capture) — the mate and the capture are what
 # mate-avoidant models and the engine's safety partition must refuse.
 ACCIDENT_FEN = "7k/p7/6K1/8/8/8/R7/1R6 w - - 0 1"
+
+# Posterior fixtures. MARCH: an open board where Black's king can walk
+# — a kingside squatter marches e5-f6-g7-h8 (each step the UNIQUE
+# homing pick, likelihood 1.0), while under sloppy the same steps are
+# shuffle-share moves and the hunt urge pulls the OTHER way, toward
+# the white knight (Kd4 — the wander direction the phantom net priced
+# at half a mate). DECLINE-1/2: a free white knight parked next to the
+# marched king; taking is greed's near-certainty, so a squatter who
+# declines twice separates squat-pure from squat-greedy — the axis the
+# corner march alone cannot see.
+MARCH_FIXTURE = "n7/p7/8/4k3/8/8/8/KN6 b - - 0 1"
+DECLINE_FIXTURE_1 = "n7/6k1/7N/8/8/8/8/K7 b - - 0 1"
+DECLINE_FIXTURE_2 = "n7/6k1/5N2/8/8/8/8/K7 b - - 0 1"
 
 # Session-19 greed adjudication poses: the x-ray defender the capturer's
 # own body hides, and the pinned defender that cannot legally recapture.
@@ -572,6 +592,192 @@ def test_selective_depth() -> None:
     )
 
 
+def test_posterior() -> None:
+    # Before any evidence, MAP inference IS the incumbent: uniform
+    # prior, ties broken by hypothesis order, sloppy first.
+    posterior = HypothesisPosterior()
+    check(
+        "posterior: zero evidence answers the incumbent sloppy",
+        posterior.map_model().name == "sloppy"
+        and posterior.observations == 0,
+    )
+
+    # The corner march: three observed homing steps must collapse the
+    # posterior onto the squat FAMILY. squat-k and squat-greedy-k stay
+    # exactly tied (no capture ever offered, and greed is the only
+    # axis they differ on), so the tie-break names squat-k while the
+    # single-hypothesis collapse gauge stays honestly at zero.
+    board = chess.Board(MARCH_FIXTURE)
+    for black_move, white_reply in (
+        ("e5f6", "b1c3"), ("f6g7", "c3b1"), ("g7h8", "b1c3"),
+    ):
+        posterior.observe(board, chess.Move.from_uci(black_move))
+        board.push_uci(black_move)
+        board.push_uci(white_reply)
+    weights = posterior.diagnostics()["posterior_weights"]
+    squat_mass = sum(
+        weight for name, weight in weights.items()
+        if name.startswith("squat") and not name.endswith("-q")
+    )
+    check(
+        "posterior: three homing steps collapse onto the squat family",
+        posterior.map_model().name == "squat-k"
+        and squat_mass > 0.95
+        and posterior.collapse_at == 0,
+        f"squat-k+greedy={squat_mass:.4f}, weights={weights}",
+    )
+
+    # THE PHANTOM REPRICING — the mirage mechanism in one assert. At
+    # the march start the fixed sloppy belief gives the away-from-home
+    # hunt step Kd4 over a tenth of the mass (the g03 nets stood
+    # behind exactly such wander replies at ~0.5); the collapsed
+    # posterior mixture prices it at nothing, and the homing step at
+    # near-certainty.
+    start = chess.Board(MARCH_FIXTURE)
+    wander = chess.Move.from_uci("e5d4")
+    home = chess.Move.from_uci("e5f6")
+    sloppy_p = dict(make_model("sloppy").distribution(start))
+    mix_p = dict(posterior.mixture_model().distribution(start))
+    check(
+        "posterior: collapsed mixture kills the wander mass",
+        sloppy_p.get(wander, 0.0) > 0.10
+        and mix_p.get(wander, 0.0) < 0.01
+        and mix_p.get(home, 0.0) > 0.95,
+        f"P(wander): sloppy={sloppy_p.get(wander, 0.0):.3f} "
+        f"mix={mix_p.get(wander, 0.0):.4f}; "
+        f"P(home): mix={mix_p.get(home, 0.0):.3f}",
+    )
+
+    # Smoothing: a pawn lapse (a7a5 — squat holds pawns hostage while
+    # pieces can move, and sloppy's push urge LOVES the double step)
+    # costs the squat read three orders of magnitude but must not zero
+    # it; two more homing steps bring the family back.
+    lapse = chess.Move.from_uci("a7a5")
+    posterior.observe(board, lapse)
+    board.push(lapse)
+    board.push_uci("c3b1")
+    survived = posterior.weights()
+    finite = all(w == w and w >= 0.0 for w in survived)
+    squat_alive = survived[3] > 1e-9
+    for black_move, white_reply in (("h8g8", "b1c3"), ("g8h8", "c3b1")):
+        posterior.observe(board, chess.Move.from_uci(black_move))
+        board.push_uci(black_move)
+        board.push_uci(white_reply)
+    weights = posterior.diagnostics()["posterior_weights"]
+    recovered = sum(
+        weight for name, weight in weights.items()
+        if name.startswith("squat") and not name.endswith("-q")
+    )
+    check(
+        "posterior: one off-model lapse wounds but never kills",
+        finite and squat_alive and recovered > 0.9
+        and posterior.map_model().name == "squat-k",
+        f"post-lapse squat-k={survived[3]:.2e}, recovered={recovered:.4f}",
+    )
+
+    # Two declined free knights separate pure squat from greedy squat
+    # (greed .85 leaves only .15 for the homing step a pure squatter
+    # plays with certainty) — and the point-collapse gauge fires only
+    # here, once ONE hypothesis owns 0.95.
+    for fen in (DECLINE_FIXTURE_1, DECLINE_FIXTURE_2):
+        pose = chess.Board(fen)
+        posterior.observe(pose, chess.Move.from_uci("g7h8"))
+    diag = posterior.diagnostics()
+    check(
+        "posterior: declined gifts split the greed axis and collapse",
+        diag["posterior_map"] == "squat-k"
+        and diag["posterior_map_weight"] >= 0.95
+        and diag["posterior_collapse_at"] == posterior.observations
+        and diag["posterior_live"] <= 2,
+        f"map@{diag['posterior_map_weight']}, "
+        f"collapse@{diag['posterior_collapse_at']}, "
+        f"live={diag['posterior_live']}",
+    )
+
+    # Mixture arithmetic: exact weighted merge, normalized, sorted.
+    board = chess.Board(MARCH_FIXTURE)
+    sloppy = make_model("sloppy")
+    zach = make_model("zach")
+    mix = MixtureModel([(sloppy, 0.6), (zach, 0.4)])
+    merged = mix.distribution(board)
+    s_p = dict(sloppy.distribution(board))
+    z_p = dict(zach.distribution(board))
+    exact = all(
+        abs(prob - (0.6 * s_p.get(move, 0.0) + 0.4 * z_p.get(move, 0.0)))
+        < 1e-12
+        for move, prob in merged
+    )
+    check(
+        "posterior: mixture is the exact weighted merge",
+        exact
+        and abs(sum(p for _, p in merged) - 1.0) < 1e-9
+        and all(
+            merged[i][1] >= merged[i + 1][1]
+            for i in range(len(merged) - 1)
+        ),
+        f"moves={len(merged)}",
+    )
+
+
+def test_posterior_engine() -> None:
+    from .league.play import play_game
+
+    def infer_engine(mode: str) -> ModelEngine:
+        return ModelEngine(
+            belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
+            probe_cap=2_000, sub_probe_cap=2_000, infer=mode,
+        )
+
+    # End-to-end vs a real squatter: the engine's posterior must read
+    # the temperament off the observed moves alone — and two identical
+    # runs must reproduce to the ply, because posterior updates are
+    # pure functions of the observed sequence (the determinism claim
+    # every pinned league leans on).
+    runs = []
+    for _ in range(2):
+        engine = infer_engine("mix")
+        opponent = ModelPlayer(make_model("squat"), seed=5)
+        final, _outcome = play_game(
+            engine, opponent, max_plies=16
+        )
+        runs.append((final.fen(), engine.gauges()))
+    fen_a, gauges_a = runs[0]
+    fen_b, gauges_b = runs[1]
+    check(
+        "engine: inference reads a squatter from its moves alone",
+        gauges_a["posterior_map"].startswith("squat")
+        and gauges_a["posterior_observations"] > 0,
+        f"map={gauges_a['posterior_map']}"
+        f"@{gauges_a['posterior_map_weight']}",
+    )
+    check(
+        "engine: inferring runs reproduce to the ply",
+        fen_a == fen_b and gauges_a == gauges_b,
+        f"final={fen_a.split(' ')[0]}",
+    )
+
+    # MAP mode plays legal chess end to end, and the off switch keeps
+    # the posterior machinery entirely out of the engine.
+    engine = infer_engine("map")
+    final, _outcome = play_game(
+        engine, ModelPlayer(make_model("squat"), seed=5), max_plies=8
+    )
+    fixed = ModelEngine(
+        belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
+        probe_cap=2_000,
+    )
+    check(
+        "engine: MAP mode plays, off mode carries no posterior",
+        len(final.move_stack) == 8
+        and engine.posterior is not None
+        and fixed.posterior is None
+        and "posterior_map" not in fixed.gauges()
+        and fixed.name == "losebot(sloppy)"
+        and engine.name == "losebot(infer-map)",
+        f"map game plies={len(final.move_stack)}",
+    )
+
+
 def test_engine_safety_and_oracle() -> None:
     engine = ModelEngine(
         belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
@@ -674,6 +880,8 @@ def run() -> int:
         test_evaluate_shape,
         test_sub_probe,
         test_selective_depth,
+        test_posterior,
+        test_posterior_engine,
         test_engine_safety_and_oracle,
         test_league_smoke,
     ):

@@ -8,6 +8,19 @@ Two-layer decision per move:
 2. STEERING (opponent-aware): expectimax against the engine's BELIEF
    model of the opponent, over the misère-safe root partition.
 
+The belief itself is either FIXED (the constructor's model, the
+pre-inference behavior) or INFERRED (``infer`` = "map" or "mix"): the
+engine keeps a Bayesian posterior over dev-built urge hypotheses,
+updated from the opponent's observed moves in this game — and only
+those; no family name, no held-out parameter ever reaches it — and
+steers against the MAP hypothesis or the posterior mixture. This is
+the phantom-net cure (TUNING-LOG 2026-07-22): a fixed sloppy belief
+prices a squatter's king-wander replies at ~0.5 mass the squatter
+never spends, and every offered net becomes a phantom EV that outbids
+real plans; the posterior watches a few homing moves and reprices the
+wander mass to what the opponent actually is. The oracle layer is
+untouched by all of this — certificates never depended on the belief.
+
 The safety partition is the old bridge fallback grown up: moves that
 immediately mate them, stalemate them, or adjudicate a draw are
 excluded whenever any alternative exists. The search prices those
@@ -46,6 +59,7 @@ import chess
 
 from . import oracle
 from .models.base import OpponentModel
+from .models.posterior import HypothesisPosterior
 from .outcomes import adjudicate_draw
 from .search import best_move
 
@@ -69,7 +83,10 @@ class ModelEngine:
         deep_topk: int = 0,
         node_cap: int = 0,
         draw_contempt: float = 400.0,
+        infer: str = "off",
     ):
+        if infer not in ("off", "map", "mix"):
+            raise ValueError(f"infer must be off/map/mix, got {infer!r}")
         self.belief = belief
         self.depth = depth
         self.topk = topk
@@ -86,7 +103,21 @@ class ModelEngine:
         self.deep_topk = deep_topk
         self.node_cap = node_cap
         self.draw_contempt = draw_contempt
-        self.name = f"losebot({belief.name})"
+        self.infer = infer
+        # One posterior per engine, and the league builds one engine
+        # per game: inference state resets with the opponent, and its
+        # updates are pure functions of this game's observed moves —
+        # determinism to the ply survives.
+        self.posterior = (
+            HypothesisPosterior() if infer != "off" else None
+        )
+        self._shadow: chess.Board | None = None  # replay cursor
+        self._observed_plies = 0
+        self._us: chess.Color | None = None
+        if infer == "off":
+            self.name = f"losebot({belief.name})"
+        else:
+            self.name = f"losebot(infer-{infer})"
         for gauge in self.GAUGES:
             setattr(self, gauge, 0)
 
@@ -112,14 +143,27 @@ class ModelEngine:
         "clamped_nodes",
     )
 
-    def gauges(self) -> dict[str, int]:
-        return {gauge: getattr(self, gauge) for gauge in self.GAUGES}
+    def gauges(self) -> dict:
+        """Counter snapshot, plus posterior diagnostics when inferring.
+
+        The posterior entries ride the same runner path onto
+        record.probes, so a pinned report can answer "what did the
+        engine believe, and how fast did it get there" per game — the
+        phantom-net diagnosis was exactly such a question, asked of
+        artifacts that could not answer it.
+        """
+        out = {gauge: getattr(self, gauge) for gauge in self.GAUGES}
+        if self.posterior is not None:
+            out.update(self.posterior.diagnostics())
+        return out
 
     def choose_move(self, board: chess.Board) -> chess.Move:
         legal = list(board.legal_moves)
         if not legal:
             raise ValueError("no legal moves")
         self.moves_played += 1
+        if self.posterior is not None:
+            self._observe_opponent(board)
         if len(legal) == 1:
             return legal[0]
 
@@ -142,7 +186,7 @@ class ModelEngine:
         move, _value, stats = best_move(
             board,
             us=board.turn,
-            model=self.belief,
+            model=self._current_belief(),
             depth=depth,
             topk=topk,
             coverage=self.coverage,
@@ -156,6 +200,37 @@ class ModelEngine:
         self.ext_nodes += stats.extensions
         self.clamped_nodes += stats.clamped
         return move if move is not None else pool[0]
+
+    def _current_belief(self) -> OpponentModel:
+        """What steering prices this move: fixed belief, MAP, or mix."""
+        if self.posterior is None:
+            return self.belief
+        if self.infer == "map":
+            return self.posterior.map_model()
+        return self.posterior.mixture_model()
+
+    def _observe_opponent(self, board: chess.Board) -> None:
+        """Feed the posterior every opponent move since the last sync.
+
+        The play loop hands us one board carrying the whole move
+        stack, so inference needs no protocol change: replay a shadow
+        cursor from the stack bottom, and every ply whose mover was
+        not us is an observation. We are called only on our own turns,
+        so our color is the first ``board.turn`` we ever see — and
+        between two of our turns the loop advances by whatever the
+        game produced (one opponent reply normally; several plies on
+        the first call as Black or after a mid-game start).
+        """
+        if self._shadow is None:
+            self._us = board.turn
+            self._shadow = board.root()
+        stack = board.move_stack
+        for index in range(self._observed_plies, len(stack)):
+            move = stack[index]
+            if self._shadow.turn != self._us:
+                self.posterior.observe(self._shadow, move)
+            self._shadow.push(move)
+        self._observed_plies = len(stack)
 
     def _deep_position(self, board: chess.Board) -> bool:
         """The deep-depth gate: is the opponent stripped enough?
