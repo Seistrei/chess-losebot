@@ -224,6 +224,68 @@ def _cmd_league(args) -> int:
     return 0
 
 
+def _cmd_fit(args) -> int:
+    import chess.pgn
+
+    from .models.fit import (
+        COARSE_GRID,
+        FINE_GRID,
+        fit,
+        neg_log_likelihood,
+        observations_from_game,
+    )
+
+    obs = []
+    used = skipped = 0
+    for path in sorted(Path(args.pgn_dir).glob("*.pgn")):
+        with open(path, encoding="utf-8") as handle:
+            while True:
+                game = chess.pgn.read_game(handle)
+                if game is None:
+                    break
+                white = game.headers.get("White", "")
+                black = game.headers.get("Black", "")
+                if args.focal in white and args.focal not in black:
+                    color = chess.WHITE
+                elif args.focal in black and args.focal not in white:
+                    color = chess.BLACK
+                else:
+                    skipped += 1
+                    continue
+                game_obs = observations_from_game(game, color)
+                obs.extend(game_obs)
+                used += 1
+                print(
+                    f"{path.name}: {args.focal} as "
+                    f"{'White' if color == chess.WHITE else 'Black'}, "
+                    f"{len(game_obs)} observations"
+                )
+    if not obs:
+        print(f"no observations for {args.focal!r} under {args.pgn_dir}")
+        return 1
+    print(f"\nfitting {len(obs)} observations from {used} games "
+          f"({skipped} skipped)...")
+    grid = FINE_GRID if args.grid == "fine" else COARSE_GRID
+    # Descent is local: from zeros, a mercy=1 fit deadens every other
+    # axis (zero remaining mass) and the sweep stalls in that flat.
+    # A structured start keeps the urges live long enough to compete.
+    start = None
+    if args.start == "sloppy":
+        start = make_model("sloppy").params
+    fitted, nll = fit(obs, grid=grid, start=start, log=print)
+    print(f"\nfitted: {fitted}")
+    print(f"nll: {nll:.2f} total, {nll / len(obs):.4f}/move")
+    # Reference points: is the fit actually better than the hand-seeded
+    # beliefs, and by how much per move?
+    for name in ("sloppy", "zach", "squat"):
+        ref = neg_log_likelihood(make_model(name).params, obs)
+        print(f"  vs {name:7s}: nll {ref:.2f} total, "
+              f"{ref / len(obs):.4f}/move "
+              f"({'fit better' if nll < ref else 'preset better'} "
+              f"by {abs(ref - nll) / len(obs):.4f}/move)")
+    return 0
+
+
 def _cmd_oracle(args) -> int:
     board = chess.Board(args.fen)
     budget = [args.cap]
@@ -275,6 +337,22 @@ def main(argv=None) -> int:
     oracle_cmd.add_argument("--n", type=int, default=3)
     oracle_cmd.add_argument("--cap", type=int, default=200_000)
 
+    fit_cmd = sub.add_parser(
+        "fit", help="offline MLE of urge parameters from PGN games"
+    )
+    fit_cmd.add_argument("--pgn-dir", required=True)
+    fit_cmd.add_argument(
+        "--focal", required=True,
+        help="player-name substring whose moves are the observations",
+    )
+    fit_cmd.add_argument("--grid", default="fine",
+                         choices=("coarse", "fine"))
+    fit_cmd.add_argument(
+        "--start", default="zeros", choices=("zeros", "sloppy"),
+        help="descent start point (a mercy=1 fit from zeros deadens "
+        "the urge axes; try both starts before believing either)",
+    )
+
     args = parser.parse_args(argv)
     command = args.command or "selftest"
     handler = {
@@ -282,6 +360,7 @@ def main(argv=None) -> int:
         "play": _cmd_play,
         "league": _cmd_league,
         "oracle": _cmd_oracle,
+        "fit": _cmd_fit,
     }[command]
     return handler(args)
 

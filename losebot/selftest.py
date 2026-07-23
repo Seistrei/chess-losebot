@@ -778,6 +778,54 @@ def test_posterior_engine() -> None:
     )
 
 
+def test_fit() -> None:
+    from .league.play import play_game
+    from .models.fit import (
+        COARSE_GRID,
+        fit,
+        neg_log_likelihood,
+        observations_from_play,
+    )
+
+    def kernel_obs(family: str, seed: int, plies: int):
+        """One kernel-vs-sloppy game; the kernel's own moves are the
+        observations, so the fitted parameters have a known truth."""
+        white = ModelPlayer(make_model(family), seed=seed)
+        black = ModelPlayer(make_model("sloppy"), seed=seed + 100)
+        board, _outcome = play_game(white, black, max_plies=plies)
+        return observations_from_play(
+            chess.Board(), board.move_stack, chess.WHITE
+        )
+
+    # Known-parameter recovery, the fitter's licence to operate: squat
+    # games must fit back to the corner premise, and the fit may never
+    # score worse than the truth it was generated from (the truth is
+    # on the grid, so descent finding worse would be a bug, not noise).
+    obs = kernel_obs("squat", 0, 120)
+    fitted, nll = fit(obs, grid=COARSE_GRID)
+    truth = neg_log_likelihood(make_model("squat").params, obs)
+    check(
+        "fit: squat games recover home=1 and the pawn hostage",
+        fitted.home == 1.0 and fitted.pawn_last
+        and fitted.home_side == "king" and nll <= truth + 1e-9,
+        f"home={fitted.home} pawn_last={fitted.pawn_last} "
+        f"side={fitted.home_side} nll={nll:.1f} truth={truth:.1f} "
+        f"obs={len(obs)}",
+    )
+
+    obs = kernel_obs("zach", 0, 120)
+    fitted, nll = fit(obs, grid=COARSE_GRID)
+    truth = neg_log_likelihood(make_model("zach").params, obs)
+    check(
+        "fit: zach games recover the all-zero shuffle",
+        fitted.home == 0.0 and fitted.greed == 0.0
+        and fitted.promote == 0.0 and fitted.mercy == 0.0
+        and nll <= truth + 1e-9,
+        f"fitted={fitted} nll={nll:.1f} truth={truth:.1f} "
+        f"obs={len(obs)}",
+    )
+
+
 def test_engine_safety_and_oracle() -> None:
     engine = ModelEngine(
         belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
@@ -882,6 +930,7 @@ def run() -> int:
         test_selective_depth,
         test_posterior,
         test_posterior_engine,
+        test_fit,
         test_engine_safety_and_oracle,
         test_league_smoke,
     ):
