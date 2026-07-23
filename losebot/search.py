@@ -90,8 +90,17 @@ def best_move(
     recursing forever. ``node_cap`` bounds one call's total expansion:
     past it every node evaluates in place (counted in
     ``stats.clamped``), degrading toward the shallow answer instead of
-    stalling the move clock. Zero disables either; both off is
-    bit-identical to the pre-extension search."""
+    stalling the move clock. The cap is SPLIT EVENLY across root
+    candidates, for the same reason the sub-probe cap is: one counter
+    shared across the root spent itself on the sort-front candidates
+    (captures and checks, by the root order), so the argmax compared
+    their full-depth values against bare leaf evals for the quiet
+    candidates behind them — and quiet moves are where boxes get
+    built. Each candidate now clamps against its own share, so every
+    root value is computed under the same allowance regardless of
+    walk position; a cap smaller than the pool degrades every branch
+    to its entry eval, honestly and evenly. Zero disables either
+    knob; both off is bit-identical to the pre-extension search."""
     stats = SearchStats()
     moves = list(root_moves) if root_moves is not None else list(
         board.legal_moves
@@ -102,14 +111,19 @@ def best_move(
     # the argmax winner among value ties — is a function of the
     # position, never of move-generation order.
     moves.sort(key=lambda m: (_root_order(board, m), m.uci()))
+    node_share = node_cap // len(moves) if node_cap else 0
     best: chess.Move | None = None
     best_value = -float("inf")
     for move in moves:
         probe = probe_factory() if probe_factory is not None else None
+        # Absolute per-branch threshold; None disables. A zero share
+        # (cap smaller than the pool) still clamps every branch at its
+        # first node — 0 must not collide with "no limit".
+        limit = stats.nodes + node_share if node_cap else None
         board.push(move)
         value = _node_value(
             board, us, model, depth - 1, 1, topk, coverage, draw_contempt,
-            stats, probe, forced_ext, node_cap,
+            stats, probe, forced_ext, limit,
         )
         board.pop()
         stats.root_values.append((move, value))
@@ -218,7 +232,7 @@ def _node_value(
     stats: SearchStats,
     probe=None,
     ext_left: int = 0,
-    node_cap: int = 0,
+    node_limit: int | None = None,
 ) -> float:
     stats.nodes += 1
     if board.is_checkmate():
@@ -249,10 +263,11 @@ def _node_value(
         child_depth, child_ext = depth, ext_left - 1
     else:
         child_depth, child_ext = depth - 1, ext_left
-    if node_cap and stats.nodes >= node_cap:
+    if node_limit is not None and stats.nodes >= node_limit:
         # Budget clamp: answer from here with the leaf eval rather
-        # than stall the move clock. Degrades exactly where the tree
-        # was too wide for the configured budget.
+        # than stall the move clock. The limit is this root branch's
+        # own share of the cap, so clamping degrades the branch that
+        # overspent — never the branches walked after it.
         stats.clamped += 1
         stats.leaves += 1
         return evaluate(board, us)
@@ -265,7 +280,7 @@ def _node_value(
             board.push(move)
             child = _node_value(
                 board, us, model, child_depth, ply + 1, topk, coverage,
-                contempt, stats, probe, child_ext, node_cap,
+                contempt, stats, probe, child_ext, node_limit,
             )
             board.pop()
             if child > value:
@@ -284,7 +299,7 @@ def _node_value(
         board.push(move)
         child = _node_value(
             board, us, model, child_depth, ply + 1, topk, coverage, contempt,
-            stats, probe, child_ext, node_cap,
+            stats, probe, child_ext, node_limit,
         )
         board.pop()
         value += prob * child

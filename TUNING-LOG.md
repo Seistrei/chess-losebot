@@ -560,3 +560,30 @@ knobs in the tree (the extension's two new devices and the halved
 conversion say it will matter again once the odds are honest).
 Milestones unchanged: held-out 60/80/90%, worst family named, the
 live bar still "the corner poses and the mate lands BY FORCE."
+
+### The node cap splits like the probe cap (2026-07-23, review fix)
+
+Review caught the node cap repeating the sub-probe cap's original
+sin: one counter shared across the root, so the sort-front
+candidates (captures and checks, by the root order) searched at
+full depth and every quiet candidate behind them was compared on a
+bare leaf eval — at cap 60 on the start position, 19 of 20 root
+values differed from a fair allowance and the argmax flipped (e4 ->
+a4). Quiet moves are where boxes get built; a biased cap taxes
+exactly the payload. The cap now splits evenly per root candidate
+(bare floor division; an absolute per-branch threshold that is
+None-disabled, because a zero share at a zero node count must not
+read as no-limit), so every root value is computed under the same
+allowance regardless of walk position, and a cap smaller than the
+pool degrades every branch to its entry eval, evenly. What the cap
+bounds is EXPANSION — clamped entries are leaf evals closing
+already-open loops, since truncating a chance node's remaining
+children would bias its expectation by the missing mass — and the
+suite now pins the invariant directly: nodes - clamped <= cap, and
+a pool member's joint value equals itself searched alone under one
+share. Selftest 38 -> 39; 2.0.0a4 -> 2.0.0a5. No pinned run is
+touched (node_cap has never appeared in a pinned config, and
+flags-off stays bit-identical); the dev-seldepth ext/deep arms
+recorded node_cap 400000 and are a 2.0.0a4 record — regenerate them
+from that commit, not HEAD, because per-branch shares can trip
+where their never-reached global total did not.

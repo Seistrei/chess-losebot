@@ -32,8 +32,11 @@ the opponent stripped — few non-king men, or king+pawns of any count,
 the squat shape — search deeper outright (``deep_depth`` under the
 ``deep_men`` gate, optionally narrowed to ``deep_topk``). A per-move
 ``node_cap`` clamps whatever the two of them grow: past it the search
-answers from the leaf eval instead of stalling the move clock. All
-three default off; the flags are dev levers until a pinned league
+answers from the leaf eval instead of stalling the move clock. Like
+the sub-probe cap, it is split evenly across root candidates — one
+shared counter would hand the sort-front candidates full-depth
+values and leave the quiet rest on bare leaf evals. All three
+default off; the flags are dev levers until a pinned league
 promotes them.
 """
 

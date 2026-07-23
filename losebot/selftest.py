@@ -501,8 +501,12 @@ def test_selective_depth() -> None:
         v1 < 90_000 and v2 > 90_000,
         f"ext1={v1:.0f} ext2={v2:.0f}",
     )
-    # The node cap clamps mid-tree, still answers with a legal move,
-    # and the overshoot is bounded by the already-open frontier.
+    # The node cap clamps mid-tree and still answers with a legal
+    # move. What the cap bounds is EXPANSION: entries that pass the
+    # limit and grow children. Clamped entries are leaf evals closing
+    # already-open loops (truncating them instead would bias a chance
+    # node's expectation by its missing mass), so the invariant is
+    # nodes - clamped <= cap, not a bound on raw entries.
     start = chess.Board()
     move, _value, stats = best_move(
         start, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
@@ -511,8 +515,36 @@ def test_selective_depth() -> None:
     check(
         "search: node cap clamps to a legal answer",
         move in start.legal_moves and stats.clamped > 0
-        and stats.nodes < 300,
-        f"nodes={stats.nodes} clamped={stats.clamped}",
+        and stats.nodes - stats.clamped <= 60,
+        f"nodes={stats.nodes} clamped={stats.clamped} "
+        f"expanded={stats.nodes - stats.clamped}",
+    )
+    # Fairness: the cap is split per root candidate, not first-come —
+    # a candidate's value must not depend on where the root walk put
+    # it (one shared counter compared the sort-front candidates'
+    # full-depth values against bare leaf evals for the rest). Each
+    # pool member searched jointly under k shares must equal itself
+    # searched alone under one share.
+    pool = [chess.Move.from_uci(u) for u in ("e2e4", "d2d4", "g1f3")]
+    _move, _value, joint_stats = best_move(
+        start, us=chess.WHITE, model=make_model("sloppy"), depth=3, topk=4,
+        root_moves=pool, node_cap=150,
+    )
+    joint = dict(joint_stats.root_values)
+    fair = True
+    for mv in pool:
+        _m, solo_value, _s = best_move(
+            start, us=chess.WHITE, model=make_model("sloppy"), depth=3,
+            topk=4, root_moves=[mv], node_cap=50,
+        )
+        if joint[mv] != solo_value:
+            fair = False
+            break
+    check(
+        "search: node cap splits per root candidate, not first-come",
+        fair and joint_stats.clamped > 0,
+        f"joint={ {m.uci(): round(v, 1) for m, v in joint.items()} } "
+        f"clamped={joint_stats.clamped}",
     )
     # The deep gate reads THEIR strip: few men, or king+pawns of any
     # count (the squat pawn_last shape) — never a mixed-piece four.
