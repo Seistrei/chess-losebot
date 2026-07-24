@@ -934,3 +934,15 @@ than ext, and blunders). Milestones stand at 60/80/90% held-out;
 the mate lands BY FORCE against a human" — squat-held g01 is that
 exact shape against a held-out kernel, which is the strongest
 evidence yet that the bar is reachable.
+
+### The default catches up to the record, again (2026-07-23)
+
+Per the a3 precedent (a pin beats the record, its config becomes the
+defaults): engine and CLI defaults move to the posterior-ext config —
+infer off -> map, forced_ext 0 -> 6, node_cap 0 -> 400000. Behavior
+at defaults changes accordingly; 2.0.0a7 -> 2.0.0a8. One suite touch
+rides along: the off-mode-carries-no-posterior check now requests
+infer="off" explicitly, since silence no longer means off. The
+posterior-ext tables are a 2.0.0a7 record and regenerate from that
+commit with the flags its report records; at a8 the same
+configuration is simply spelled with no flags.

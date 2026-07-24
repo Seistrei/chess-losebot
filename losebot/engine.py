@@ -48,9 +48,10 @@ the squat shape — search deeper outright (``deep_depth`` under the
 answers from the leaf eval instead of stalling the move clock. Like
 the sub-probe cap, it is split evenly across root candidates — one
 shared counter would hand the sort-front candidates full-depth
-values and leave the quiet rest on bare leaf evals. All three
-default off; the flags are dev levers until a pinned league
-promotes them.
+values and leave the quiet rest on bare leaf evals. The posterior-ext
+pin promoted the extension and the cap (with inference) to defaults;
+deep roots stay a default-off dev lever — they starve the certifier
+and converted less in every graded arm.
 """
 
 from __future__ import annotations
@@ -77,13 +78,13 @@ class ModelEngine:
         sub_probe_cap: int = 100_000,
         sub_probe_slice: int = 8_000,
         sub_probe_men: int = 5,
-        forced_ext: int = 0,
+        forced_ext: int = 6,
         deep_depth: int = 0,
         deep_men: int = 3,
         deep_topk: int = 0,
-        node_cap: int = 0,
+        node_cap: int = 400_000,
         draw_contempt: float = 400.0,
-        infer: str = "off",
+        infer: str = "map",
     ):
         if infer not in ("off", "map", "mix"):
             raise ValueError(f"infer must be off/map/mix, got {infer!r}")

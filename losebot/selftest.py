@@ -813,7 +813,7 @@ def test_posterior_engine() -> None:
     )
     fixed = ModelEngine(
         belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
-        probe_cap=2_000,
+        probe_cap=2_000, infer="off",
     )
     check(
         "engine: MAP mode plays, off mode carries no posterior",

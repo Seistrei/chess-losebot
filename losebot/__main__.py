@@ -55,10 +55,10 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "non-king men (or any time our king is in check)",
     )
     parser.add_argument(
-        "--forced-ext", type=int, default=0,
+        "--forced-ext", type=int, default=6,
         help="forced-sequence extension budget per line: plies in "
         "check or with a single legal reply spend this instead of "
-        "depth (0 disables)",
+        "depth (0 disables; default 6, the posterior-ext config)",
     )
     parser.add_argument(
         "--deep-depth", type=int, default=0,
@@ -76,12 +76,13 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "distributions concentrate, so narrower often buys the depth)",
     )
     parser.add_argument(
-        "--node-cap", type=int, default=0,
+        "--node-cap", type=int, default=400_000,
         help="per-move steering node clamp: past it the search "
-        "answers from the leaf eval instead of stalling (0 disables)",
+        "answers from the leaf eval instead of stalling (0 disables; "
+        "default 400k, the posterior-ext config)",
     )
     parser.add_argument(
-        "--infer", default="off", choices=("off", "map", "mix"),
+        "--infer", default="map", choices=("off", "map", "mix"),
         help="online opponent inference from observed moves: steer "
         "against the MAP hypothesis or the posterior mixture instead "
         "of the fixed --belief; half the prior starts on --belief and "
