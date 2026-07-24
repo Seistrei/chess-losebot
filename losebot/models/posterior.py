@@ -105,17 +105,19 @@ def _scaled(params: UrgeParams, factor: float) -> UrgeParams:
 #: uniform by .11/move and hand-seeded sloppy by .64/move. Every value
 #: traces to that fit; none to a frozen preset. What it says about a
 #: real human: hunts and grabs near-certainly, never once sought a
-#: check — and, the axis no dev kernel carries, lapses from the
-#: mate-avoidance discipline 70% of the time (the family's
-#: misspecification residue lands on mercy). Mercy is the load-bearing
-#: axis here: it is the only urge that puts mass on moves that mate US,
-#: so every mercy-free hypothesis prices an observed avoidable mate at
-#: exactly zero (the epsilon floor) — no amount of evidence could
-#: previously separate "sloppy human" from "human who sometimes mates
-#: us on purpose". This point makes that distinction learnable, which
-#: is what the human-held diagnosis (posterior-ext pin: reads scatter,
-#: one game never collapses, no hypothesis carries a mercy axis) asked
-#: for.
+#: check — and 70% of its mass is a uniform-over-legal component the
+#: structured urges cannot explain. That 70% is the family's
+#: MISSPECIFICATION RESIDUE landing on mercy — the likelihood's
+#: catch-all for unstructured moves — not a claim that the player
+#: abandons the mate-avoidance discipline seven moves in ten. Mercy is
+#: nonetheless the load-bearing axis: it is the only urge that puts
+#: mass on moves that mate US, so every mercy-free hypothesis prices
+#: an observed avoidable mate at exactly zero (the epsilon floor) —
+#: no amount of evidence could previously separate "sloppy human"
+#: from "human who sometimes mates us on purpose". This point makes
+#: that distinction learnable, which is what the human-held diagnosis
+#: (posterior-ext pin: reads scatter, one game never collapses, no
+#: hypothesis carries a mercy axis) asked for.
 FITTED_HUMAN = UrgeParams(
     mercy=0.70, promote=0.10, greed=0.95, trade=0.45, check=0.0,
     push=0.30, hunt=0.90,
@@ -125,11 +127,13 @@ FITTED_HUMAN = UrgeParams(
 #: appended so existing indices never move). The configured belief
 #: supplies the prior anchor; order is now only a deterministic
 #: tie-break after genuinely equal posterior weights. The fitted-human
-#: rungs follow the sloppy-mild precedent: the same half-scaling that
-#: gave the sloppy family its milder interpolation gives the mercy
-#: axis a second rung (0.70 and 0.35), so inference can land between
-#: "full corpus lapse rate" and "mercy-free" instead of being forced
-#: to choose the extremes.
+#: pair follows the sloppy-mild precedent LITERALLY: ``_scaled``
+#: halves every continuous urge, so fitted-human-mild is a globally
+#: milder human (mercy .35 and half of every structural urge with it),
+#: not a mercy-only rung — the two points vary overall scale, never
+#: the mercy axis in isolation. A controlled mercy ladder (structure
+#: held at the corpus fit, mercy varied and scored on corpus NLL) is
+#: the named future construction; see the 2026-07-24 log entry.
 HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
     ("sloppy", SLOPPY),
     ("sloppy-mild", _scaled(SLOPPY, 0.5)),

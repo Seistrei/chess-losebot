@@ -997,19 +997,20 @@ carried a mercy axis, so human-held's scattered reads could not,
 even in principle, name a family that sometimes mates us on purpose.
 What landed (2.0.0a8 -> 2.0.0a9, selftest 54 -> 57):
 
-- models/posterior.py: the FITTED-HUMAN family, two rungs. The full
+- models/posterior.py: the FITTED-HUMAN family, two points. The full
   point is the corpus fit verbatim (the 2026-07-23 offline MLE over
   the eight Iptychs live games, 768 observations, 1.8541 nats/move:
   mercy .70, greed .95, trade .45, hunt .90, push .30, promote .10,
-  check 0.0) and the mild rung is its half-scale by the sloppy-mild
-  precedent (mercy .35), so the mercy axis has an interpolation
-  instead of an extreme. Every value traces to the corpus fit or dev
-  reasoning; no number touches a frozen preset — corpus-derived is
-  dev-legal, and the module docstring now says so. The prior grows a
-  fourth family under the review round's family-balanced rule,
-  exactly the mechanism that redesign anticipated: belief=sloppy now
-  opens 0.5625 / 0.0625 / 0.125 / 4x0.03125 / 2x0.0625, asserted to
-  the digit in-suite.
+  check 0.0) and the mild point is its half-scale by the sloppy-mild
+  precedent applied literally — _scaled halves EVERY continuous urge,
+  so fitted-human-mild is a globally milder human (mercy .35 and half
+  the structure with it), not a mercy-only interpolation. Every value
+  traces to the corpus fit or dev reasoning; no number touches a
+  frozen preset — corpus-derived is dev-legal, and the module
+  docstring now says so. The prior grows a fourth family under the
+  review round's family-balanced rule, exactly the mechanism that
+  redesign anticipated: belief=sloppy now opens 0.5625 / 0.0625 /
+  0.125 / 4x0.03125 / 2x0.0625, asserted to the digit in-suite.
 
 - Why mercy is THE axis: it is the only urge that puts mass on moves
   that mate us, so every mercy-free hypothesis prices an observed
@@ -1106,38 +1107,51 @@ still scatter (sloppy x6 at 0.54-0.99, sloppy-mild x4 at
 0.79-0.95), two games never collapse at all (g05/g07, c@0 — and
 exactly those two show the mercy family's best mass, 0.27 and 0.11:
 the tug-of-war is visible but never won). The mechanism is priced,
-not mysterious: human-held's lapse rate is far below the corpus
-point's rungs (.70/.35), so the rare lapse evidence (~700x per
-observed off-model move) loses to the structural tithe the mercy
-mass costs on the other ~95% of moves. The rung ladder cannot
-legally reach lower — a mercy-0.05 rung is the held-out value, and
-the protocol forbids exactly that anchor. The legal paths forward
-are named: a richer live corpus (more first-party games, milder
-players), or rung scales FITTED to the corpus by NLL instead of
-halved by precedent. Until then the modeling confound on human-held
-STANDS — with one side newly bounded: assembly there is possible
-even under the mis-read (g01 proves it), so the wall is not
-assembly-behind-modeling; it is modeling alone, plus construction
-variance.
+with one honest caveat: the two fitted points vary GLOBAL scale,
+not mercy alone (_scaled halves the structure too), so the failure
+cannot be attributed to the mercy value in isolation. What is
+measured is that neither the corpus point nor its half-scale beats
+the sloppy family on this stream — the rare lapse evidence (~700x
+per observed off-model move) loses to the mass the mercy component
+tithes from the structured moves that are ~95% of it. Scaling
+further down would weaken structure further, chasing the confound;
+and a mercy-0.05 point is the held-out value, the anchor the
+protocol forbids. The legal paths forward are named: a richer live
+corpus (more first-party games, milder players), or a CONTROLLED
+MERCY LADDER — structure held at the corpus fit, mercy varied and
+scored on corpus NLL — so the axis is finally moved in isolation
+with every value still corpus-traced. Until then the modeling
+confound on human-held STANDS — with one side newly bounded:
+assembly there is possible even under the mis-read (g01 proves it),
+so the wall is not assembly-behind-modeling; it is modeling alone,
+plus construction variance.
 
-AND THE MERCY FAMILY PROVED ITSELF WHERE ITS BELIEF IS NEAREST
-TRUTH: random reads fitted-human x9 + fitted-human-mild x1 — the
-machinery collapses MAP onto the new family end-to-end in real
-games, first time on the record. Under that honest belief the
-engine's play transformed: it stopped building and started
-OFFERING. Seven of ten random games end in mercy mates (70-97 plies
-mostly — the fastest anything has ever ended against random), zero
-by force, three walls: believed P(take) of 0.7/L per offer, true
-1/L, offers cash faster than construction converts. The engine got
+AND THE MERCY FAMILY PROVED ITSELF AS MACHINERY — ON THE SET'S
+NEAREST PROXY FOR NOISE: random reads fitted-human x9 +
+fitted-human-mild x1, the first MAP collapses onto the new family
+on the record. Read the claim precisely: a closed-set MAP at 1.00
+names the best point IN THE SET, and no hypothesis is actually
+random (mercy 1.0, structure zero) — fitted-human, mercy .70 with
+real structure retained, is STANDING IN for noise exactly as
+sloppy-mild did in the posterior-map pin, one large step closer on
+the one axis that matters. A conservative, misspecified proxy, and
+the offer diagnosis below survives the misspecification in the safe
+direction: the proxy UNDER-prices true acceptance. Under that
+belief the engine's play transformed: it stopped building and
+started OFFERING. Seven of ten random games end in mercy mates
+(70-97 plies mostly — the fastest anything has ever ended against
+random), zero by force, three walls: believed P(take) of 0.7/L per
+offer, true 1/L, offers cash faster than construction converts —
+and more often than the engine expects, never less. The engine got
 mated in 7/10 games against noise — the best mated-at-all rate ever
 recorded on that row — and the forced column reads 0%, because
 every one of those mates is ledgered as the luck it is. The zero
 MOVED: worst held-out is now random (0%), human-held is off it.
-This is not a modeling error (the belief is the closest hypothesis
-to mercy=1.0 noise, and it under-prices the offers that do cash);
-it is the OBJECTIVE/METRIC SPLIT made visible for the first time:
-expectimax maximizes P(mated), the record counts only P(mated by
-force), and no belief was dishonest in the gap between them. The
+This is not a modeling error the posterior could fix from inside
+the set (fitted-human IS its closest point to noise); it is the
+OBJECTIVE/METRIC SPLIT made visible for the first time: expectimax
+maximizes P(mated), the record counts only P(mated by force), and
+mercy-bearing beliefs are what let luck be purchased at all. The
 queued value-plumbing lever now has a second mandate from the
 opposite direction: distinguish certificate value from chance-mass
 value in the search itself, so forced nets outbid coin-flip offers
@@ -1151,9 +1165,12 @@ plies, g02 156, the corner tomb and the double-donation crossfire,
 both still read squat-greedy-q@1.00), dev 4/30 as the arm measured.
 Cost of record: 93.7s/game solo, 109 min the full league — 44%
 CHEAPER than posterior-ext's 166.1, because offer-games end early
-and nothing pathological ran (node-cap clamps: 38,795 in the ext
-pin, ZERO here). Sub-probes: 41 hits / 37.3M calls, unk 98.7% — the
-extension keeps the certifier starved, unchanged.
+and nothing pathological ran: node-cap clamps fell 38,795 -> 13,912
+(21 games touched, the largest human-held g00 at 3,621 — no
+counterpart to the ext pin's 25,687-entry single-game blowup; the
+backstop still works, it just had less to stop). Sub-probes: 41
+hits / 37.3M calls, unk 98.7% — the extension keeps the certifier
+starved, unchanged.
 
 TABLES OF RECORD: posterior-ext REMAINS the table of record
 (held-out 6/40 > 5/40; overall 12/70 > 9/70). posterior-mercy is
@@ -1169,18 +1186,63 @@ because an honest belief loses a forced-only accounting would be
 belief-falsification for score, the exact sin the phantom-net entry
 prosecuted in the other direction. Dev is rate-neutral by direct
 A/B; the naming capability is load-bearing for the live bar (the
-corpus fit says real humans carry mercy .70 — the family exists
-because the target opponent does).
+corpus fit measures a large mercy-shaped noise component in real
+human play — whatever mix of true lapses and unmodeled structure it
+contains, only a mercy-bearing hypothesis can represent it, and the
+target opponent is exactly that kind of human).
 
 Queue, forced by the split verdict: VALUE PLUMBING first, doubly
 mandated (dev squat still walls 9/10 with correct beliefs and sub=0
 — the standing mandate — and the random row now shows chance-mass
 EV outbidding certificate-bearing construction — the new one);
-HUMAN-HELD NAMING second, by legal means only (grow the corpus or
-fit the rung scales to it; never a held-out anchor); selective
-depth stays shipped, deep roots stay benched. Milestones stand at
+HUMAN-HELD NAMING second, by legal means only (grow the corpus, or
+build the controlled mercy ladder on it; never a held-out anchor);
+selective depth stays shipped, deep roots stay benched. Milestones stand at
 60/80/90% held-out; the live bar stays "the corner poses and the
 mate lands BY FORCE against a human" — and the session's exhibit is
 that human-held's first-ever forced mate is exactly that shape,
 landed while the family it was built to name still cannot be
 named.
+
+### Mercy-pin review round: the rung is a scale, the residue is not a lapse rate, and random is named by proxy (2026-07-24)
+
+Four findings on the pin accepted; no engine behavior changes,
+version stays a9 (comments and log prose only — trajectories,
+reports, and regeneration untouched, per the precedent that version
+bumps are for code that moves play).
+
+- THE MILD POINT IS A GLOBAL SCALE, NOT A MERCY RUNG (P2, real):
+  _scaled halves every continuous urge, so fitted-human-mild is a
+  globally milder human — the sloppy-mild precedent applied
+  literally — and the entry's diagnosis had attributed the
+  human-held naming failure to the mercy values (.70/.35) as if the
+  axis had been varied in isolation. It was not; the two points vary
+  overall scale. Comment and entry now say so, and the queue's legal
+  path sharpens into the CONTROLLED MERCY LADDER: structure held at
+  the corpus fit, mercy varied and scored on corpus NLL — the axis
+  moved alone, every value still corpus-traced.
+- MERCY .70 IS RESIDUE, NOT A LAPSE RATE (P2, real): the fit
+  supports a 70% uniform-over-legal component inside this family —
+  the a6 entry's own misspecification reading — not a claim that a
+  human abandons mate-avoidance seven moves in ten. Avoidable mates
+  are merely the move class only that component can explain.
+  Docstring and entry rephrased to keep the interpretation.
+- RANDOM IS NAMED BY PROXY (P2, real): a closed-set MAP at 1.00
+  names the best point in the set, and no hypothesis is truly
+  random — fitted-human (mercy .70, structure retained) stands in
+  for noise as sloppy-mild did in the posterior-map pin, one large
+  step closer on the mercy axis. The offer-vs-forced diagnosis
+  survives unchanged, in the safe direction: the proxy UNDER-prices
+  true acceptance (0.7/L believed, 1/L true), so offers cash more
+  often than the engine expects, never less.
+- THE ZERO-CLAMP CLAIM WAS A TOOLING BUG, NOT THE REPORT'S (P3,
+  real): the entry claimed the node cap never fired; report.json
+  says 13,912 clamped entries across 21 games, the largest
+  human-held g00 at 3,621 — down from the ext pin's 38,795 with its
+  25,687-entry single-game blowup, so the honest sentence is
+  "substantially less to stop", not "nothing". The zero came from
+  session tooling summing a gauge key that does not exist
+  (node_cap_clamped for clamped_nodes) — the pinned report was
+  right all along, and the artifact policy is why the error was
+  catchable: the claim was checkable from report.json alone, and
+  that is exactly how review caught it.
