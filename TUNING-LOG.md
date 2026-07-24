@@ -780,3 +780,157 @@ rerun: this is a behavior-affecting prior correction, so
 `posterior-map/` remains the historical a6 inference pin rather than
 being relabeled as an a7 result. Runtime and conversion gains: no
 claim.
+
+## Selective depth x honest odds: the extension comes off the bench and doubles the record (2026-07-23)
+
+The posterior-map queue said it plainly: re-arm the benched a4 depth
+knobs on --infer map, aimed at walls that are now proven
+assembly-bound. The whole a4 sweep was graded inside the phantom's
+environment — fixed-sloppy EV outbidding real plans on every squat
+wall — so its "no arm moves dev" was a measurement of the poison, not
+of the knobs. Re-graded with honest odds, the verdict flips, and the
+pin below supersedes funded-100k as the table of record.
+
+FIRST, THE CONTROL SAID SOMETHING ITSELF. infer-base (a7 defaults +
+--infer map, the posterior-map config re-run on current code) does
+NOT reproduce the a6 pin: 13 of 30 dev games diverge in movetext,
+exactly as the a7 review entry warned when it declined to relabel the
+pin. What survives is everything that matters: the aggregate holds at
+forced 2/30 with the SAME two conversions ply-for-ply (squat g00's
+78-ply window, zach g08's 118), and the assembly-bound diagnosis got
+SHARPER — the a6 pin's squat g09 carried 4 wall hits; at a7 every dev
+wall runs sub=0 with the family still read correctly, and matched
+families collapse faster (the anchored prior starts sloppy at 0.583,
+so 0.95 arrives in 3-8 observations against a6's 5-29). posterior-map
+stays the a6 inference record; infer-base is the a7 control this
+sweep grades against.
+
+DEV ARMS (zach/sloppy/squat, 10 games/family, baseline seeds, all
+--infer map; artifacts dev-infer-seldepth-{base,ext,deep}/, untracked,
+regenerable from HEAD + the report's engine block; arm wall-seconds
+ran under 3-way container load and are not citable):
+
+```
+arm    config                     forced  hits  unk%   certs  snodes  st-us
+base   defaults                     2/30     3  63.7       3   11.0M      1
+ext    forced_ext 6, cap 400k       6/30    47  99.0      12   53.0M      0
+deep   depth 4 men 3, topk kept     4/30    30  97.6       7   23.7M      2
+```
+
+THE TOGETHER-TEST PASSES ON ZACH, AND SLOPPY JOINS IN. The honest
+certifier's criterion was hits and forced moving together on the wall
+families. Ext zach: hits 1 -> 23 WITH forced 1 -> 4. Ext sloppy: hits
+0 -> 21 WITH forced 0 -> 1. Deep zach shows the same signature weaker
+(20 hits, 3 forced) plus two stalemate-us blunders ext does not have,
+and its a4 pathology survives inference unchanged: deepening is
+structurally anti-probe (gated calls x61, unk 97.6%; its conversions
+closed through root certificates, not sub-probes). Squat is the
+flat-flat family in BOTH arms — one conversion each, relocated (the
+control's g00 window became ext's new g09 construction), walls still
+sub=0 — so dev squat's wall stays assembly-bound at every depth
+tried. Ext costs what it cost in a4 — 4.8x search nodes, the same
+ratio — and the a5 per-branch node cap now actually trips where a4's
+global counter never did (squat g07: 2,900 clamped entries),
+degrading evenly by design instead of biasing the quiet candidates.
+Ext takes the pin on every axis: triple the control's forced, zero
+blunders, and the fastest conversions on record.
+
+### Pinned league (2026-07-23, engine model, posterior-ext)
+
+Defaults + --infer map --forced-ext 6 --node-cap 400000 (config of
+record in the report's engine block, prior rule and per-hypothesis
+priors included); 10 games/family; artifacts:
+games/league/posterior-ext/.
+
+```
+family       split      n  forced mercy st-them st-us insuf fifty rep maxply
+sloppy       dev       10       1     0       0     0     1     0   1      7
+squat        dev       10       1     0       0     0     0     0   0      9
+zach         dev       10       4     0       0     0     0     0   0      6
+human-held   held-out  10       0     0       0     0     0     0   1      9
+random       held-out  10       3     1       0     0     0     0   1      5
+sloppy-held  held-out  10       1     0       0     0     1     0   0      8
+squat-held   held-out  10       2     0       0     0     0     0   0      8
+forced — held-out: 6/40 (15%); dev: 6/30 (20%); overall: 12/70 (17%)
+worst held-out: human-held (0%)
+```
+
+THE RECORD IS DOUBLED EVERYWHERE AT ONCE: held-out 3/40 -> 6/40, dev
+3/30 -> 6/30, overall 6/70 -> 12/70 against funded-100k, with the
+anchor's 6.25% now lapped twice over. Determinism held end-to-end:
+all 30 dev games are bit-identical to the ext arm's across the
+solo/loaded container boundary, so the arm evidence and the pin are
+one experiment, not two.
+
+SQUAT-HELD IS OFF ZERO — the standing trophy target, the family every
+league since the baseline scored 0%, and the cleanest test in the
+project after the posterior-map pin proved its belief right and its
+constructor absent. The constructor arrived. g01 (169 plies, 2 certs)
+is the LIVE BAR'S OWN SHAPE landed on a held-out family: the engine
+walks its king into the a8 corner tomb, preserves the squatter's
+a6-pawn as executioner, and donates a knight to b7 — where the greed
+graft inference identified (squat-greedy-q@1.00, all ten games, read
+from moves alone) takes the bait: 85.axb7#. g02 (156 plies, 2 certs)
+is a double-donation crossfire: 77.Qb8+ baits Kxc6, 78.Qb5+ forces
+axb5#. The row's sub-probe hits sit exactly on the two converting
+games (5 and 1); the eight walls still run sub=0 — the certifier
+agrees the constructor reaches nets in some games and none of the
+others, which is what a real capability looks like at n=10.
+
+The rest of the held-out ledger: sloppy-held g03 converts in 53
+PLIES — the fastest organic forced selfmate on the project's record
+(old record 74) — by feeding its own rook to f7 and letting the
+greedy family's 27.exf7# close over the self-boxed king, three root
+certificates deep. Random tripled to 3/10: the g00 pawn-bait pocket
+(49.g3 hxg3#), the g03 herd chain driving the noise king five checks
+across the board into the quiet 55...Rb7 and 56.axb7#, and the g05
+herd into knight-feed (78.cxd7#); its fourth mate is mercy, ledgered
+as luck as always. Relocation cuts both ways and is recorded
+honestly: sloppy-held's funded-era pair (the 74-ply record game
+included) walled or drew on these trajectories — the a4 lesson
+stands that game-for-game ledgers are noise at n=10 while aggregates
+and device inventories are the units, and both units moved up.
+
+The dev half of the pin (identical to the arm): zach g03's crossfire
+at 55 plies, g02's herd chain — the class's first landing on a dev
+family — g05's waiting-move net (check-drive into the quiet 39...g5,
+cashed by 40.cxd7#), g08's induced rook underpromotion into 97.Qh1+
+Rxh1#, squat g09's quiet buildup (h6, Qg3, Re6) around the squatted
+corner closed by 42.fxe6#, and sloppy g00's herd into 84.Qd2+
+Kxd2# — six conversions, five device classes, three of them new to
+the inventory (herd-on-dev, the squat construction, the record
+crossfires).
+
+HUMAN-HELD IS NOW THE LAST ZERO, and for the first time the
+diagnostics say why in the record itself: the posterior cannot name
+the family. Reads scatter between sloppy-mild (0.78-0.93) and sloppy
+(0.57-0.99), one game never collapses at all (g05: coll=0), and the
+one 240-ply row with 3 hits still certifies nothing. Every other
+family reads at 1.00 and converts or walls on construction merit;
+this one is a modeling gap, not an assembly gap — the queued
+mercy-bearing hypothesis (the fitter's human point: mercy .70, greed
+.95, hunt .90, check 0.0) is aimed at exactly this row.
+
+Cost and gauges of record: 166.1s/game solo, 194 min the full
+league — 3.4x posterior-map's 49.3, the price of 27.0M extension
+nodes inside 126.8M total. Sub-probes: 78 hits / 42.6M gated calls,
+unk 98.8% — the extension keeps the certifier starved (the a4
+shape), and the 24 root certificates did the closing; probe-budget
+scaling under ext trees is an open lever, not a refuted one. The
+node cap's first real work at solo scale: 38,795 clamped entries
+league-wide, 25,687 of them in random g09's 3.7M-call blowup game —
+the backstop held a pathological move to 390s instead of stalling
+the clock.
+
+Queue, forced by the one remaining zero and the walls that stayed:
+HYPOTHESIS-SET GROWTH first (the mercy family / fitted-human point
+for human-held and random, through dev evidence, exactly as the
+posterior-map entry queued it); VALUE PLUMBING second (dev squat
+still walls 9/10 with a correct belief and a working constructor
+elsewhere — proven-node scores vs chance-layer dilution is the named
+suspect); deep roots stay benched (starves probes, converts less
+than ext, and blunders). Milestones stand at 60/80/90% held-out;
+15% is the second rung. The live bar stays "the corner poses and
+the mate lands BY FORCE against a human" — squat-held g01 is that
+exact shape against a held-out kernel, which is the strongest
+evidence yet that the bar is reachable.

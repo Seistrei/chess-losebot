@@ -1,0 +1,10 @@
+[Event "Misere league"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "losebot(infer-map)"]
+[Black "random"]
+[Result "0-1"]
+[Termination "checkmate; focal=white; selfmate-forced"]
+
+1. e3 d5 2. Bb5+ Nc6 3. Bxc6+ Bd7 4. Bxb7 Bc8 5. Bc6+ Bd7 6. Bxa8 Bg4 7. Bc6+ Bd7 8. Qg4 Bxc6 9. Qc8 g6 10. Qxd8+ Kxd8 11. Nc3 f5 12. Ne4 Ba4 13. b3 Be8 14. Bb2 f4 15. Nc5 e6 16. Nxe6+ Kc8 17. Nxf8 c5 18. Bxh8 a5 19. a3 c4 20. Ke2 f3+ 21. Kxf3 Bc6 22. d3 h6 23. h3 a4 24. b4 Bb5 25. dxc4 Bd7 26. Nxd7 Nf6 27. Bxf6 dxc4 28. Kg3 h5 29. Kh2 c3 30. Be5 h4 31. Nb6+ Kd8 32. Rd1+ Ke7 33. Nc8+ Ke8 34. Rd8+ Kf7 35. Rd7+ Ke8 36. Re7+ Kf8 37. Bg7+ Kg8 38. Re8+ Kxg7 39. e4 g5 40. Re7+ Kg6 41. f3 Kh6 42. Ra7 Kh5 43. Ne7 g4 44. Ra6 Kg5 45. Nd5 gxh3 46. f4+ Kg4 47. Ra8 Kh5 48. Rh8+ Kg4 49. g3 hxg3# 0-1
