@@ -47,6 +47,12 @@ def run_league(
             board, outcome, seconds = timed_game(
                 white, black, max_plies=max_plies
             )
+            # The opponent may have made the terminal move, in which
+            # case choose_move() never gets another chance to consume
+            # it. Synchronize the final board before persisting the
+            # posterior diagnostics.
+            if hasattr(engine, "sync_observations"):
+                engine.sync_observations(board)
             # One gauges() snapshot feeds both the console line and
             # the persisted record, so the two cannot tell different
             # stories — and the report carries the probe diagnosis

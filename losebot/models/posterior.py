@@ -46,7 +46,7 @@ keep updating and can revive if the evidence swings back.
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import chess
 
@@ -71,6 +71,14 @@ PRUNE = 1e-3
 #: diagnostic the league persists.
 COLLAPSE = 0.95
 
+#: The configured belief is a real Bayesian prior, not merely a
+#: tie-break hint. Half the mass starts on that exact point; the other
+#: half is exploratory mass balanced across broad families and then
+#: split across variants within each family. Adding another corner or
+#: greed variant therefore does not silently make the squat premise
+#: more probable before any evidence arrives.
+CONFIGURED_PRIOR_MASS = 0.5
+
 
 def _scaled(params: UrgeParams, factor: float) -> UrgeParams:
     """Scale every firing probability; structure knobs stay put."""
@@ -87,9 +95,9 @@ def _scaled(params: UrgeParams, factor: float) -> UrgeParams:
     )
 
 
-#: The dev-pure hypothesis set, in fixed order (the order is the MAP
-#: tie-break, so the incumbent belief sits first: at zero observations
-#: MAP inference plays exactly the engine the funded pin ran).
+#: The dev-pure hypothesis set, in fixed order. The configured belief
+#: supplies the prior anchor; order is now only a deterministic
+#: tie-break after genuinely equal posterior weights.
 HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
     ("sloppy", SLOPPY),
     ("sloppy-mild", _scaled(SLOPPY, 0.5)),
@@ -101,6 +109,65 @@ HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
     ("squat-greedy-q", replace(SQUAT, home_side="queen",
                                greed=SLOPPY.greed, trade=SLOPPY.trade)),
 )
+
+#: Broad families used only to construct the exploratory half of the
+#: prior. They do not collapse or otherwise coarsen inference: every
+#: hypothesis still accumulates its own likelihood.
+HYPOTHESIS_FAMILIES: tuple[str, ...] = (
+    "sloppy",
+    "sloppy",
+    "zach",
+    "squat",
+    "squat",
+    "squat",
+    "squat",
+)
+
+
+def prior_for_belief(
+    belief: OpponentModel,
+    hypotheses: tuple[tuple[str, UrgeParams], ...] = HYPOTHESES,
+    families: tuple[str, ...] = HYPOTHESIS_FAMILIES,
+    configured_mass: float = CONFIGURED_PRIOR_MASS,
+) -> tuple[float, ...]:
+    """Build a point-anchored, family-balanced inference prior.
+
+    Inference intentionally ranges over dev-built points only. The
+    configured belief must therefore match one of those parameter
+    dictionaries (``squat`` matches the ``squat-k`` hypothesis even
+    though the display names differ).
+    """
+    if len(hypotheses) != len(families):
+        raise ValueError("every inference hypothesis needs a family")
+    if not 0.0 < configured_mass < 1.0:
+        raise ValueError("configured prior mass must be between 0 and 1")
+    params = getattr(belief, "params", None)
+    matches = [
+        index
+        for index, (_name, hypothesis_params) in enumerate(hypotheses)
+        if hypothesis_params == params
+    ]
+    if not matches:
+        supported = ", ".join(name for name, _params in hypotheses)
+        raise ValueError(
+            f"inference belief {belief.name!r} is not in the dev "
+            f"hypothesis set ({supported})"
+        )
+
+    counts: dict[str, int] = {}
+    for family in families:
+        counts[family] = counts.get(family, 0) + 1
+    family_mass = 1.0 / len(counts)
+    exploratory = [
+        family_mass / counts[family]
+        for family in families
+    ]
+    prior = [
+        (1.0 - configured_mass) * weight
+        for weight in exploratory
+    ]
+    prior[matches[0]] += configured_mass
+    return tuple(prior)
 
 
 class MixtureModel(OpponentModel):
@@ -133,13 +200,52 @@ class HypothesisPosterior:
         hypotheses: tuple[tuple[str, UrgeParams], ...] = HYPOTHESES,
         epsilon: float = EPSILON,
         prune: float = PRUNE,
+        collapse: float = COLLAPSE,
+        prior: tuple[float, ...] | None = None,
+        families: tuple[str, ...] | None = None,
     ):
+        if not hypotheses:
+            raise ValueError("posterior needs at least one hypothesis")
+        if families is None:
+            families = (
+                HYPOTHESIS_FAMILIES
+                if hypotheses == HYPOTHESES
+                else tuple(name for name, _params in hypotheses)
+            )
+        if len(families) != len(hypotheses):
+            raise ValueError("every inference hypothesis needs a family")
+        prior_was_uniform = prior is None
+        if prior is None:
+            prior = tuple(1.0 / len(hypotheses) for _ in hypotheses)
+        if len(prior) != len(hypotheses):
+            raise ValueError("prior length must match hypotheses")
+        if any(weight <= 0.0 or not math.isfinite(weight) for weight in prior):
+            raise ValueError("every prior weight must be finite and positive")
+        total = sum(prior)
+        prior = tuple(weight / total for weight in prior)
+
+        self.hypotheses = hypotheses
+        self.families = families
         self.models = [UrgeModel(name, params) for name, params in hypotheses]
         self.epsilon = epsilon
         self.prune = prune
-        self.log_w = [0.0] * len(self.models)  # uniform prior
+        self.collapse = collapse
+        self.prior = prior
+        self.prior_rule = (
+            "uniform-per-hypothesis" if prior_was_uniform else "explicit"
+        )
+        self.configured_mass: float | None = None
+        self.log_w = [math.log(weight) for weight in prior]
         self.observations = 0
-        self.collapse_at = 0  # first observation with MAP >= COLLAPSE
+        self.collapse_at = 0  # first observation with MAP >= collapse
+
+    @classmethod
+    def from_belief(cls, belief: OpponentModel) -> "HypothesisPosterior":
+        """Construct the production posterior anchored at ``belief``."""
+        posterior = cls(prior=prior_for_belief(belief))
+        posterior.prior_rule = "configured-point-plus-family-balanced"
+        posterior.configured_mass = CONFIGURED_PRIOR_MASS
+        return posterior
 
     def observe(self, board: chess.Board, move: chess.Move) -> None:
         """Bayes-update on one observed opponent move.
@@ -160,7 +266,7 @@ class HypothesisPosterior:
         peak = max(self.log_w)
         self.log_w = [lw - peak for lw in self.log_w]  # keep floats sane
         self.observations += 1
-        if self.collapse_at == 0 and max(self.weights()) >= COLLAPSE:
+        if self.collapse_at == 0 and max(self.weights()) >= self.collapse:
             self.collapse_at = self.observations
 
     def weights(self) -> list[float]:
@@ -169,8 +275,7 @@ class HypothesisPosterior:
         return [w / total for w in raw]
 
     def map_model(self) -> UrgeModel:
-        """The maximum-a-posteriori hypothesis; ties keep list order,
-        so before any evidence this IS the incumbent sloppy belief."""
+        """The maximum-a-posteriori hypothesis."""
         weights = self.weights()
         best = max(range(len(weights)), key=lambda i: (weights[i], -i))
         return self.models[best]
@@ -195,6 +300,27 @@ class HypothesisPosterior:
         return MixtureModel(
             [(model, weight / total) for model, weight in live]
         )
+
+    def configuration(self) -> dict:
+        """JSON-ready inference configuration for citable reports."""
+        return {
+            "epsilon": self.epsilon,
+            "prune": self.prune,
+            "collapse": self.collapse,
+            "prior_rule": self.prior_rule,
+            "configured_mass": self.configured_mass,
+            "hypotheses": [
+                {
+                    "name": name,
+                    "family": family,
+                    "params": asdict(params),
+                    "prior": prior,
+                }
+                for (name, params), family, prior in zip(
+                    self.hypotheses, self.families, self.prior
+                )
+            ],
+        }
 
     def diagnostics(self) -> dict:
         """The gauges() payload: what the pinned report keeps.

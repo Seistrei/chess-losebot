@@ -722,7 +722,7 @@ covers dev squat/zach — walls with correct beliefs and nothing for
 the certifier to certify.
 
 The posterior read every held-out family correctly from moves
-alone: sloppy-held -> sloppy 10/10, human-held -> sloppy-mild 7/10
+alone: sloppy-held -> sloppy 10/10, human-held -> sloppy-mild 8/10
 (the half-strength interpolation exists for exactly that region),
 squat-held -> squat-greedy-q 10/10, random -> sloppy-mild 10/10 at
 weight 1.00 — the flattest structured hypothesis standing in for
@@ -745,3 +745,38 @@ growth second (the mercy family for random/human-held, the
 fitted-human point, both through dev evidence); value plumbing
 third, unchanged. Milestones stand at 60/80/90% held-out; the live
 bar stays "the corner poses and the mate lands BY FORCE."
+
+## Posterior review hardening (2026-07-23)
+
+Four review findings on the inference pin were accepted; 2.0.0a6 ->
+2.0.0a7, selftest 50 -> 53:
+
+- `--belief` now initializes inference as an actual prior. Half the
+  mass sits on the configured dev point and half is balanced across
+  the sloppy/zach/squat families, then divided among variants inside
+  each family. Thus `belief=zach --infer=map` starts at Zach, while
+  adding a fourth squat variant no longer grants squat four times a
+  one-point family's exploratory mass. All hypotheses retain positive
+  mass and can recover after contrary evidence.
+- The league synchronizes the final board before `gauges()`. An
+  opponent terminal move is now included even when the engine never
+  receives another `choose_move()` call; the one-ply, engine-as-Black
+  regression records one observation, while engine-as-White records
+  zero.
+- Future reports persist epsilon, prune, collapse, the prior rule and
+  exact per-hypothesis prior, family, and full `UrgeParams` dictionary,
+  plus `snapshot=final-board`. The pinned a6 report was enriched
+  without changing its results: it truthfully records the historical
+  uniform 1/7-per-hypothesis prior and
+  `snapshot=engine-last-decision`.
+- The human-held narrative is corrected from sloppy-mild 7/10 to
+  8/10, matching the ten game records (two ended at sloppy).
+
+Docker validation: selftest 53/53. A two-game CLI smoke with
+`belief=zach --infer=map`, one-ply games, emitted 2.0.0a7 metadata
+with Zach prior 2/3, sloppy-family prior 1/6, squat-family prior 1/6,
+and every parameter dictionary present. No performance league was
+rerun: this is a behavior-affecting prior correction, so
+`posterior-map/` remains the historical a6 inference pin rather than
+being relabeled as an a7 result. Runtime and conversion gains: no
+claim.

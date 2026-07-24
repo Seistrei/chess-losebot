@@ -109,7 +109,8 @@ class ModelEngine:
         # updates are pure functions of this game's observed moves —
         # determinism to the ply survives.
         self.posterior = (
-            HypothesisPosterior() if infer != "off" else None
+            HypothesisPosterior.from_belief(belief)
+            if infer != "off" else None
         )
         self._shadow: chess.Board | None = None  # replay cursor
         self._observed_plies = 0
@@ -162,8 +163,7 @@ class ModelEngine:
         if not legal:
             raise ValueError("no legal moves")
         self.moves_played += 1
-        if self.posterior is not None:
-            self._observe_opponent(board)
+        self.sync_observations(board)
         if len(legal) == 1:
             return legal[0]
 
@@ -208,6 +208,16 @@ class ModelEngine:
         if self.infer == "map":
             return self.posterior.map_model()
         return self.posterior.mixture_model()
+
+    def sync_observations(self, board: chess.Board) -> None:
+        """Bring inference through the last move on ``board``.
+
+        ``choose_move`` calls this before every decision. Game runners
+        also call it once on the final board, because an opponent move
+        can terminate the game without giving the engine another turn.
+        """
+        if self.posterior is not None:
+            self._observe_opponent(board)
 
     def _observe_opponent(self, board: chess.Board) -> None:
         """Feed the posterior every opponent move since the last sync.

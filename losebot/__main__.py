@@ -17,7 +17,7 @@ from .engine import ModelEngine
 from .league.families import resolve_families
 from .league.play import record_game, save_pgn, timed_game
 from .league.runner import league_metadata, run_league, save_report
-from .models import MODEL_NAMES, ModelPlayer, make_model
+from .models import HypothesisPosterior, MODEL_NAMES, ModelPlayer, make_model
 from .oracle import selfmate_status
 
 
@@ -84,8 +84,9 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "--infer", default="off", choices=("off", "map", "mix"),
         help="online opponent inference from observed moves: steer "
         "against the MAP hypothesis or the posterior mixture instead "
-        "of the fixed --belief (which still names the zero-evidence "
-        "start point via hypothesis order)",
+        "of the fixed --belief; half the prior starts on --belief and "
+        "half is balanced across dev hypothesis families (--belief "
+        "must match a dev hypothesis)",
     )
 
 
@@ -126,6 +127,7 @@ def _cmd_play(args) -> int:
     board, outcome, seconds = timed_game(
         white, black, max_plies=args.max_plies, start_fen=args.fen
     )
+    engine.sync_observations(board)
     record = record_game(
         board, outcome, family=args.opponent, game_index=0, seed=args.seed,
         focal_color=focal_color, white_name=white.name,
@@ -193,16 +195,15 @@ def _cmd_league(args) -> int:
             "infer": args.infer,
         }
         if args.infer != "off":
-            from .models.posterior import EPSILON, HYPOTHESES, PRUNE
-
-            # The inference config of record: the report must be able
-            # to say WHICH hypothesis set the posterior ran over, or
-            # a future set change silently redefines every number.
-            engine_desc["infer_epsilon"] = EPSILON
-            engine_desc["infer_prune"] = PRUNE
-            engine_desc["infer_hypotheses"] = [
-                name for name, _params in HYPOTHESES
-            ]
+            # Persist the exact posterior, not aliases whose parameter
+            # dictionaries or scaling rules may drift under the same
+            # names. The prior and collapse rule are part of the
+            # experiment just as much as epsilon and pruning.
+            inference = HypothesisPosterior.from_belief(
+                make_model(args.belief)
+            ).configuration()
+            inference["snapshot"] = "final-board"
+            engine_desc["inference"] = inference
 
     out_dir = Path(
         args.out

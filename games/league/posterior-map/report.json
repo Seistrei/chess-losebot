@@ -18,17 +18,142 @@
       "deep_topk": 0,
       "node_cap": 0,
       "infer": "map",
-      "infer_epsilon": 0.001,
-      "infer_prune": 0.001,
-      "infer_hypotheses": [
-        "sloppy",
-        "sloppy-mild",
-        "zach",
-        "squat-k",
-        "squat-q",
-        "squat-greedy-k",
-        "squat-greedy-q"
-      ]
+      "inference": {
+        "epsilon": 0.001,
+        "prune": 0.001,
+        "collapse": 0.95,
+        "prior_rule": "uniform-per-hypothesis",
+        "configured_mass": null,
+        "snapshot": "engine-last-decision",
+        "hypotheses": [
+          {
+            "name": "sloppy",
+            "family": "sloppy",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.95,
+              "greed": 0.85,
+              "trade": 0.35,
+              "check": 0.25,
+              "push": 0.5,
+              "hunt": 0.5,
+              "home": 0.0,
+              "home_corner": null,
+              "home_side": "king",
+              "pawn_last": false
+            },
+            "prior": 0.14285714285714285
+          },
+          {
+            "name": "sloppy-mild",
+            "family": "sloppy",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.475,
+              "greed": 0.425,
+              "trade": 0.175,
+              "check": 0.125,
+              "push": 0.25,
+              "hunt": 0.25,
+              "home": 0.0,
+              "home_corner": null,
+              "home_side": "king",
+              "pawn_last": false
+            },
+            "prior": 0.14285714285714285
+          },
+          {
+            "name": "zach",
+            "family": "zach",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.0,
+              "greed": 0.0,
+              "trade": 0.0,
+              "check": 0.0,
+              "push": 0.0,
+              "hunt": 0.0,
+              "home": 0.0,
+              "home_corner": null,
+              "home_side": "king",
+              "pawn_last": false
+            },
+            "prior": 0.14285714285714285
+          },
+          {
+            "name": "squat-k",
+            "family": "squat",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.0,
+              "greed": 0.0,
+              "trade": 0.0,
+              "check": 0.0,
+              "push": 0.0,
+              "hunt": 0.0,
+              "home": 1.0,
+              "home_corner": null,
+              "home_side": "king",
+              "pawn_last": true
+            },
+            "prior": 0.14285714285714285
+          },
+          {
+            "name": "squat-q",
+            "family": "squat",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.0,
+              "greed": 0.0,
+              "trade": 0.0,
+              "check": 0.0,
+              "push": 0.0,
+              "hunt": 0.0,
+              "home": 1.0,
+              "home_corner": null,
+              "home_side": "queen",
+              "pawn_last": true
+            },
+            "prior": 0.14285714285714285
+          },
+          {
+            "name": "squat-greedy-k",
+            "family": "squat",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.0,
+              "greed": 0.85,
+              "trade": 0.35,
+              "check": 0.0,
+              "push": 0.0,
+              "hunt": 0.0,
+              "home": 1.0,
+              "home_corner": null,
+              "home_side": "king",
+              "pawn_last": true
+            },
+            "prior": 0.14285714285714285
+          },
+          {
+            "name": "squat-greedy-q",
+            "family": "squat",
+            "params": {
+              "mercy": 0.0,
+              "promote": 0.0,
+              "greed": 0.85,
+              "trade": 0.35,
+              "check": 0.0,
+              "push": 0.0,
+              "hunt": 0.0,
+              "home": 1.0,
+              "home_corner": null,
+              "home_side": "queen",
+              "pawn_last": true
+            },
+            "prior": 0.14285714285714285
+          }
+        ]
+      }
     },
     "families": [
       "zach",

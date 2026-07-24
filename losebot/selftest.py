@@ -593,14 +593,41 @@ def test_selective_depth() -> None:
 
 
 def test_posterior() -> None:
-    # Before any evidence, MAP inference IS the incumbent: uniform
-    # prior, ties broken by hypothesis order, sloppy first.
-    posterior = HypothesisPosterior()
-    check(
-        "posterior: zero evidence answers the incumbent sloppy",
-        posterior.map_model().name == "sloppy"
-        and posterior.observations == 0,
+    # Before any evidence, the configured belief is the real prior
+    # anchor, while the exploratory half is balanced by broad family.
+    # Four squat variants must not receive four times Zach's family
+    # mass just because the hypothesis set represents more squat axes.
+    zach_posterior = HypothesisPosterior.from_belief(make_model("zach"))
+    zach_weights = zach_posterior.weights()
+    zach_families = zach_posterior.families
+    sloppy_mass = sum(
+        weight for weight, family in zip(zach_weights, zach_families)
+        if family == "sloppy"
     )
+    squat_mass = sum(
+        weight for weight, family in zip(zach_weights, zach_families)
+        if family == "squat"
+    )
+    config = zach_posterior.configuration()
+    check(
+        "posterior: configured belief anchors a family-balanced prior",
+        zach_posterior.map_model().name == "zach"
+        and zach_posterior.observations == 0
+        and abs(sloppy_mass - squat_mass) < 1e-12
+        and zach_weights[2] > sloppy_mass
+        and config["collapse"] == zach_posterior.collapse
+        and config["prior_rule"]
+        == "configured-point-plus-family-balanced"
+        and config["configured_mass"] == 0.5
+        and all(
+            set(hypothesis) == {"name", "family", "params", "prior"}
+            and isinstance(hypothesis["params"], dict)
+            for hypothesis in config["hypotheses"]
+        ),
+        f"zach={zach_weights[2]:.4f}, sloppy={sloppy_mass:.4f}, "
+        f"squat={squat_mass:.4f}",
+    )
+    posterior = HypothesisPosterior.from_belief(make_model("sloppy"))
 
     # The corner march: three observed homing steps must collapse the
     # posterior onto the squat FAMILY. squat-k and squat-greedy-k stay
@@ -687,11 +714,23 @@ def test_posterior() -> None:
         "posterior: declined gifts split the greed axis and collapse",
         diag["posterior_map"] == "squat-k"
         and diag["posterior_map_weight"] >= 0.95
-        and diag["posterior_collapse_at"] == posterior.observations
-        and diag["posterior_live"] <= 2,
+        and diag["posterior_collapse_at"] == posterior.observations,
         f"map@{diag['posterior_map_weight']}, "
         f"collapse@{diag['posterior_collapse_at']}, "
         f"live={diag['posterior_live']}",
+    )
+    # Pruning is deliberately a later, separate event: the point can
+    # be confidently identified while more than one low-weight rival
+    # remains live in the mixture.
+    pose = chess.Board(DECLINE_FIXTURE_1)
+    posterior.observe(pose, chess.Move.from_uci("g7h8"))
+    diag = posterior.diagnostics()
+    check(
+        "posterior: low-weight rivals prune after point collapse",
+        diag["posterior_collapse_at"] < posterior.observations
+        and diag["posterior_live"] <= 2,
+        f"collapse@{diag['posterior_collapse_at']}, "
+        f"obs={posterior.observations}, live={diag['posterior_live']}",
     )
 
     # Mixture arithmetic: exact weighted merge, normalized, sorted.
@@ -727,6 +766,16 @@ def test_posterior_engine() -> None:
             belief=make_model("sloppy"), depth=2, topk=4, probe_n=1,
             probe_cap=2_000, sub_probe_cap=2_000, infer=mode,
         )
+
+    configured = ModelEngine(
+        belief=make_model("zach"), depth=1, probe_n=1,
+        probe_cap=10, sub_probe_n=0, infer="map",
+    )
+    check(
+        "engine: configured belief reaches zero-evidence inference",
+        configured.posterior.map_model().name == "zach"
+        and configured._current_belief().name == "zach",
+    )
 
     # End-to-end vs a real squatter: the engine's posterior must read
     # the temperament off the observed moves alone — and two identical
@@ -775,6 +824,26 @@ def test_posterior_engine() -> None:
         and fixed.name == "losebot(sloppy)"
         and engine.name == "losebot(infer-map)",
         f"map game plies={len(final.move_stack)}",
+    )
+
+    # If the opponent makes the terminal move, choose_move() is never
+    # called again. The league's final synchronization must still put
+    # that move into the persisted posterior snapshot. A one-ply game
+    # gives the engine no turn at all when it sits Black, isolating the
+    # boundary exactly.
+    _summary, records = run_league(
+        lambda: infer_engine("map"),
+        ("zach",),
+        games_per_family=2,
+        max_plies=1,
+        log=lambda *args, **kwargs: None,
+    )
+    check(
+        "league: final opponent move reaches posterior diagnostics",
+        records[0].probes["posterior_observations"] == 0
+        and records[1].probes["posterior_observations"] == 1,
+        f"white={records[0].probes['posterior_observations']}, "
+        f"black={records[1].probes['posterior_observations']}",
     )
 
 
