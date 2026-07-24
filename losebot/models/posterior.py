@@ -20,14 +20,18 @@ same belief and the same offers keep landing.
 Protocol note, load-bearing: inference reads ONLY the opponent's
 observed moves in the current game — never the family name it plays
 under, never a held-out parameter. The hypothesis set below is built
-from DEV knowledge alone: the three dev presets, a half-strength
-sloppy (the milder-human region between sloppy and zach), the squat
-premise on the mirrored corner (corner choice is a family parameter,
-not a held-out secret — boards have two king homes), and the squat
-premise grafted with sloppy's own greed numbers (a squatter who
-accepts gifts is the choreography-era combination, hypothesized here
-with dev values only). Held-out presets never appear on this list;
-generalizing to them is the posterior's job, not its prior.
+from DEV and CORPUS knowledge alone: the three dev presets, a
+half-strength sloppy (the milder-human region between sloppy and
+zach), the squat premise on the mirrored corner (corner choice is a
+family parameter, not a held-out secret — boards have two king
+homes), the squat premise grafted with sloppy's own greed numbers (a
+squatter who accepts gifts is the choreography-era combination,
+hypothesized here with dev values only), and the corpus-fitted human
+point with its half-scale rung (the offline fitter's MLE over the
+eight Iptychs live games — first-party corpus data, fully dev-legal —
+and the first hypotheses to carry a mercy axis; see FITTED_HUMAN).
+Held-out presets never appear on this list and no value below traces
+to one; generalizing to them is the posterior's job, not its prior.
 
 Updates are deterministic functions of the observed move sequence
 (pure-float log-likelihood accumulation, no RNG, no wall clock), so
@@ -95,9 +99,37 @@ def _scaled(params: UrgeParams, factor: float) -> UrgeParams:
     )
 
 
-#: The dev-pure hypothesis set, in fixed order. The configured belief
+#: The corpus-fitted human point (TUNING-LOG 2026-07-23, models/fit.py):
+#: coordinate-descent MLE over the eight Iptychs live games — 768
+#: observations, 1.8541 nats/move from the sloppy start, beating
+#: uniform by .11/move and hand-seeded sloppy by .64/move. Every value
+#: traces to that fit; none to a frozen preset. What it says about a
+#: real human: hunts and grabs near-certainly, never once sought a
+#: check — and, the axis no dev kernel carries, lapses from the
+#: mate-avoidance discipline 70% of the time (the family's
+#: misspecification residue lands on mercy). Mercy is the load-bearing
+#: axis here: it is the only urge that puts mass on moves that mate US,
+#: so every mercy-free hypothesis prices an observed avoidable mate at
+#: exactly zero (the epsilon floor) — no amount of evidence could
+#: previously separate "sloppy human" from "human who sometimes mates
+#: us on purpose". This point makes that distinction learnable, which
+#: is what the human-held diagnosis (posterior-ext pin: reads scatter,
+#: one game never collapses, no hypothesis carries a mercy axis) asked
+#: for.
+FITTED_HUMAN = UrgeParams(
+    mercy=0.70, promote=0.10, greed=0.95, trade=0.45, check=0.0,
+    push=0.30, hunt=0.90,
+)
+
+#: The dev/corpus-pure hypothesis set, in fixed order (new points are
+#: appended so existing indices never move). The configured belief
 #: supplies the prior anchor; order is now only a deterministic
-#: tie-break after genuinely equal posterior weights.
+#: tie-break after genuinely equal posterior weights. The fitted-human
+#: rungs follow the sloppy-mild precedent: the same half-scaling that
+#: gave the sloppy family its milder interpolation gives the mercy
+#: axis a second rung (0.70 and 0.35), so inference can land between
+#: "full corpus lapse rate" and "mercy-free" instead of being forced
+#: to choose the extremes.
 HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
     ("sloppy", SLOPPY),
     ("sloppy-mild", _scaled(SLOPPY, 0.5)),
@@ -108,6 +140,8 @@ HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
                                trade=SLOPPY.trade)),
     ("squat-greedy-q", replace(SQUAT, home_side="queen",
                                greed=SLOPPY.greed, trade=SLOPPY.trade)),
+    ("fitted-human", FITTED_HUMAN),
+    ("fitted-human-mild", _scaled(FITTED_HUMAN, 0.5)),
 )
 
 #: Broad families used only to construct the exploratory half of the
@@ -121,6 +155,8 @@ HYPOTHESIS_FAMILIES: tuple[str, ...] = (
     "squat",
     "squat",
     "squat",
+    "fitted-human",
+    "fitted-human",
 )
 
 

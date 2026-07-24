@@ -760,6 +760,125 @@ def test_posterior() -> None:
     )
 
 
+def test_posterior_mercy() -> None:
+    """The grown hypothesis set: the corpus-fitted mercy family.
+
+    Three claims, one per check: the fourth family repartitions the
+    prior exactly; an observed avoidable mate — the one move class
+    every mercy-free hypothesis prices at literal zero — lands the
+    posterior on the mercy family through the epsilon floor; and the
+    new family does not blur kernel reads on the march fixture.
+    """
+    from .models.posterior import (
+        FITTED_HUMAN,
+        HYPOTHESES,
+        HYPOTHESIS_FAMILIES,
+    )
+
+    def family_mass(posterior, family: str) -> float:
+        return sum(
+            weight
+            for weight, fam in zip(posterior.weights(), posterior.families)
+            if fam == family
+        )
+
+    # Prior arithmetic with the fourth family, pinned to the digit:
+    # belief=sloppy keeps its configured half, and the exploratory half
+    # now splits four ways (0.125/family) before dividing by variant.
+    # Wrong arithmetic here silently reprices every inferring game's
+    # opening, so the whole vector is asserted, not just its shape.
+    posterior = HypothesisPosterior.from_belief(make_model("sloppy"))
+    expected = (
+        0.5625, 0.0625, 0.125,               # sloppy anchor, mild, zach
+        0.03125, 0.03125, 0.03125, 0.03125,  # four squat variants
+        0.0625, 0.0625,                      # fitted-human + mild rung
+    )
+    check(
+        "posterior: the fourth family repartitions the prior exactly",
+        len(HYPOTHESES) == 9
+        and len(set(HYPOTHESIS_FAMILIES)) == 4
+        and len(posterior.prior) == len(expected)
+        and all(
+            abs(got - want) < 1e-12
+            for got, want in zip(posterior.prior, expected)
+        ),
+        f"prior={tuple(round(w, 5) for w in posterior.prior)}",
+    )
+
+    # A mercy-bearing sequence on the accident fixture: the greedy
+    # Rxa7 (structured, sloppy's best-explained move), then the
+    # avoidable Rb8# — mercy is the only urge that puts mass on moves
+    # that mate us, so both fitted rungs price the mate at mercy/L
+    # while every mercy-free hypothesis prices it at exactly zero and
+    # eats the epsilon floor. One lapse must outweigh the anchor's 9x
+    # prior head start.
+    board = chess.Board(ACCIDENT_FEN)
+    capture = chess.Move.from_uci("a2a7")
+    posterior.observe(board, capture)
+    board.push(capture)
+    board.push_uci("h8g8")
+    mate = chess.Move.from_uci("b1b8")
+    board.push(mate)
+    mate_is_mate = board.is_checkmate()
+    board.pop()
+    avoidable = board.legal_moves.count() > 1
+    mercy_free_p = {
+        name: dict(
+            UrgeModel(name, params).distribution(board)
+        ).get(mate, 0.0)
+        for name, params in HYPOTHESES
+        if params.mercy == 0.0
+    }
+    fitted_p = dict(
+        UrgeModel("fitted-human", FITTED_HUMAN).distribution(board)
+    ).get(mate, 0.0)
+    posterior.observe(board, mate)
+    diag = posterior.diagnostics()
+    check(
+        "posterior: an avoidable mate taken names the mercy family",
+        mate_is_mate and avoidable
+        and len(mercy_free_p) == 7
+        and all(prob == 0.0 for prob in mercy_free_p.values())
+        and fitted_p > 0.02
+        and diag["posterior_map"] == "fitted-human"
+        and family_mass(posterior, "fitted-human") > 0.95
+        and max(
+            weight
+            for weight, fam in zip(posterior.weights(), posterior.families)
+            if fam != "fitted-human"
+        ) < min(
+            weight
+            for weight, fam in zip(posterior.weights(), posterior.families)
+            if fam == "fitted-human"
+        ),
+        f"map={diag['posterior_map']}@{diag['posterior_map_weight']}, "
+        f"family={family_mass(posterior, 'fitted-human'):.4f}, "
+        f"P(mate|fitted)={fitted_p:.4f}",
+    )
+
+    # And the other direction: kernel streams must read exactly as
+    # before the growth. Three homing steps on the march fixture still
+    # collapse onto the squat family fast, with the mercy family's
+    # uniform floor picking up nothing worth naming.
+    posterior = HypothesisPosterior.from_belief(make_model("sloppy"))
+    board = chess.Board(MARCH_FIXTURE)
+    for black_move, white_reply in (
+        ("e5f6", "b1c3"), ("f6g7", "c3b1"), ("g7h8", "b1c3"),
+    ):
+        posterior.observe(board, chess.Move.from_uci(black_move))
+        board.push_uci(black_move)
+        board.push_uci(white_reply)
+    check(
+        "posterior: the mercy family does not blur kernel reads",
+        posterior.map_model().name == "squat-k"
+        and family_mass(posterior, "squat") > 0.95
+        and family_mass(posterior, "fitted-human") < 0.01,
+        f"map={posterior.map_model().name}, "
+        f"squat={family_mass(posterior, 'squat'):.4f}, "
+        f"fitted={family_mass(posterior, 'fitted-human'):.6f}",
+    )
+
+
 def test_posterior_engine() -> None:
     from .league.play import play_game
 
@@ -1021,6 +1140,7 @@ def run() -> int:
         test_sub_probe,
         test_selective_depth,
         test_posterior,
+        test_posterior_mercy,
         test_posterior_engine,
         test_fit,
         test_engine_safety_and_oracle,

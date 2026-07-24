@@ -988,3 +988,199 @@ play).
   "pathological move" held to 390s. It now cites the game figure and
   notes move-level timing is not persisted — per the artifact rule
   that a pinned claim must be checkable from report.json alone.
+
+## The mercy family: human-held falls off zero, random is named and fished, and the zero moves (2026-07-24)
+
+The posterior-ext queue's first lever went in whole: hypothesis-set
+growth aimed at the last zero's named confound — no hypothesis
+carried a mercy axis, so human-held's scattered reads could not,
+even in principle, name a family that sometimes mates us on purpose.
+What landed (2.0.0a8 -> 2.0.0a9, selftest 54 -> 57):
+
+- models/posterior.py: the FITTED-HUMAN family, two rungs. The full
+  point is the corpus fit verbatim (the 2026-07-23 offline MLE over
+  the eight Iptychs live games, 768 observations, 1.8541 nats/move:
+  mercy .70, greed .95, trade .45, hunt .90, push .30, promote .10,
+  check 0.0) and the mild rung is its half-scale by the sloppy-mild
+  precedent (mercy .35), so the mercy axis has an interpolation
+  instead of an extreme. Every value traces to the corpus fit or dev
+  reasoning; no number touches a frozen preset — corpus-derived is
+  dev-legal, and the module docstring now says so. The prior grows a
+  fourth family under the review round's family-balanced rule,
+  exactly the mechanism that redesign anticipated: belief=sloppy now
+  opens 0.5625 / 0.0625 / 0.125 / 4x0.03125 / 2x0.0625, asserted to
+  the digit in-suite.
+
+- Why mercy is THE axis: it is the only urge that puts mass on moves
+  that mate us, so every mercy-free hypothesis prices an observed
+  avoidable mate at literal zero and eats the epsilon floor — one
+  taken mate is a ~700x likelihood factor toward the mercy family,
+  and no volume of mercy-free evidence can ever say "this opponent
+  mates us on purpose". The new suite checks pin the mechanism from
+  three sides: an observed avoidable mate on the accident fixture
+  (the greedy Rxa7, then Rb8#) lands map=fitted-human with
+  mercy-family mass 0.97 through the sloppy anchor's 9x prior head
+  start; the march fixture still collapses onto squat-k at 0.998
+  with the mercy family at 4e-4 (kernel reads unblurred); and the
+  nine-hypothesis prior vector is asserted exactly.
+
+DEV CONTROL: THE GATE FIRED, THE DIAGNOSIS EXONERATED, THE A/B
+RESOLVED. The dev arm (zach/sloppy/squat, 10 games, baseline seeds,
+a9 defaults; artifacts dev-infer-mercy/, untracked) came back naming
+perfect, aggregate short: every game reads its true family at 1.00
+(collapse 3-18 observations, median 10; the mercy rungs at 0.0 on
+every mercy-free stream) — but forced 4/30 against the record's dev
+6/30, and the session's own gate says aggregate holds or the growth
+is mis-tuned. The offline divergence replay (the posterior is a pure
+function of the observed sequence, so the pin-era belief trajectory
+reconstructs without search) localized the whole dip: 22 of 30 games
+are BIT-IDENTICAL to the pin — four of its six dev conversions
+reproduced ply-for-ply — and all 8 divergent games diverge at ply
+3-4 by ONE signature: the old set's MAP had already handed sloppy
+off to zach at the engine's second decision, the grown set holds
+sloppy one observation longer (zach's exploratory prior fell 1/6 ->
+1/8 with the fourth family), and the opening re-rolls from there.
+The mercy hypotheses never held MAP for a single ply in any dev
+game — the values are exonerated; the re-roll is the prior
+renormalization ANY fourth family causes, whatever its content. The
+re-rolled 8 landed 0/8 where the pin's had gone 2/8. Whether that is
+a rate drop or a coin was measured, not argued: a fresh-seed A/B
+(seed0=100, seeds neither set ever saw; grown set on the a9 tree,
+old set on the a8 HEAD in a worktree; artifacts dev-mercy-s100/ and
+dev-old-s100/, untracked):
+
+```
+arm            set        forced  sloppy  squat  zach  certs
+dev-mercy-s100 grown (9)   10/30       5      2     3     16
+dev-old-s100   old (7)      8/30       4      2     2     12
+```
+
+The grown set BEATS the old set on fresh ground, names 30/30 there
+too (>=0.95, zero fitted-MAP finals), and the pooled count across
+all 60 paired dev games is 14 = 14 — rate-neutral on dev with the
+naming capability added. Not mis-tuned; gate answered. (Both s100
+arms also outscored both s0 arms — seed-schedule variance at n=30 is
++/-3, one more vote for the a4 rule that aggregates and device
+inventories are the units, single schedules are not.)
+
+### Pinned league (2026-07-24, engine model, posterior-mercy)
+
+a9 defaults, no flags (= the posterior-ext config over the grown
+nine-hypothesis set; prior rule and per-hypothesis priors in the
+report's engine block); 10 games/family; artifacts:
+games/league/posterior-mercy/. Dev rows are bit-identical to the
+dev-infer-mercy arm across the mount/bake boundary — the arm and the
+pin are one experiment, again.
+
+```
+family       split      n  forced mercy st-them st-us insuf fifty rep maxply
+sloppy       dev       10       0     0       0     1     1     0   0      8
+squat        dev       10       1     0       0     0     0     0   0      9
+zach         dev       10       3     0       0     0     0     0   0      7
+human-held   held-out  10       1     0       0     0     0     1   0      8
+random       held-out  10       0     7       0     0     0     0   0      3
+sloppy-held  held-out  10       2     0       0     0     2     0   0      6
+squat-held   held-out  10       2     0       0     0     0     0   0      8
+forced — held-out: 5/40 (12%); dev: 4/30 (13%); overall: 9/70 (13%)
+worst held-out: random (0%)
+```
+
+THE TIERED VERDICT, HONESTLY: (b) YES, (a) NO, (c) NO BY ONE.
+
+HUMAN-HELD IS OFF ZERO — tier (b), the conversion the family was
+grown for, by a route nobody predicted. g01 (103 plies, engine
+Black, 1 root certificate, 4 sub-probe hits) is the
+pawn-executioner shell landed on the last unconverted family: the
+engine strips White with a queen rampage, gives the queen back to
+seal material, entombs its own king on g8 behind the g7 pawn it
+FORCED White to push (34.hxg7+), then shepherds White's f-pawn up
+the board with rook-and-knight herding until 52.f7# is White's only
+legal move. But the posterior that steered it read sloppy-mild@0.95
+(c@6) with the mercy family at 0.04 — the conversion did NOT come
+from naming. It came from a re-rolled trajectory under the same
+mis-read the record's zero carried.
+
+TIER (a) FAILED, AND THE FAILURE IS NOW A MEASUREMENT: 0/10
+human-held games collapse onto a mercy-bearing hypothesis. Reads
+still scatter (sloppy x6 at 0.54-0.99, sloppy-mild x4 at
+0.79-0.95), two games never collapse at all (g05/g07, c@0 — and
+exactly those two show the mercy family's best mass, 0.27 and 0.11:
+the tug-of-war is visible but never won). The mechanism is priced,
+not mysterious: human-held's lapse rate is far below the corpus
+point's rungs (.70/.35), so the rare lapse evidence (~700x per
+observed off-model move) loses to the structural tithe the mercy
+mass costs on the other ~95% of moves. The rung ladder cannot
+legally reach lower — a mercy-0.05 rung is the held-out value, and
+the protocol forbids exactly that anchor. The legal paths forward
+are named: a richer live corpus (more first-party games, milder
+players), or rung scales FITTED to the corpus by NLL instead of
+halved by precedent. Until then the modeling confound on human-held
+STANDS — with one side newly bounded: assembly there is possible
+even under the mis-read (g01 proves it), so the wall is not
+assembly-behind-modeling; it is modeling alone, plus construction
+variance.
+
+AND THE MERCY FAMILY PROVED ITSELF WHERE ITS BELIEF IS NEAREST
+TRUTH: random reads fitted-human x9 + fitted-human-mild x1 — the
+machinery collapses MAP onto the new family end-to-end in real
+games, first time on the record. Under that honest belief the
+engine's play transformed: it stopped building and started
+OFFERING. Seven of ten random games end in mercy mates (70-97 plies
+mostly — the fastest anything has ever ended against random), zero
+by force, three walls: believed P(take) of 0.7/L per offer, true
+1/L, offers cash faster than construction converts. The engine got
+mated in 7/10 games against noise — the best mated-at-all rate ever
+recorded on that row — and the forced column reads 0%, because
+every one of those mates is ledgered as the luck it is. The zero
+MOVED: worst held-out is now random (0%), human-held is off it.
+This is not a modeling error (the belief is the closest hypothesis
+to mercy=1.0 noise, and it under-prices the offers that do cash);
+it is the OBJECTIVE/METRIC SPLIT made visible for the first time:
+expectimax maximizes P(mated), the record counts only P(mated by
+force), and no belief was dishonest in the gap between them. The
+queued value-plumbing lever now has a second mandate from the
+opposite direction: distinguish certificate value from chance-mass
+value in the search itself, so forced nets outbid coin-flip offers
+when both are live.
+
+The rest of the ledger holds or reproduces: sloppy-held 2/10 (g03
+IS the 53-ply record game, reproduced to the ply; g02 converts in
+72 at map sloppy@0.89 c@0 — a conversion under partial collapse),
+squat-held's pair survives the prior change bit-for-bit (g01 169
+plies, g02 156, the corner tomb and the double-donation crossfire,
+both still read squat-greedy-q@1.00), dev 4/30 as the arm measured.
+Cost of record: 93.7s/game solo, 109 min the full league — 44%
+CHEAPER than posterior-ext's 166.1, because offer-games end early
+and nothing pathological ran (node-cap clamps: 38,795 in the ext
+pin, ZERO here). Sub-probes: 41 hits / 37.3M calls, unk 98.7% — the
+extension keeps the certifier starved, unchanged.
+
+TABLES OF RECORD: posterior-ext REMAINS the table of record
+(held-out 6/40 > 5/40; overall 12/70 > 9/70). posterior-mercy is
+pinned as the MERCY-FAMILY record: the growth's config,
+diagnostics, and trophies are citable from its report alone. The
+grown set STAYS in the a9 defaults — so defaults no longer
+regenerate the record tables (the record is a 2.0.0a7/a8 artifact
+and regenerates from those commits) — for the project's own
+reasons: the posterior program's premise is that beliefs must be
+earned from evidence, and un-shipping a family whose beliefs are
+EARNED (random 10/10, the first true mercy reads on the record)
+because an honest belief loses a forced-only accounting would be
+belief-falsification for score, the exact sin the phantom-net entry
+prosecuted in the other direction. Dev is rate-neutral by direct
+A/B; the naming capability is load-bearing for the live bar (the
+corpus fit says real humans carry mercy .70 — the family exists
+because the target opponent does).
+
+Queue, forced by the split verdict: VALUE PLUMBING first, doubly
+mandated (dev squat still walls 9/10 with correct beliefs and sub=0
+— the standing mandate — and the random row now shows chance-mass
+EV outbidding certificate-bearing construction — the new one);
+HUMAN-HELD NAMING second, by legal means only (grow the corpus or
+fit the rung scales to it; never a held-out anchor); selective
+depth stays shipped, deep roots stay benched. Milestones stand at
+60/80/90% held-out; the live bar stays "the corner poses and the
+mate lands BY FORCE against a human" — and the session's exhibit is
+that human-held's first-ever forced mate is exactly that shape,
+landed while the family it was built to name still cannot be
+named.
