@@ -27,9 +27,10 @@ family parameter, not a held-out secret — boards have two king
 homes), the squat premise grafted with sloppy's own greed numbers (a
 squatter who accepts gifts is the choreography-era combination,
 hypothesized here with dev values only), and the corpus-fitted human
-point with its half-scale rung (the offline fitter's MLE over the
-eight Iptychs live games — first-party corpus data, fully dev-legal —
-and the first hypotheses to carry a mercy axis; see FITTED_HUMAN).
+point carrying its controlled mercy ladder (the offline fitter's MLE
+over the eight Iptychs live games — first-party corpus data, fully
+dev-legal — with mercy varied ALONE by a declared halving rule; see
+FITTED_HUMAN and MERCY_LADDER_RUNGS).
 Held-out presets never appear on this list and no value below traces
 to one; generalizing to them is the posterior's job, not its prior.
 
@@ -123,17 +124,36 @@ FITTED_HUMAN = UrgeParams(
     push=0.30, hunt=0.90,
 )
 
-#: The dev/corpus-pure hypothesis set, in fixed order (new points are
-#: appended so existing indices never move). The configured belief
-#: supplies the prior anchor; order is now only a deterministic
-#: tie-break after genuinely equal posterior weights. The fitted-human
-#: pair follows the sloppy-mild precedent LITERALLY: ``_scaled``
-#: halves every continuous urge, so fitted-human-mild is a globally
-#: milder human (mercy .35 and half of every structural urge with it),
-#: not a mercy-only rung — the two points vary overall scale, never
-#: the mercy axis in isolation. A controlled mercy ladder (structure
-#: held at the corpus fit, mercy varied and scored on corpus NLL) is
-#: the named future construction; see the 2026-07-24 log entry.
+#: The controlled mercy ladder (TUNING-LOG 2026-07-24): the axis the
+#: mercy pin could not move in isolation, varied ALONE. Rung k holds
+#: the structure at FITTED_HUMAN verbatim and sets mercy to the fit's
+#: .70 residue halved k times — the DECLARED RULE, and the legality
+#: argument: every rung traces to the corpus number and the halving,
+#: never to a held-out preset; if a halving lands near one, that is
+#: the rule's doing, said here preemptively. Five rungs (.70, .35,
+#: .175, .0875, .04375) because the corpus NLL still discriminates
+#: every adjacent pair (smallest gap 67.8 nats total, at the bottom;
+#: scored 2026-07-24) — the ~5-rung cap stops the descent, not the
+#: data. Halving is exponent arithmetic, so each rung is exactly half
+#: its neighbor in floats and the suite asserts the spacing exactly.
+MERCY_LADDER_RUNGS = 5
+
+
+def _rung(k: int) -> UrgeParams:
+    """Ladder rung k: the corpus fit with mercy halved k times."""
+    return replace(FITTED_HUMAN, mercy=FITTED_HUMAN.mercy / 2**k)
+
+
+#: The dev/corpus-pure hypothesis set, in fixed order. Indices 0-7 are
+#: the a8 set unchanged; the 2026-07-24 ladder replaced fitted-human-
+#: mild (the sloppy-mild precedent applied literally — a GLOBAL
+#: half-scale that halved the structure along with mercy, so the two
+#: fitted points varied overall scale, never the mercy axis alone)
+#: with rungs that move mercy in isolation. The configured belief
+#: supplies the prior anchor; order is only a deterministic tie-break
+#: after genuinely equal posterior weights. Rung names carry the mercy
+#: value's fraction digits (m35 = .35, m04375 = .04375) so a report
+#: table reads without this file open.
 HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
     ("sloppy", SLOPPY),
     ("sloppy-mild", _scaled(SLOPPY, 0.5)),
@@ -145,12 +165,17 @@ HYPOTHESES: tuple[tuple[str, UrgeParams], ...] = (
     ("squat-greedy-q", replace(SQUAT, home_side="queen",
                                greed=SLOPPY.greed, trade=SLOPPY.trade)),
     ("fitted-human", FITTED_HUMAN),
-    ("fitted-human-mild", _scaled(FITTED_HUMAN, 0.5)),
+    ("fitted-human-m35", _rung(1)),
+    ("fitted-human-m175", _rung(2)),
+    ("fitted-human-m0875", _rung(3)),
+    ("fitted-human-m04375", _rung(4)),
 )
 
 #: Broad families used only to construct the exploratory half of the
 #: prior. They do not collapse or otherwise coarsen inference: every
-#: hypothesis still accumulates its own likelihood.
+#: hypothesis still accumulates its own likelihood. The whole ladder
+#: is ONE human family: its rungs split the family's exploratory mass,
+#: so growing the ladder never taxes the other families' prior.
 HYPOTHESIS_FAMILIES: tuple[str, ...] = (
     "sloppy",
     "sloppy",
@@ -159,6 +184,9 @@ HYPOTHESIS_FAMILIES: tuple[str, ...] = (
     "squat",
     "squat",
     "squat",
+    "fitted-human",
+    "fitted-human",
+    "fitted-human",
     "fitted-human",
     "fitted-human",
 )

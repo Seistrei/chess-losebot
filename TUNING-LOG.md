@@ -1246,3 +1246,224 @@ bumps are for code that moves play).
   right all along, and the artifact policy is why the error was
   catchable: the claim was checkable from report.json alone, and
   that is exactly how review caught it.
+
+## The mercy ladder: the axis moves alone, random climbs to the top rung, and the board loses its last zero (2026-07-24)
+
+The review round's named construction went in whole: a CONTROLLED
+MERCY LADDER on the corpus fit, replacing fitted-human-mild's global
+half-scale — the point whose review proved the human-held naming
+failure could never be attributed to the mercy value in isolation,
+because _scaled halved the structure along with it. What landed
+(2.0.0a9 -> 2.0.0a10, selftest 57 -> 59):
+
+- models/posterior.py: five rungs, one rule. Structure is held at
+  the corpus fit verbatim (greed .95, trade .45, hunt .90, push
+  .30, promote .10, check 0.0) and mercy descends by SUCCESSIVE
+  HALVING from the fit's .70 residue: .70 (fitted-human itself,
+  kept), .35, .175, .0875, .04375 — rung k is .70/2^k, exact in
+  floats, and the suite asserts the spacing and the frozen
+  structure field for field. The rule is the legality argument: no
+  rung was chosen because a held-out family uses a value; the
+  bottom rung lands near the held-out mercy point the protocol
+  forbids as an anchor, and that is the halving's doing, said here
+  preemptively. Corpus NLL scored every adjacent pair before the
+  set was accepted (768 observations, the eight Iptychs games):
+
+  ```
+  mercy .70      1443.25 total  1.8792/move
+  mercy .35      1514.18        1.9716   (+70.9)
+  mercy .175     1618.56        2.1075   (+104.4)
+  mercy .0875    1719.02        2.2383   (+100.5)
+  mercy .04375   1804.67        2.3498   (+85.7)
+  (next .021875  1872.44        2.4381   (+67.8) — not adopted)
+  ```
+
+  Every gap is tens of nats: the corpus discriminates every
+  adjacent pair, so the declared ~5-rung cap stops the descent, not
+  the data. The ladder is ONE human family under the
+  family-balanced prior: belief=sloppy opens 0.5625 / 0.0625 /
+  0.125 / 4x0.03125 / 5x0.025, asserted to the digit in-suite —
+  and, load-bearing for everything below, NO other family's prior
+  moves: the ladder repartitions only the human family's interior.
+
+- The fit reconciliation, for the record: rescoring exposed that
+  FITTED_HUMAN (1.8792/move above) is the corpus MLE restricted to
+  the seven axes the fitter entry recorded. The full 2026-07-23
+  descent endpoint — re-derived deterministically this session —
+  also carried home=.25 (queen-side) and the pawn hostage, at
+  1423.95 total = the recorded 1.8541/move exactly. The ladder
+  inherits the seven-axis restriction deliberately: it extends the
+  in-set point (consistency is what makes rung comparisons clean),
+  and the dropped axes are squat-shaped behaviors the set already
+  prices in the squat family. .0251/move is the restriction's
+  measured cost.
+
+- Selftest 57 -> 59, the ladder's contract in-suite: rung spacing
+  IS the declared rule (writing .70 back into any rung must
+  reproduce FITTED_HUMAN field for field); the prior vector to the
+  digit; the accident-fixture mate still names the mercy family at
+  0.97 — MAP inside the family moves to m35, one lapse in two
+  observations being ladder arithmetic, so the check pins the
+  FAMILY claim and lets the rung float; NEW, the naming the mercy
+  pin could not even express: a synthetic stream 19/20 structured
+  with avoidable-mate acceptance once per ten observations
+  point-collapses on fitted-human-m0875@0.97 (collapse@158) — a
+  LOW rung named over both the .70 residue and every mercy-free
+  hypothesis; and the march fixture still collapses squat-k@0.9986
+  with the whole ladder at 1e-4 — kernel reads unblurred.
+
+DEV CONTROL: THE GATE HELD WITHOUT AN A/B, AND THE ONE DIVERGENCE
+HAS A MECHANISM. The dev arm (zach/sloppy/squat, 10 games, baseline
+seeds, a10 defaults; artifacts dev-infer-ladder/, untracked) came
+back 4/30 forced — the mercy pin's number exactly, row for row —
+with naming still perfect: every game MAPs its true family, squat
+10/10 point-collapsed at bit-identical plies. The offline
+divergence replay (tooling validated first by reproducing all 70 of
+the mercy pin's posterior gauges from its PGNs alone) found 29/30
+games BIT-IDENTICAL to the pin — the mercy pin's growth re-rolled
+8 games by repartitioning zach's prior; the ladder re-rolled one,
+because no family-level prior moved. The exception broke a record
+worth breaking: in sloppy g08, fitted-human-m0875 TOOK MAP at
+observation 25 — the first mercy-family MAP on a dev stream ever —
+held it for 75 plies, and the re-rolled game's evidence put sloppy
+back on top (final read sloppy@0.44, uncollapsed; outcome class
+unchanged, max-plies; the other 29 games carry zero ladder-MAP
+plies). The anatomy is one sentence: that stream is a
+capture-starved king-walk, hunting king steps are priced at 2-3x
+sloppy's shuffle share by the fit's hunt=.90, and a low rung tithes
+only .0875 of that structure to uniform — twenty-five such
+observations ground down the anchor's 22.5x head start. The old
+points could never do this (fitted-human tithes 70%; the mild
+point halved hunt along with mercy): the ladder's low rungs sit
+nearer the kernels in behavior space BY DESIGN, and the cost of
+moving mercy alone is now measured — one transient mis-MAP in
+thirty games, self-corrected, aggregate unmoved. Collapse gauges
+also shift on bit-identical streams (the denominator effect):
+sloppy g04's short stream ends sloppy@0.62 c@0 on the pin's exact
+moves because five structure-strong rungs retain mass where two
+diluted points died, and zach point-collapses EARLIER for the
+mirrored reason. MAP is what steers, and MAP moved in one game;
+the gauge is set-relative, the argmax mostly is not.
+
+### Pinned league (2026-07-24, engine model, posterior-ladder)
+
+a10 defaults, no flags (the posterior-ext config over the
+twelve-hypothesis ladder set; prior rule and per-hypothesis priors
+in the report's engine block); 10 games/family; artifacts:
+games/league/posterior-ladder/. Dev rows are bit-identical to the
+dev-infer-ladder arm across the mount/bake boundary, 30/30 — the
+arm and the pin are one experiment, again. Against the mercy pin's
+league, 60/70 games reproduce to the byte (squat-held 10/10 for a
+third consecutive pin); all ten re-rolls trace to the ladder.
+
+```
+family       split      n  forced mercy st-them st-us insuf fifty rep maxply
+sloppy       dev       10       0     0       0     1     1     0   0      8
+squat        dev       10       1     0       0     0     0     0   0      9
+zach         dev       10       3     0       0     0     0     0   0      7
+human-held   held-out  10       1     0       0     0     0     0   0      9
+random       held-out  10       1     5       0     0     0     0   0      4
+sloppy-held  held-out  10       2     0       0     0     3     0   0      5
+squat-held   held-out  10       2     0       0     0     0     0   0      8
+forced — held-out: 6/40 (15%); dev: 4/30 (13%); overall: 10/70 (14%)
+worst held-out: human-held and random, 10% — the first board with
+no zero row in the project's history
+```
+
+THE TIERED VERDICT: (a) SPLIT AND THE SPLIT IS THE MEASUREMENT,
+(b) YES BY REPRODUCTION, (c) TIED, NOT RETAKEN.
+
+TIER (a), RANDOM'S HALF: THE LADDER SEPARATES NOISE UPWARD. Random
+reads fitted-human — the TOP rung — in 10/10 games, and for the
+first time COLLAPSES in 10/10 (>=0.9736, seven at 0.999+, c@6-29;
+the mercy pin collapsed 4/10 with one game on the mild point). The
+named-by-proxy caveat was testable and the test ran: a stream that
+truly wants mercy 1.0 should reject every lower rung and take the
+highest available, and it did, ten times, hard — while human-held
+(below) took none. The ceiling is the top rung by construction
+(the declared rule only descends from .70), so "climbs above
+fitted-human" was never satisfiable; what is measured is the
+DIRECTION: random rejected the entire ladder below the residue,
+confirming the misspecification points up toward 1.0, and the
+proxy still under-prices true acceptance in the safe direction.
+
+TIER (a), HUMAN-HELD'S HALF: THE AXIS IS NOW EXONERATED, AND THE
+CONFOUND HAS A SMALLER NAME. 0/10 human-held games collapse onto a
+mercy rung — the same census as the pin (sloppy x6 at 0.66-0.99,
+sloppy-mild x4 at 0.79-0.98, now 9/10 collapsed with only g05
+never settling). But this failure MEASURES something the pin's
+could not: the review round showed the old points varied global
+scale, so "no mercy value works" was unprovable; the ladder varied
+mercy ALONE at full corpus structure, and every rung from .70 down
+to .04375 still loses to the sloppy family on these streams. The
+mercy VALUE is exonerated — no setting of that dial names this
+opponent. What remains is the STRUCTURE: the corpus fit is one
+player's temperament (greed .95, hunt .90, the Iptychs games), and
+human-held's structured moves evidently do not match it closely
+enough for any mercy level to compensate. The modeling confound
+stands, but it shrank from "mercy value, global scale, or
+structure?" to STRUCTURE ALONE — and the one legal lever left is
+the one the queue already names: grow the corpus (more first-party
+games, milder players) until the fitted structure stops being one
+person's. One leakage in the other direction, priced honestly:
+sloppy-held g07 ends on fitted-human-m35@0.48 uncollapsed (the dev
+g08 mechanism on a held-out stream; outcome class unchanged, row
+still 2/10 with both trophies byte-identical).
+
+TIER (b): human-held g01 reproduces BYTE FOR BYTE — the
+pawn-executioner shell, 103 plies, 52.f7# — still under the
+sloppy-mild mis-read (0.9766 now, c@8; the weight shift on
+identical moves is the denominator effect). Off zero again, by
+reproduction rather than construction; a conversion under a
+correct read remains unclaimed, and after this pin the honest
+prediction is that it waits on the corpus, not the ladder.
+
+TIER (c), AND THE HEADLINE NOBODY TIERED: held-out forced is 6/40
+— TIES posterior-ext's record, does not retake it (ext keeps
+overall, 12/70 vs 10/70). But the zero moved OFF the board
+entirely: random g05 (89 plies, engine Black, 3 oracle
+certificates) is the first FORCED selfmate ever landed against
+noise — 43...Qc6+ forces bxc6, 44...Bb6 leaves cxd7# as White's
+only legal move: a certificate net, valid against ANY reply,
+built while the posterior read the top rung at 0.97. The
+forced-vs-offers ledger (the objective/metric split's third data
+point): mercy mates 7 -> 5, forced 0 -> 1, max-plies 3 -> 4. The
+sharpened 10/10 collapse bought one certificate and gave back two
+offers — the first time the trade ran TOWARD the metric — and the
+value-plumbing mandate stands with its first existence proof that
+forced nets CAN outbid coin-flip offers when search finds them.
+
+TABLES OF RECORD, THREE READINGS STATED PLAINLY: posterior-ext
+keeps the overall count (12/70 > 10/70). The held-out count is
+TIED at 6/40. And on the metric this log privileged from the a1
+protocol forward — the WORST held-out row, because an average can
+hide exactly the family you cannot beat — posterior-ladder is the
+best table ever pinned: worst row 10% against a 0% somewhere in
+every predecessor. The ladder set STAYS in the a10 defaults, by
+the same belief-earning logic as the mercy pin: random's 10/10
+top-rung collapse is the strongest naming on the record, dev is
+rate-neutral with 29/30 bit-identity, and the conversions the old
+set earned reproduce byte for byte under the new one.
+
+Cost of record: 94.3s/game solo, 110 min the league — the mercy
+pin's cost within noise (93.7/109), and 43% under posterior-ext's
+166.1, offer-games still ending early. Node-cap clamps 13,055
+entries across 22 games, largest human-held g00 at 3,621 (the pin
+had 13,912/21/3,621 — that largest game reproduced exactly).
+Sub-probes: 41 hits / 38.8M calls, unk 98.8% — the certifier stays
+starved, unchanged three pins running.
+
+Queue, sharpened by the split verdict: VALUE PLUMBING first,
+standing on both mandates plus g05's existence proof (dev squat
+still walls 9/10 with correct beliefs and sub=0; random still
+cashes five coins for one certificate); CORPUS GROWTH second and
+now ALONE on the human-held path — the ladder closed the
+mercy-value axis, the review round closed the scale axis, so what
+is left is more humans in the fit, by legal means only (first-party
+games; never a held-out anchor). Selective depth stays shipped,
+deep roots stay benched. Milestones stand at 60/80/90% held-out;
+the live bar stays "the corner poses and the mate lands BY FORCE
+against a human" — and the record now holds two shapes of proof
+that the machinery can do it: the reproduced f7# shell against the
+human family, and the first certificate net cashed against pure
+noise.

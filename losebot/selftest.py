@@ -761,18 +761,51 @@ def test_posterior() -> None:
 
 
 def test_posterior_mercy() -> None:
-    """The grown hypothesis set: the corpus-fitted mercy family.
+    """The corpus-fitted mercy family and its controlled ladder.
 
-    Three claims, one per check: the fourth family repartitions the
-    prior exactly; an observed avoidable mate — the one move class
-    every mercy-free hypothesis prices at literal zero — lands the
-    posterior on the mercy family through the epsilon floor; and the
-    new family does not blur kernel reads on the march fixture.
+    Five claims, one per check: the ladder's spacing IS the declared
+    rule (mercy halved rung to rung, structure the corpus fit
+    verbatim); the human family repartitions the prior exactly; an
+    observed avoidable mate — the one move class every mercy-free
+    hypothesis prices at literal zero — lands the posterior on the
+    mercy family through the epsilon floor; a RARE taken mate at a
+    low rate names a LOW rung over both the .70 residue and every
+    mercy-free hypothesis (the axis the ladder exists to move); and
+    the family does not blur kernel reads on the march fixture.
     """
+    from dataclasses import replace
+
     from .models.posterior import (
         FITTED_HUMAN,
         HYPOTHESES,
         HYPOTHESIS_FAMILIES,
+        MERCY_LADDER_RUNGS,
+    )
+
+    # The rule is the spacing: every hypothesis in the human family is
+    # FITTED_HUMAN with mercy halved some number of times and NOTHING
+    # else moved — asserted by writing the fit's mercy back into each
+    # rung and demanding the corpus point returns, field for field.
+    # Halving is float-exact, so the comparisons are exact, not toleranced.
+    ladder = [
+        params
+        for (_name, params), family in zip(HYPOTHESES, HYPOTHESIS_FAMILIES)
+        if family == "fitted-human"
+    ]
+    check(
+        "posterior: ladder rungs halve mercy and hold the fit's structure",
+        len(ladder) == MERCY_LADDER_RUNGS
+        and ladder[0] == FITTED_HUMAN
+        and ladder[0].mercy == 0.70
+        and all(
+            ladder[k + 1].mercy * 2 == ladder[k].mercy
+            for k in range(len(ladder) - 1)
+        )
+        and all(
+            replace(rung, mercy=FITTED_HUMAN.mercy) == FITTED_HUMAN
+            for rung in ladder
+        ),
+        f"rungs={tuple(round(rung.mercy, 6) for rung in ladder)}",
     )
 
     def family_mass(posterior, family: str) -> float:
@@ -782,20 +815,22 @@ def test_posterior_mercy() -> None:
             if fam == family
         )
 
-    # Prior arithmetic with the fourth family, pinned to the digit:
-    # belief=sloppy keeps its configured half, and the exploratory half
-    # now splits four ways (0.125/family) before dividing by variant.
-    # Wrong arithmetic here silently reprices every inferring game's
-    # opening, so the whole vector is asserted, not just its shape.
+    # Prior arithmetic with the ladder, pinned to the digit:
+    # belief=sloppy keeps its configured half, the exploratory half
+    # splits four ways (0.125/family), and the human family's share
+    # divides across five rungs (0.025 each) — growing the ladder
+    # taxes only its own family, never the others. Wrong arithmetic
+    # here silently reprices every inferring game's opening, so the
+    # whole vector is asserted, not just its shape.
     posterior = HypothesisPosterior.from_belief(make_model("sloppy"))
     expected = (
         0.5625, 0.0625, 0.125,               # sloppy anchor, mild, zach
         0.03125, 0.03125, 0.03125, 0.03125,  # four squat variants
-        0.0625, 0.0625,                      # fitted-human + mild rung
+        0.025, 0.025, 0.025, 0.025, 0.025,   # the five-rung mercy ladder
     )
     check(
-        "posterior: the fourth family repartitions the prior exactly",
-        len(HYPOTHESES) == 9
+        "posterior: the ladder repartitions the prior exactly",
+        len(HYPOTHESES) == 12
         and len(set(HYPOTHESIS_FAMILIES)) == 4
         and len(posterior.prior) == len(expected)
         and all(
@@ -808,10 +843,10 @@ def test_posterior_mercy() -> None:
     # A mercy-bearing sequence on the accident fixture: the greedy
     # Rxa7 (structured, sloppy's best-explained move), then the
     # avoidable Rb8# — mercy is the only urge that puts mass on moves
-    # that mate us, so both fitted rungs price the mate at mercy/L
+    # that mate us, so every ladder rung prices the mate at mercy/L
     # while every mercy-free hypothesis prices it at exactly zero and
-    # eats the epsilon floor. One lapse must outweigh the anchor's 9x
-    # prior head start.
+    # eats the epsilon floor. One lapse must outweigh the anchor's
+    # prior head start over even the lowest rung.
     board = chess.Board(ACCIDENT_FEN)
     capture = chess.Move.from_uci("a2a7")
     posterior.observe(board, capture)
@@ -834,13 +869,17 @@ def test_posterior_mercy() -> None:
     ).get(mate, 0.0)
     posterior.observe(board, mate)
     diag = posterior.diagnostics()
+    # The claim is family-level: WHICH rung wins a two-observation
+    # fixture is ladder arithmetic (one lapse in two reads nearest
+    # .35), but the mercy family as a whole must take the posterior
+    # from the anchor on a single taken mate.
     check(
         "posterior: an avoidable mate taken names the mercy family",
         mate_is_mate and avoidable
         and len(mercy_free_p) == 7
         and all(prob == 0.0 for prob in mercy_free_p.values())
         and fitted_p > 0.02
-        and diag["posterior_map"] == "fitted-human"
+        and diag["posterior_map"].startswith("fitted-human")
         and family_mass(posterior, "fitted-human") > 0.95
         and max(
             weight
@@ -854,6 +893,47 @@ def test_posterior_mercy() -> None:
         f"map={diag['posterior_map']}@{diag['posterior_map_weight']}, "
         f"family={family_mass(posterior, 'fitted-human'):.4f}, "
         f"P(mate|fitted)={fitted_p:.4f}",
+    )
+
+    # THE LADDER'S REASON TO EXIST: a stream that is structured
+    # nineteen moves in twenty but accepts an avoidable mate once per
+    # ten observations. The residue rung (.70) tithes 70% of its mass
+    # to uniform and cannot explain the structured run; the mercy-free
+    # seven explain the run but price every taken mate at the epsilon
+    # floor. Only a LOW rung holds both ends — the lapse rate ~.10
+    # sits nearest .0875 in log space, and the posterior must point-
+    # collapse there, not merely favor the family. Both observations
+    # reuse the accident fixture: the free Rxa7 is the greed urge's
+    # unique pick (exact cascade probability, no estimate), and the
+    # post-capture Rb8# is the avoidable mate whose only mass is
+    # mercy/L.
+    posterior = HypothesisPosterior.from_belief(make_model("sloppy"))
+    structured_board = chess.Board(ACCIDENT_FEN)
+    lapse_board = chess.Board(ACCIDENT_FEN)
+    lapse_board.push(capture)
+    lapse_board.push_uci("h8g8")
+    for _cycle in range(20):
+        for _ in range(9):
+            posterior.observe(structured_board, capture)
+        posterior.observe(lapse_board, mate)
+    diag = posterior.diagnostics()
+    weights = diag["posterior_weights"]
+    residue_w = weights["fitted-human"]
+    mercy_free_w = max(
+        weights[name]
+        for (name, params) in HYPOTHESES
+        if params.mercy == 0.0
+    )
+    check(
+        "posterior: a rare taken mate names a low rung, not the residue",
+        diag["posterior_map"] == "fitted-human-m0875"
+        and diag["posterior_map_weight"] >= 0.95
+        and diag["posterior_collapse_at"] > 0
+        and weights["fitted-human-m0875"] > residue_w
+        and weights["fitted-human-m0875"] > mercy_free_w,
+        f"map={diag['posterior_map']}@{diag['posterior_map_weight']}, "
+        f"residue={residue_w}, best-mercy-free={mercy_free_w}, "
+        f"collapse@{diag['posterior_collapse_at']}",
     )
 
     # And the other direction: kernel streams must read exactly as
