@@ -901,15 +901,19 @@ Kxd2# — six conversions, five device classes, three of them new to
 the inventory (herd-on-dev, the squat construction, the record
 crossfires).
 
-HUMAN-HELD IS NOW THE LAST ZERO, and for the first time the
-diagnostics say why in the record itself: the posterior cannot name
-the family. Reads scatter between sloppy-mild (0.78-0.93) and sloppy
+HUMAN-HELD IS NOW THE LAST ZERO, and for the first time the record
+itself carries a diagnosis: the posterior cannot name the family.
+Reads scatter between sloppy-mild (0.78-0.93) and sloppy
 (0.57-0.99), one game never collapses at all (g05: coll=0), and the
 one 240-ply row with 3 hits still certifies nothing. Every other
 family reads at 1.00 and converts or walls on construction merit;
-this one is a modeling gap, not an assembly gap — the queued
-mercy-bearing hypothesis (the fitter's human point: mercy .70, greed
-.95, hunt .90, check 0.0) is aimed at exactly this row.
+here modeling is the FIRST UNRESOLVED CONFOUND — until a hypothesis
+can name the family, assembly on this row cannot be diagnosed
+either way (squat-held's zero hid a working-belief/absent-constructor
+split; this zero may hide an assembly wall behind the modeling one).
+The queued mercy-bearing hypothesis (the fitter's human point: mercy
+.70, greed .95, hunt .90, check 0.0) is aimed at exactly this
+confound.
 
 Cost and gauges of record: 166.1s/game solo, 194 min the full
 league — 3.4x posterior-map's 49.3, the price of 27.0M extension
@@ -919,8 +923,9 @@ shape), and the 24 root certificates did the closing; probe-budget
 scaling under ext trees is an open lever, not a refuted one. The
 node cap's first real work at solo scale: 38,795 clamped entries
 league-wide, 25,687 of them in random g09's 3.7M-call blowup game —
-the backstop held a pathological move to 390s instead of stalling
-the clock.
+the backstop held that pathological game to 390s (the record's
+per-game figure; move-level timing is not persisted) instead of
+stalling the clock.
 
 Queue, forced by the one remaining zero and the walls that stayed:
 HYPOTHESIS-SET GROWTH first (the mercy family / fitted-human point
@@ -946,3 +951,40 @@ infer="off" explicitly, since silence no longer means off. The
 posterior-ext tables are a 2.0.0a7 record and regenerate from that
 commit with the flags its report records; at a8 the same
 configuration is simply spelled with no flags.
+
+### Post-pin review round (2026-07-24)
+
+Three findings on the pin + flip, all accepted; no engine behavior
+changes, version stays a8 (trajectories, reports, and regeneration
+are untouched — the a1/a5/a7 bump precedent is for code that moves
+play).
+
+- THE FLIP BROKE FOUR ADVERTISED BELIEFS (P2, real): with --infer
+  defaulting to map, every held-out name in --belief's own choices
+  list (sloppy-held, human-held, squat-held, random) died as an
+  uncaught ValueError from engine construction — the posterior's
+  deliberate dev-purity rejection surfacing as a traceback mid-run.
+  Reproduced at the CLI before fixing. main() now validates the
+  belief x infer combination at the parser boundary for engine-bearing
+  commands (play, league --engine model): the same rejection arrives
+  as a clean parser error naming the escape hatch ("a fixed held-out
+  belief needs --infer off"), and --infer off keeps every advertised
+  belief usable. Held-out choices stay exposed on purpose — a fixed
+  held-out belief is a legitimate diagnostic configuration; only
+  anchoring INFERENCE on one is protocol leakage, and the posterior
+  still enforces that. Suite 53 -> 54: the new check drives all four
+  names through the real CLI and demands exit 2 plus the escape
+  hatch in the message.
+- HUMAN-HELD OVERCLAIM CORRECTED (P2, real): the pin entry read the
+  scattered posterior as "a modeling gap, not an assembly gap" —
+  but zero conversions cannot exclude an assembly wall hiding behind
+  the modeling one; only the confound ORDER is proven. The entry now
+  says modeling is the first unresolved confound and assembly there
+  is undiagnosable until a hypothesis can name the family. The
+  queued mercy-hypothesis experiment is unchanged — it resolves the
+  confound either way.
+- 390s ATTRIBUTED TO THE GAME (P3, real): report.json persists
+  per-game seconds only; the node-cap sentence claimed a
+  "pathological move" held to 390s. It now cites the game figure and
+  notes move-level timing is not persisted — per the artifact rule
+  that a pinned claim must be checkable from report.json alone.

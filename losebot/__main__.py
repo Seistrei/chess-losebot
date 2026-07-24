@@ -357,6 +357,21 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
     command = args.command or "selftest"
+    if command == "play" or (command == "league" and args.engine == "model"):
+        # Inference anchors its prior on the configured belief, and the
+        # posterior deliberately rejects held-out points — but since
+        # --infer defaults to map, an advertised held-out --belief must
+        # fail at the CLI boundary with the escape hatch named, not as
+        # a traceback from engine construction mid-run.
+        if args.infer != "off":
+            from .models.posterior import prior_for_belief
+
+            try:
+                prior_for_belief(make_model(args.belief))
+            except ValueError as exc:
+                parser.error(
+                    f"{exc}; a fixed held-out belief needs --infer off"
+                )
     handler = {
         "selftest": _cmd_selftest,
         "play": _cmd_play,

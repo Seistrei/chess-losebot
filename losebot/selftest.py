@@ -7,6 +7,8 @@ the Docker image's default command and the gate on every commit.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 from pathlib import Path
 
@@ -844,6 +846,27 @@ def test_posterior_engine() -> None:
         and records[1].probes["posterior_observations"] == 1,
         f"white={records[0].probes['posterior_observations']}, "
         f"black={records[1].probes['posterior_observations']}",
+    )
+
+    # With --infer defaulting to map, every advertised held-out belief
+    # must fail AT THE CLI BOUNDARY (clean parser error naming the
+    # --infer off escape hatch), never as a construction traceback.
+    from .__main__ import main as cli_main
+
+    failures = []
+    for name in ("sloppy-held", "human-held", "squat-held", "random"):
+        stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(stderr):
+                cli_main(["play", "--belief", name, "--max-plies", "1"])
+            failures.append(f"{name}: returned without exiting")
+        except SystemExit as exc:
+            if exc.code != 2 or "--infer off" not in stderr.getvalue():
+                failures.append(f"{name}: code={exc.code}")
+    check(
+        "cli: held-out beliefs at default inference stop at the boundary",
+        not failures,
+        f"failures={failures if failures else 'none'}",
     )
 
 
