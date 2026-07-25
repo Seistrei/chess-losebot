@@ -1955,48 +1955,81 @@ trophy regression covers all 465 decisions of the ten games that ever
 converted. The wall sweeps that produced zero gains cover five random
 games and are NOT a corpus-wide statement.
 
-AN INTERIM READING FROM ARMS STILL IN FLIGHT, DECISIVE ON ONE POINT.
-Four dev arms (zach/sloppy/squat, 10 games, baseline seeds, BAKED
-image = unmodified main, so the knob is the only variable) reached
-9/9/15/7 of 30 games at the time of this reading. CORRECTION TO AN
-EARLIER DRAFT OF THIS ENTRY, which recorded them as killed by the
-second Docker outage: they were not. The daemon API returned 500 for
-about twenty minutes while every container kept running — all four
-were later confirmed at ~99% CPU. The mistake was the same one the
-watchers made below, believing an unreachable daemon meant a dead
-container, and it is left visible here rather than quietly deleted
-because it is the second time in one session that an instrument's
-silence got read as an event.
-
-Only zach g00..g08 is complete in all four, so what follows is a
-nine-game, one-family reading and is labelled as such — but within it
-the arms are deterministic and directly comparable:
+ITEM 1 ANSWERED, AND THE ANSWER IS THAT THE COST IS NOT RECOVERABLE.
+Four dev arms, all complete: zach/sloppy/squat, 10 games, baseline
+seeds, one knob each. Arms A/B/C ran the BAKED image (unmodified
+main); arm D needed the new `--sub-probe-slice` flag and so ran the
+current source, which the byte-level identity check above shows plays
+identically to main at defaults — the knob remains the only variable.
 
 ```
-arm                        zach g00..g08        conversions
-posterior-ladder (ref)     . . F F . F . . .    3
-A base                     . . F F . F . . .    3   reproduces the ref
-B sub_probe_men 4          . . F F . F . . .    3
-C sub_probe_n 0  (OFF)     . . F . . F . . .    2   LOSES zach_g03
-D sub_probe_slice 800      . . F F . F . ? ?    3   (7 games)
+arm                     conversions   nodes/dec    root     sub   steer   sub hits
+posterior-ladder (ref)   3/0/1 @70g     134,758  46,996  71,091  16,671        41
+A base                   3/0/1          139,159  47,627  75,256  16,276        12
+B sub_probe_men 4        3/0/1          135,521  47,627  71,618  16,276        10
+C sub_probe_n 0 (OFF)    2/0/1           64,508  47,796       0  16,712         0
+D sub_probe_slice 800    3/0/1          137,043  47,296  73,634  16,113        47
+                                   (zach/sloppy/squat, 30 games each)
 ```
 
-Two things follow. The BASELINE GATE PASSES: arm A reproduces the
-pinned run's zach row exactly, so the arms are comparable and the
-protocol held. And the layer EARNS ITS PLACE: turning it off costs a
-conversion. That matters because the cross-tab above was confounded
-and could not settle it — 52.8% of all node work for 41 hits invites
-deletion, and deletion is now measured to cost a trophy. The two
-re-budgets that keep every conversion (tighter gate, smaller slice)
-are the live candidates, but their SAVINGS ARE UNPRICED at this
-reading: nodes per decision live in report.json, which is written only
-when a run ends, and no arm had ended. Nothing is claimed about cost
-here.
+THE BASELINE GATE PASSES OUTRIGHT. Arm A reproduces posterior-ladder's
+dev rows across all 30 games with ZERO divergences and zero
+reconstruction mismatches — every belief trajectory rebuilds from the
+observed move sequence alone. The protocol held and the arms are
+comparable.
 
-One wall-clock hint, not a measurement: arm C reached 15 games while A
-reached 9 in the same window, so the layer is a large share of wall
-time as well as of nodes. Container seconds under parallel load are
-not citable, which is exactly why it is a hint.
+AND EVERY CANDIDATE FAILS, EACH IN ITS OWN WAY:
+
+- OFF (C) is the only material saving — 53.6% of ALL node work — and
+  it LOSES zach_g03. The confounded cross-tab could not settle whether
+  the layer earns its 52.8%; this does. It earns it.
+- TIGHTER GATE (B) saves 2.6% and changes NOTHING: zero divergences
+  across 30 games, identical conversions. A free 2.6%, and 2.6% is not
+  a re-budget.
+- SMALLER SLICE (D) is the mechanism working exactly as designed and
+  paying nothing. Hits go 12 -> 47, nearly FOUR TIMES, on 2% FEWER
+  nodes: the slice does convert refutation-spend into finds, which is
+  the whole thesis of this session applied one layer down. Four games
+  diverge, every trajectory reconstructs (so the movement is the
+  re-budget and not an inference regression) — and the conversions are
+  identical. Four times the certificates, the same outcomes.
+
+So the queue's premise was right about the SIZE of the waste and wrong
+about its RECOVERABILITY. The layer costs ~75k nodes per decision and
+neither knob moves that materially; the only lever that does is
+deletion, and deletion costs a trophy. Whatever reclaims this budget,
+it is not a re-budget of these two parameters.
+
+Read D against the session's own thesis before calling it a failure.
+Cutting the price of a refutation is what made the ROOT layer better
+and it is exactly what D does to the SUB layer — 3.9x the certificates
+for less money. It did not convert because sub-probe hits are steering
+NUDGES, not claims: search.py:253 scores a proven node as a
+near-terminal, and 47 nudges in 3,164 decisions moved four games'
+trajectories without moving one outcome. That is a finding about what
+the sub-probe layer is FOR, not about the slice.
+
+NO PINNED LEAGUE, AND THAT IS THE PROTOCOL WORKING. The rule is one
+pinned league if and only if code changed play. The code does not:
+every new knob defaults off and the identity check is byte-level. No
+config change earns one either — B changes no play, D changes play but
+no outcome, C is rejected, and the forcing certifier's measured value
+is one earlier conversion in 465 decisions at +20k nodes per decision.
+Pinning any of these would spend hours to record a null. The success
+tiers stand unclaimed and are named as such: not CHEAPER (2.6% is not
+material), not DEEPER (the gain is n=4, and the tier asks n>=5), not
+METRIC (held-out untouched; the arms were dev-only by protocol).
+
+THE NEXT ARMS, DECLARED. Item 3's reallocation was never tested,
+because it was gated on a reclamation that did not materialise: with
+the sub-probe irreducible, there is no freed budget for steering to
+spend, and steering still sits at 4% of its own cap with clamps at
+0.01%. The honest next questions are (a) whether steering can be made
+to spend its 24x headroom on its OWN account — raised depth/topk as
+their own arm, priced against the 96% of its cap it never touches; and
+(b) whether the sub-probe layer should be a FINDER rather than a
+prover at all, since D shows finds are cheap and refutations are what
+the layer actually buys. Both are arms, not conclusions.
 
 A NOTE ON THE INSTRUMENT, because it bit three times. Docker Desktop
 updated mid-session twice; the FIRST outage did destroy five in-flight
@@ -2009,3 +2042,19 @@ the daemon before believing an empty list: a dead daemon and an idle
 one are indistinguishable to that idiom. This is the reach entry's
 lesson in a second costume — UNKNOWN is not absence, and neither is an
 unreachable instrument.
+
+And a third costume, the sharpest of the three, because this one
+accused the engine. The divergence replay defaulted its prior anchor
+to `--belief zach` while the league's default is SLOPPY, and the
+posterior anchors half its prior on that belief — so it rebuilt the
+wrong trajectory and reported NINE reconstruction mismatches, the one
+reading the tool itself declares "the only reading that indicts the
+re-budget". Every one was the instrument. The fix is not a better
+default but the removal of the default: the replay now reads the
+belief out of the arm's OWN report metadata, because a hardcoded
+assumption about a run is exactly the kind of key that goes stale
+silently. With it read correctly: A and B diverge from the pinned run
+ZERO times, D diverges four times, and reconstruction mismatches are
+zero everywhere. The mercy-pin round warned about session tooling
+summing a key that does not exist; this is the same warning about
+tooling ASSUMING a key's value.
