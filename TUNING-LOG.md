@@ -1575,3 +1575,183 @@ bumps are for code that moves play).
   entry repeated the contradiction. The m0875 collapse is consistent
   with the implemented .10, so this was prose, not code: both now
   say nine-in-ten with the cycle count and total spelled out.
+
+## The reach verdict: nothing was missed, the rungs that pay are cheap, and the queue's first item loses its mechanism (2026-07-24)
+
+A pure replay diagnostic — no engine or CLI code, so no version bump
+(stays 2.0.0a10, selftest 59/59 green before and after). The question
+was declared before anything ran: when the engine found no
+certificate, was one THERE? Tooling lives in games/league/dev-reach/,
+untracked wholesale by the artifact policy, and it touches no belief
+and no held-out parameter — the oracle is opponent-free by
+construction, which is what made this the cleanest experiment
+available on held-out boards.
+
+FIRST, THE QUEUE CORRECTION THE PIN'S OWN REPORT DEMANDED. The ladder
+pin listed VALUE PLUMBING first, on the mechanism that "forced nets
+CAN outbid coin-flip offers when search finds them" — g05 as its
+existence proof. Cross-tabbing all 70 games of the pinned report
+kills the mechanism: the population is empty. Ten games logged at
+least one oracle certificate and ALL TEN converted forced; the five
+mercy mates found ZERO certificates ever, and so did all fifty
+max-plies games, the four insufficient-material draws and the one
+stalemate-us. In every game oracle_moves equals
+forced_selfmates_found, so a certificate was ALWAYS played the ply it
+was proven. A certificate has never lost to an offer, because the two
+have never been on the board at the same time. Whatever g05 proves,
+it is not that forced nets outbid offers — it is that the two
+outcomes come from disjoint positions.
+
+THE INSTRUMENT, VALIDATED BEFORE IT WAS BELIEVED (the mercy-pin
+review round's lesson about session tooling summing a key that does
+not exist): the replay walks each pinned PGN, and at every position
+where the engine actually DECIDED — lone legal moves are excluded,
+because choose_move returns those without probing — re-runs
+engine._probe verbatim, fresh memo per decision, one budget shared
+across the n ladder. Run against the ten games whose report says
+certificates fired, it re-derived all 22 from the PGNs alone: right
+count per game, right ply, and the proving move identical to the move
+played in all 22. Only then was it pointed at the walls.
+
+THE SWEEP, AND IT IS EMPTY. All sixteen named targets, full coverage,
+nothing skipped: the five random mercy mates, the nine squat dev
+walls, and the three near-misses where sub-probes hit but no root
+certificate resulted. 1,600 decisions, each probed at the SHIPPED
+budget (n<=4, cap 50k) and at a FAT one (n<=5, cap 500k):
+
+```
+arm      exhausted        verdicts                     died at n=
+shipped  1582/1600 98.9%  unknown 1582, disproven 18   n3 1301, n4 299
+fat      1592/1600 99.5%  unknown 1592, disproven  8   n4 1485, n5 92
+MISSED CERTIFICATES: 0 — in every game, at every decision
+```
+
+Read the second row before the first conclusion. The fat arm found
+nothing AND WAS ITSELF UNKNOWN on 99.5% of decisions, having spent
+798.5M nodes. That is not evidence of absence; UNKNOWN is not
+DISPROVEN, and the instrument is bound by the oracle's own contract
+exactly as the engine is. Worse, the fat arm is LESS definitive than
+the shipped one: deepening probe_n without funding it proportionally
+moved the death rung one deeper and cut definitive answers from 18 to
+8. So the declared criterion's second branch — "the fat budget finds
+nothing either, therefore those positions were net-poor" — could not
+be licensed by the experiment as designed. A third outcome the
+criterion did not declare had occurred: both arms too weak to decide.
+Named here so no future session re-runs a bigger version of it.
+
+THE INSTRUMENT THAT DOES TERMINATE. What settles it is the cost of a
+FULL resolution: per position, each n run alone, fresh budget, fresh
+memo, a ceiling high enough to finish. 24 positions (tail-40 samples
+from seven games across four families):
+
+```
+n     resolved      median nodes    vs shipped cap 50k
+1       24/24                 63
+2       24/24              2,056
+3       24/24             65,998    132% — the cap cannot finish it
+4       23/24          2,044,599    41x the cap
+5        3/24          8,338,458
+step ratio n=4/n=3: x33.3
+n=4 outcome: DISPROVEN 23, unknown 1 — not one certificate
+```
+
+THE VERDICT IS NOT REACH. At the probe's OWN ADVERTISED DEPTH the
+positions are genuinely net-poor, proven definitively rather than
+inferred from a starved instrument: fully funding n=4 would cost 41x
+the shipped cap and return DISPROVEN on 23 of 24 sampled positions.
+The certificates are not there to be missed. The declared criterion's
+second branch fires — the engine steered wrong EARLIER — but it is
+the escalation that licenses it, not the fat sweep.
+
+AND THE RUNGS THAT PAY ARE THE CHEAP ONES. Every certificate the
+project has ever landed, by proof depth:
+
+```
+n=1  10 (45%)     n=3   3 (14%)
+n=2   8 (36%)     n=4   1 ( 5%)
+median nodes to FIND one: 194;  worst: 49,559;  all under the cap
+```
+
+81% of the record is n<=2, at a median of 194 nodes. The engine
+spends 46,996 nodes per decision — 94% of its cap — reaching for an
+n=3 whose median cost it cannot cover, and the n>=3 rungs have
+produced four certificates in the project's history. This is the
+starvation diagnosis inverted: the certifier is not starved of
+budget, it is over-funded on rungs that hold nothing and correctly
+funded on the two that hold everything.
+
+THE BUDGETS ARE ALLOCATED BACKWARDS FROM WHERE THEY BIND, which
+answers the two subsidiary questions the lever posed:
+
+```
+layer        nodes/decision       cap     saturation
+root probe           46,996    50,000        94%
+sub probes           71,091   100,000        71%
+steering             16,671   400,000         4%
+```
+
+Node-cap clamps are NOT binding — 13,055 entries is 1.84 per decision
+against 16,671 search nodes, 0.01%; steering has 24x headroom it has
+never used. And the sub-probe's 98.8% unknown has a one-line
+mechanism: 38.8M calls spent 504M nodes, which is 13.01 NODES PER
+CALL against the 2,056 the cheapest useful proof (n=2) costs. The
+100k cap splits across ~30 root branches, so a branch share of ~3,333
+funds about one n=2 proof and then answers UNKNOWN for the ~180
+remaining gated calls in its subtree. 1.15% of calls ever returned a
+definitive answer. The layer is not mis-tuned; it is funded at under
+1% of the price of its own cheapest possible answer.
+
+THE SHAPE LEVER, PRICED BUT NOT BUILT. The ~33x per rung is our
+OR-node width: the proof tries all ~30 own moves while the opponent
+AND-node below usually bails on its first refutation. A prototype
+certifier restricting our nodes to the most FORCING moves (fewest
+replies, checks first) and leaving the opponent's node exhaustive —
+sound but INCOMPLETE, so its failures return NOT_FOUND and never
+DISPROVEN — reaches, at the SAME 50k cap: n=5 at width 8, n=6 at
+width 5, n=7-9 at width 3. Two to six rungs deeper at constant price.
+It found nothing on random_g00, which is what the exhaustive
+DISPROVEN at n<=4 predicts, and its silence is weaker evidence than
+the exhaustive arm's by construction. It is a diagnostic; nothing it
+says has reached an engine or a league.
+
+Queue, corrected and reordered by the verdict:
+
+- VALUE PLUMBING loses its stated mechanism and keeps its slot with a
+  new one. It was never a tiebreak between certificates and offers —
+  that population is empty and always was. The measured population is
+  the trajectory: 1,600 decisions in which no certificate existed
+  within four own-moves, so the objective has to change where the
+  engine GOES tens of plies earlier, not what it prefers at the
+  moment a net appears. That is an OBJECTIVE change, as the lever
+  declared, but it must price PROXIMITY to net-bearing structure, not
+  certificates themselves — a categorical bonus on certificates would
+  fire 22 times in 7,094 decisions and change nothing else.
+- RE-BUDGET THE CERTIFIER, promoted to first because it is cheap,
+  measured, and pays for the item above. The productive range is
+  n<=2 at ~2k nodes; the ~45k per decision now spent failing to
+  finish n=3 bought zero certificates in 1,600 decisions even at 10x.
+  Reclaim it for steering, which runs at 4% of its own cap. Whether
+  the freed budget is better spent as depth, as width, or on the
+  forcing-restricted certifier above is the next graded arm.
+- CORPUS GROWTH stays the committed path for human-held naming,
+  unchanged and still blocked on collecting games from MORE PLAYERS
+  (the corpus is eight games from one opponent) — not a dev-session
+  task.
+- Selective depth stays shipped, deep roots stay benched. Milestones
+  stand at 60/80/90% held-out; the live bar stays "the corner poses
+  and the mate lands BY FORCE against a human."
+
+COST AND COVERAGE, HONESTLY. 878M nodes over the sweep (79.7M
+shipped, 798.5M fat) plus the escalations; ~3.5 hours of detached
+container time. The sweep covers 16 of 70 games and 1,600 of 7,094
+decisions — the named targets in full, nothing skipped, and 54 games
+NOT examined. The cost curve samples 24 positions from seven games
+across four of seven families; sloppy-held, squat-held and zach were
+never sampled for it, and the tail-40 sampling means the curve
+describes late positions, where the pinned conversions actually
+landed, not openings. One escalation container was SIGKILLed (exit
+137) at position 19 by a Docker engine restart; it writes its JSON
+only on completion, so its console log was rescued for the 18
+positions already measured and the two interrupted games were re-run
+separately — the 24 positions above are those two runs pooled, which
+is why their ceilings differ (12M and 9M).
