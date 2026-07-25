@@ -1943,11 +1943,58 @@ run: nodes per decision and share, per layer, against each layer's own
 cap. The reach verdict had to rebuild that split from a pinned report
 before it could see the budgets were backwards.
 
-COST AND COVERAGE, HONESTLY. The escalation covers 23 positions in
-nine games across three families, tail-40 — the families the reach
-entry missed, not the whole corpus, and zach's n=4 stays unresolved at
-10M. The trophy regression covers all 465 decisions of the ten games
-that ever converted. The wall sweeps that produced zero gains cover
-five random games and are NOT a corpus-wide statement. A Docker
-Desktop update destroyed five in-flight containers mid-session; every
-run is deterministic and was relaunched, and nothing on disk was lost.
+COST AND COVERAGE, HONESTLY. The escalation covers 23 of 27 PLANNED
+positions across nine games and three families, tail-40, sample 3 per
+game: sloppy-held and squat-held are complete at 9 positions each,
+zach contributed 5 of 9 before a Docker Desktop update killed the
+container, and zach's n=4 is UNKNOWN at the 10M ceiling in all four
+runs that reached it. So the zach column is the thin one in both
+senses — fewer positions AND the only unresolved rung — and a session
+wanting zach's n=4 definitively must budget well past 10M for it. The
+trophy regression covers all 465 decisions of the ten games that ever
+converted. The wall sweeps that produced zero gains cover five random
+games and are NOT a corpus-wide statement.
+
+THE ARMS DID NOT FINISH, AND WHAT THEY GOT IS STILL DECISIVE ON ONE
+POINT. Four dev arms (zach/sloppy/squat, 10 games, baseline seeds,
+BAKED image = unmodified main, so the knob is the only variable) were
+killed by a SECOND Docker Desktop update at 9/9/15/7 of 30 games. Only
+zach g00..g08 is complete in all four, so this is a nine-game,
+one-family reading and is labelled as such — but within it the arms
+are deterministic and directly comparable:
+
+```
+arm                        zach g00..g08        conversions
+posterior-ladder (ref)     . . F F . F . . .    3
+A base                     . . F F . F . . .    3   reproduces the ref
+B sub_probe_men 4          . . F F . F . . .    3
+C sub_probe_n 0  (OFF)     . . F . . F . . .    2   LOSES zach_g03
+D sub_probe_slice 800      . . F F . F . ? ?    3   (7 games)
+```
+
+Two things follow. The BASELINE GATE PASSES: arm A reproduces the
+pinned run's zach row exactly, so the arms are comparable and the
+protocol held. And the layer EARNS ITS PLACE: turning it off costs a
+conversion. That matters because the cross-tab above was confounded
+and could not settle it — 52.8% of all node work for 41 hits invites
+deletion, and deletion is now measured to cost a trophy. The two
+re-budgets that keep every conversion (tighter gate, smaller slice)
+are the live candidates, but their SAVINGS ARE UNPRICED: nodes per
+decision live in report.json, which is written only at the end, and no
+arm reached the end. Nothing is claimed about cost here.
+
+One wall-clock hint, not a measurement: arm C completed 15 games while
+A completed 9 in the same window, so the layer is a large share of
+wall time as well as of nodes. Container seconds under parallel load
+are not citable, which is exactly why it is a hint.
+
+A NOTE ON THE INSTRUMENT, because it bit twice. Docker Desktop updated
+mid-session TWICE, destroying nine in-flight containers in total.
+Everything is deterministic and re-runnable and nothing on disk was
+lost, but the watchers were wrong: `docker ps` returning an API ERROR
+was read by an `until [ -z "$(docker ps -q ...)" ]` loop as "no
+containers running", so a watcher announced completion for a run that
+had been killed. Health-check the daemon before believing an empty
+container list — a dead daemon and an idle one look identical to that
+idiom, which is the same shape of mistake as reading UNKNOWN as
+absence.
