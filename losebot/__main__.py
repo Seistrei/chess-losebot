@@ -44,11 +44,41 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--probe-cap", type=int, default=50_000)
     parser.add_argument(
+        "--probe-forcing-n", type=int, default=0,
+        help="root oracle depth for the FORCING-RESTRICTED ladder, "
+        "which continues from --probe-n+1 on whatever budget the "
+        "exhaustive ladder leaves. Sound but incomplete: its failures "
+        "are NOT_FOUND, never refutations (0 disables)",
+    )
+    parser.add_argument(
+        "--probe-forcing-width", type=int, default=0,
+        help="own-moves tried per node by the restricted ladder, most "
+        "forcing first (fewest replies, checks ahead); 0 disables it "
+        "regardless of --probe-forcing-n",
+    )
+    parser.add_argument(
+        "--probe-forcing-cap", type=int, default=0,
+        help="the restricted ladder's OWN node budget, additive to "
+        "--probe-cap and never carved out of it: the record's dearest "
+        "certificate is an n=3 find costing 49,559 of 50,000, so a "
+        "shared budget forfeits real trophies for speculative ones",
+    )
+    parser.add_argument(
         "--sub-probe-n", type=int, default=2,
         help="oracle depth for sub-root probes at steering our-nodes "
         "(0 disables them)",
     )
     parser.add_argument("--sub-probe-cap", type=int, default=100_000)
+    parser.add_argument(
+        "--sub-probe-slice", type=int, default=8_000,
+        help="ceiling on ONE gated sub-probe call. The branch share "
+        "(cap // root branches) is what actually binds at the default, "
+        "so a call resolves n=2 — a refutation the search discards — "
+        "and leaves the branch dry for the ~180 calls behind it. Lower "
+        "is find-biased: certificates are cheap to FIND and expensive "
+        "to REFUTE, so a small slice buys the first and skips the "
+        "second",
+    )
     parser.add_argument(
         "--sub-probe-men", type=int, default=5,
         help="sub-probes fire once the opponent has at most this many "
@@ -99,8 +129,12 @@ def _build_engine(args) -> ModelEngine:
         coverage=args.coverage,
         probe_n=args.probe_n,
         probe_cap=args.probe_cap,
+        probe_forcing_n=args.probe_forcing_n,
+        probe_forcing_width=args.probe_forcing_width,
+        probe_forcing_cap=args.probe_forcing_cap,
         sub_probe_n=args.sub_probe_n,
         sub_probe_cap=args.sub_probe_cap,
+        sub_probe_slice=args.sub_probe_slice,
         sub_probe_men=args.sub_probe_men,
         forced_ext=args.forced_ext,
         deep_depth=args.deep_depth,
@@ -185,8 +219,12 @@ def _cmd_league(args) -> int:
             "coverage": args.coverage,
             "probe_n": args.probe_n,
             "probe_cap": args.probe_cap,
+            "probe_forcing_n": args.probe_forcing_n,
+            "probe_forcing_width": args.probe_forcing_width,
+            "probe_forcing_cap": args.probe_forcing_cap,
             "sub_probe_n": args.sub_probe_n,
             "sub_probe_cap": args.sub_probe_cap,
+            "sub_probe_slice": args.sub_probe_slice,
             "sub_probe_men": args.sub_probe_men,
             "forced_ext": args.forced_ext,
             "deep_depth": args.deep_depth,

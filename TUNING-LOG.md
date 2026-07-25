@@ -1755,3 +1755,199 @@ only on completion, so its console log was rescued for the 18
 positions already measured and the two interrupted games were re-run
 separately — the 24 positions above are those two runs pooled, which
 is why their ceilings differ (12M and 9M).
+
+## Two provers, two budgets: the verdict nobody reads is free to give up (2026-07-25)
+
+Version 2.0.0a11, selftest 69/69 (was 59/59; ten new checks). The
+session's thesis rests on one claim the queue asked to be verified
+rather than assumed, so that came first and everything else was built
+on the answer.
+
+THE CLAIM, VERIFIED TWO WAYS. Nothing in the engine consumes a
+definitive negative: `_probe` branches on PROVEN and on budget
+exhaustion, the sub-probe adds only UNKNOWN, and `search._node_value`
+collapses every non-PROVEN answer to None (search.py:249 keeps only
+`proven_n is not None`). Reading code is not evidence, so DISPROVEN
+was MASKED to a status object the engine has never seen — at the
+oracle's PUBLIC BOUNDARY only, leaving the recursion, the memo, the
+pruning and the node spend bit-identical, so that only what the
+engine is TOLD changed:
+
+```
+selftest   58/59 — the single failure is selftest.py:357, the oracle's
+           OWN contract test, which asserts DISPROVEN directly. Every
+           engine, search and league test passed.
+play       zach/squat/sloppy/random, seed 0, 120 plies: identical
+           plies, identical final FEN, identical certificate count in
+           all four. The mask fired 16,568 times (3,324/4,891/6,075/
+           2,278) — the experiment was not vacuous.
+```
+
+A definitive negative is worth nothing to this engine. Trading
+completeness for reach costs nothing that was being spent.
+
+ITEM 0 FIRST, BECAUSE IT GATED THE REST. The reach verdict's cost
+curve never sampled sloppy-held, squat-held or zach — the families
+that DO convert. Same escalation, each n alone, fresh budget, fresh
+memo, 10M ceiling, tail-40; 23 positions across nine games:
+
+```
+family        n      runs  median nodes                  outcome
+sloppy-held   1..4      9  12 / 94 / 768 / 5,915         DISPROVEN all
+squat-held    1..4      9  55 / 1,421 / 35,849 / 894,297 DISPROVEN all
+zach          1..3      5  111 / 5,960 / 326,523         DISPROVEN all
+zach          4         4  10,000,000 (ceiling)          UNKNOWN
+REACHABLE NETS AT ANY RUNG, ANY FAMILY: none
+```
+
+The verdict GENERALIZES and the re-budget can be global — with the
+honesty the reach entry itself demanded: zach's n=4 is UNKNOWN at a
+10M ceiling, NOT DISPROVEN. Three rungs are definitive in all three
+families and the fourth in two of three. Nothing was found anywhere.
+
+AND THE COST CURVE IS NOT UNIVERSAL — a correction to the reach entry.
+Its tail-40 sample put n=4 at 2,044,599 nodes, 41x the shipped cap.
+sloppy-held resolves n=4 at a median of 5,915 — TWELVE PERCENT of the
+cap. On stripped families the shipped engine is already complete to
+its advertised depth, and its silence there really is absence. "n=4
+costs 41x the cap" describes the families sampled, not the layer.
+
+THE CENSUS THAT REDESIGNED THE FEATURE. Every certificate the project
+has landed, re-derived alone with a fresh budget:
+
+```
+n=1 x10  max     86 nodes      n=3 x3  4,311 / 11,898 / 45,282
+n=2 x 8  max  1,254 nodes      n=4 x1  24,285
+```
+
+THE DEAREST TROPHY IS AN n=3 FIND. A cheap exhaustive n<=2 phase does
+NOT protect it, so any design funding a second prover out of
+`probe_cap` spends money the first one provably needs. That was not
+feared, it was MEASURED: the shared-budget hybrid (exhaustive n<=2,
+then restricted n=3..8 at width 5, one 50k cap) was built, run, and
+LOST EXACTLY THE TWO DEEP TROPHIES THE CENSUS PREDICTS — random_g05
+ply83 (the n=3 net) and sloppy-held_g03 ply47 (the n=4 net) — for zero
+gains across five wall games. Rejected on its own evidence.
+
+WHAT SHIPPED: TWO PROVERS, TWO BUDGETS, THE SECOND ADDITIVE. The
+exhaustive ladder is untouched — same order, same cap, same breaks —
+so trophy safety is structural rather than hoped for. The
+forcing-restricted ladder (`oracle.forcing_selfmate_status`) runs
+afterwards on its OWN `probe_forcing_cap`, restricting our OR-node to
+the `width` most forcing moves (fewest replies, checks first) while
+leaving the opponent's AND-node EXHAUSTIVE, which is where soundness
+lives. Sound but incomplete: its failures are NOT_FOUND, never
+DISPROVEN.
+
+THE TROPHY REGRESSION, AND IT GAINED. All 465 decisions of the ten
+games that ever logged a certificate, both arms, 50k exhaustive cap
+plus a 50k forcing cap:
+
+```
+shipped certificates  22/22 re-derived     LOSSES 0     UNSOUND 0
+GAIN  zach_g05 ply71  f4f2 at n=4, found by the restriction and
+      VERIFIED by the exhaustive prover at 647,381 nodes — 13x the
+      shipped cap, which is exactly why the shipped engine is blind
+      to it
+root nodes/decision   47,853 -> 94,566
+```
+
+Read the gain precisely. zach_g05's recorded conversion runs plies
+73/75/77; the restriction certifies at ply 71, TWO PLIES EARLIER. In
+play that diverges the game, so the honest claim is not "a 23rd
+trophy" but "one decision, in ten games, where the shipped engine
+found nothing and the restriction returned a verified forced net
+before the shipped conversion." One gain in 465 decisions.
+
+AND IT IS AVAILABLE FOR LESS. The ply-71 net needs width 8 and 17,888
+nodes; width 5 never finds it at any cap up to 50k. So
+`probe_forcing_cap 20,000` at width 8 buys the same gain for +20k per
+decision rather than +50k. The layer's price is set by what its one
+conversion costs, not by the exhaustive cap it sits beside.
+
+SOUNDNESS, ASSERTED RATHER THAN ARGUED. Three fixtures are enough to
+catch a broken port and not enough to carry a claim the engine now
+rests on, so a differential fuzz walked real corpus positions:
+
+```
+194 positions, widths 1..8 and 250, n<=3
+  15 restricted certificates, ALL verified MOVE-LEVEL against the
+     exhaustive prover (push it; every reply must mate us now or lose
+     at n-1) — position-level agreement was not accepted
+ 174 exact agreements at an UNRESTRICTING width (>= the legal move
+     count), where the restricted prover IS the exhaustive one
+   0 unsound, 0 disagreements, and DISPROVEN returned 0 times, ever
+```
+
+A LABELLING BUG CAUGHT IN REVIEW, WHICH WOULD OTHERWISE HAVE SHIPPED.
+When the budget died during the ordering pass, `_forcing_order`
+returned an empty candidate list, the OR-node fell through to
+DISPROVEN and the public entry to NOT_FOUND — a starved node claiming
+absence, the exact sin the UNKNOWN distinction exists to prevent. The
+ordering pass now reports truncation and such a node owes UNKNOWN;
+the selftest asserts it at budgets 0, 1, 4 and 20.
+
+THE SELFTEST ADDITIONS (the suite is the gate), ten checks: soundness
+move-level on all three fixtures; NEVER returns DISPROVEN; NOT_FOUND
+vs UNKNOWN vs DISPROVEN kept three distinct answers; a shared memo
+cannot leak a restriction-tainted refutation (restricted keys are
+width-tagged, so sharing is SAFE rather than merely discouraged);
+per-layer budget accounting bounded by each layer's own cap with the
+two root provers ledgered apart; the layer inert unless all three of
+its knobs are set; and THE DEPTH CLAIM PINNED AS A CONVERSION rather
+than a reach — `DEEP_FIXTURE` is zach_g05 ply73, where at a SHARED cap
+of 3,000 the exhaustive prover is UNKNOWN and the restriction returns
+f7f6 at n=3, confirmed move-level. The reach entry warned that
+climbing further is not the same as bringing something back; this
+fixture pins the latter.
+
+ITEM 1, RE-MEASURED — AND THE STATED MECHANISM IS NOT THE WASTE. From
+the pinned report, 70 games / 7,094 decisions:
+
+```
+layer        nodes/decision       cap   saturation   share
+root probe           46,996    50,000         94%    34.9%
+sub probes           71,091   100,000         71%    52.8%
+steering             16,671   400,000          4%    12.4%
+
+sub_probe_hits ACROSS THE ENTIRE LEAGUE: 41
+38,760,792 calls; 504,319,626 nodes; 12.3M nodes per hit
+```
+
+The "13.01 nodes per call" is real but is not where the money goes: a
+dry branch share returns UNKNOWN at ZERO node cost, so the futile
+calls are FREE. The 504M was spent by the 1.15% of calls that ran to a
+definitive answer — about 446,021 of them, of which 41 were PROVEN.
+The layer's actual bill is ~445,980 REFUTATIONS the search discards.
+Same disease as the root probe, one layer down, and it reframes the
+fix: not "fund the branch shares better" but "stop buying the verdict
+nobody reads."
+
+The caution against gutting it, stated because the cross-tab invites
+it: 8 of 10 forced conversions had sub-probe hits against 3 of 60
+non-converting games — but the gate opens on stripped positions, which
+is also where conversions happen, so the association is confounded by
+reaching an endgame at all. Two conversions (zach_g05 and random_g05,
+three certificates each) had ZERO sub-probe hits. Hence measured arms
+rather than an assumption.
+
+CODE DOES NOT CHANGE PLAY, AND THE GATE SAYS SO. Every new knob
+defaults off, and the check is byte-level: the same four games
+replayed under the current source are IDENTICAL to unmodified main. No
+pinned league is owed for the code itself; one is owed only if a
+CONFIG change ships, and that decision waits on the arms.
+
+READABLE ALLOCATION, so no future session re-derives it by hand. The
+league report now carries a `layers` block and prints one line per
+run: nodes per decision and share, per layer, against each layer's own
+cap. The reach verdict had to rebuild that split from a pinned report
+before it could see the budgets were backwards.
+
+COST AND COVERAGE, HONESTLY. The escalation covers 23 positions in
+nine games across three families, tail-40 — the families the reach
+entry missed, not the whole corpus, and zach's n=4 stays unresolved at
+10M. The trophy regression covers all 465 decisions of the ten games
+that ever converted. The wall sweeps that produced zero gains cover
+five random games and are NOT a corpus-wide statement. A Docker
+Desktop update destroyed five in-flight containers mid-session; every
+run is deterministic and was relaunched, and nothing on disk was lost.

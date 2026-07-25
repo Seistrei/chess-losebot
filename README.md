@@ -38,6 +38,15 @@ The new `losebot/` package has three load-bearing ideas:
    oracle's job is to make the finish unconditional. "Forced selfmate"
    is the only win the scoreboard fully credits.
 
+   The oracle ships two provers over the same proof. The EXHAUSTIVE one
+   answers PROVEN / DISPROVEN / UNKNOWN and is the only one entitled to
+   a refutation. The FORCING-RESTRICTED one tries just the most forcing
+   own-moves while leaving the opponent's node exhaustive: sound but
+   incomplete, so it reaches deeper for the same money and its failures
+   are NOT_FOUND, never DISPROVEN. The distinction is load-bearing —
+   a restricted prover's silence is ignorance, and laundering it into a
+   refutation is the one bug the whole status enum exists to prevent.
+
 Progress is measured by the **frozen league** (`losebot/league/`):
 dev families (fair game for tuning) and held-out families (frozen
 parameters, report-only), seats alternated, fresh RNG per game, every

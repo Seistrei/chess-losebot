@@ -86,7 +86,48 @@ def summarize(records: list[GameRecord]) -> dict:
         "worst_family_forced_rate": (
             scored[worst_name]["forced_rate"] if worst_name else 0.0
         ),
+        "layers": _layers(records),
     }
+
+
+#: Which gauge funds which layer, and against which configured cap.
+#: The 2026-07-24 reach verdict had to rebuild this split by hand from
+#: a pinned report before it could see that the budgets were allocated
+#: backwards; a run should state its own allocation instead.
+_LAYERS = (
+    ("root_probe", "probe_nodes", "probe_cap"),
+    ("root_forcing", "probe_forcing_nodes", "probe_forcing_cap"),
+    ("sub_probe", "sub_probe_nodes", "sub_probe_cap"),
+    ("steering", "search_nodes", "node_cap"),
+)
+
+
+def _layers(records: list[GameRecord]) -> dict:
+    """Per-layer node allocation: cost per decision and cap saturation.
+
+    Reported per run so "where did the compute go" is a column rather
+    than an archaeology exercise. Saturation is against the layer's own
+    configured cap, which is what makes a 4%-saturated layer next to a
+    94%-saturated one legible at a glance.
+    """
+    total = {}
+    decisions = 0
+    for record in records:
+        probes = getattr(record, "probes", None) or {}
+        decisions += probes.get("moves_played", 0)
+        for _name, gauge, _cap in _LAYERS:
+            total[gauge] = total.get(gauge, 0) + probes.get(gauge, 0)
+    spent = sum(total.values())
+    out = {"decisions": decisions, "nodes": spent, "by_layer": {}}
+    for name, gauge, cap in _LAYERS:
+        nodes = total.get(gauge, 0)
+        out["by_layer"][name] = {
+            "nodes": nodes,
+            "per_decision": nodes / decisions if decisions else 0.0,
+            "share": nodes / spent if spent else 0.0,
+            "cap_gauge": cap,
+        }
+    return out
 
 
 def render(summary: dict) -> str:
@@ -120,6 +161,17 @@ def render(summary: dict) -> str:
         f"worst held-out family: {summary['worst_family']} "
         f"({100.0 * summary['worst_family_forced_rate']:.0f}%)"
     )
+    layers = summary.get("layers")
+    if layers and layers["decisions"]:
+        parts = " ".join(
+            f"{name} {row['per_decision']:,.0f}/dec "
+            f"({100.0 * row['share']:.0f}%)"
+            for name, row in layers["by_layer"].items() if row["nodes"]
+        )
+        lines.append(
+            f"nodes — {layers['nodes'] / layers['decisions']:,.0f} per "
+            f"decision over {layers['decisions']:,} decisions: {parts}"
+        )
     return "\n".join(lines)
 
 

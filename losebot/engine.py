@@ -74,6 +74,9 @@ class ModelEngine:
         coverage: float = 0.85,
         probe_n: int = 4,
         probe_cap: int = 50_000,
+        probe_forcing_n: int = 0,
+        probe_forcing_width: int = 0,
+        probe_forcing_cap: int = 0,
         sub_probe_n: int = 2,
         sub_probe_cap: int = 100_000,
         sub_probe_slice: int = 8_000,
@@ -94,6 +97,9 @@ class ModelEngine:
         self.coverage = coverage
         self.probe_n = probe_n
         self.probe_cap = probe_cap
+        self.probe_forcing_n = probe_forcing_n
+        self.probe_forcing_width = probe_forcing_width
+        self.probe_forcing_cap = probe_forcing_cap
         self.sub_probe_n = sub_probe_n
         self.sub_probe_cap = sub_probe_cap
         self.sub_probe_slice = sub_probe_slice
@@ -134,6 +140,11 @@ class ModelEngine:
         "forced_selfmates_found",
         "probe_nodes",
         "probe_budget_exhaustions",
+        "probe_forcing_nodes",
+        "probe_forcing_hits",
+        "probe_forcing_not_found",
+        "probe_forcing_unknowns",
+        "probe_forcing_exhaustions",
         "search_nodes",
         "sub_probe_calls",
         "sub_probe_hits",
@@ -260,7 +271,33 @@ class ModelEngine:
         return not (them_occ & ~board.pawns & ~board.kings)
 
     def _probe(self, board: chess.Board, memo: dict) -> chess.Move | None:
-        """Iterative-deepening oracle probe under one shared budget."""
+        """Iterative-deepening oracle probe: two provers, two budgets.
+
+        The second budget is ADDITIVE, never carved out of the first.
+
+        The EXHAUSTIVE ladder below is untouched — same order, same
+        ``probe_cap``, same breaks — so every certificate the project
+        has ever landed is still found exactly as it was found. That is
+        not caution, it is arithmetic: the record's most expensive
+        trophy is an n=3 FIND costing 49,559 against this 50,000 cap,
+        a 441-node margin, so a shared budget would have handed the
+        restricted prover money the exhaustive one provably needed.
+        A first attempt did exactly that and lost random_g05 ply83.
+
+        The FORCING-RESTRICTED ladder therefore runs afterwards on its
+        OWN ``probe_forcing_cap``, as an independent prover with its
+        own range — sound but incomplete, buying depth with
+        completeness rather than with nodes the other layer needs. It
+        costs what it costs, stated in its own gauges, and it cannot
+        take a trophy away from the layer above.
+
+        Continuing past a DISPROVEN costs nothing here, because nothing
+        reads it: this loop branches on PROVEN and on budget alone, and
+        so does every consumer downstream. That was verified before it
+        was relied on — masking DISPROVEN to a status the engine has
+        never seen left four games across four families identical to
+        the ply while firing 16,568 times.
+        """
         budget = [self.probe_cap]
         found: chess.Move | None = None
         for n in range(1, self.probe_n + 1):
@@ -271,9 +308,59 @@ class ModelEngine:
             if budget[0] <= 0:
                 self.probe_budget_exhaustions += 1
                 break
+        # Split the accounting at the handoff so a report can read the
+        # two provers' costs apart instead of re-deriving them.
         self.probe_nodes += self.probe_cap - budget[0]
+        if found is None and self._forcing_enabled():
+            found = self._probe_forcing(board, memo)
         if found is not None:
             self.forced_selfmates_found += 1
+        return found
+
+    def _forcing_enabled(self) -> bool:
+        return (self.probe_forcing_width > 0 and self.probe_forcing_n > 0
+                and self.probe_forcing_cap > 0)
+
+    def _probe_forcing(self, board: chess.Board,
+                       memo: dict) -> chess.Move | None:
+        """The restricted ladder: its own budget, its own full range.
+
+        It runs n=1..``probe_forcing_n`` rather than continuing where
+        the exhaustive ladder stopped, because where that ladder
+        stopped is not where it was ANSWERED — 93% of decisions end in
+        budget exhaustion, so its upper rungs are UNKNOWN, not
+        refuted. A restricted prover with its own money is entitled to
+        try them. The low rungs cost it almost nothing at these widths,
+        and anything it finds there the exhaustive ladder already
+        failed to find.
+
+        The memo is shared, and safely: restricted keys are
+        width-tagged, so a restriction-tainted DISPROVEN cannot be read
+        back as a refutation by the complete prover.
+
+        NOT_FOUND and UNKNOWN are gauged apart on purpose. The reach
+        verdict's own lesson was that a starved instrument's silence
+        got read as absence; these two counters are what keep a future
+        session from repeating that from the report alone.
+        """
+        budget = [self.probe_forcing_cap]
+        found: chess.Move | None = None
+        for n in range(1, self.probe_forcing_n + 1):
+            status, move = oracle.forcing_selfmate_status(
+                board, n, budget, memo, self.probe_forcing_width
+            )
+            if status is oracle.ProofStatus.PROVEN:
+                found = move
+                self.probe_forcing_hits += 1
+                break
+            if status is oracle.ProofStatus.NOT_FOUND:
+                self.probe_forcing_not_found += 1
+            elif status is oracle.ProofStatus.UNKNOWN:
+                self.probe_forcing_unknowns += 1
+            if budget[0] <= 0:
+                self.probe_forcing_exhaustions += 1
+                break
+        self.probe_forcing_nodes += self.probe_forcing_cap - budget[0]
         return found
 
     def _make_sub_probe(self, us: chess.Color, memo: dict, branches: int):

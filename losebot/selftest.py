@@ -55,6 +55,19 @@ IN2_FIXTURE = "8/8/8/R7/1p6/3PPk1p/1N4RP/6BK w - - 0 1"
 # opener exists to see.
 CROSSFIRE_FIXTURE = "Q3rQ2/2pb4/K1k4p/1pPp4/3P3p/P4p2/7P/8 b - - 0 1"
 
+#: The depth claim, pinned to a REAL position: zach_g05 ply 73, the
+#: decision behind the most expensive certificate the project has ever
+#: found. The exhaustive prover needs 45,282 nodes to reach that n=3
+#: net; the forcing-restricted one returns the same move (f7f6) in 858.
+#: At the shared cap below the complete prover is still UNKNOWN while
+#: the restriction has already certified — which is the whole trade in
+#: one fixture, at a price the suite can afford.
+DEEP_FIXTURE = "1r1bkr2/p1pbnp1p/P1PpP1p1/1p4K1/1Pn3P1/7P/5q2/8 b - - 2 37"
+DEEP_FIXTURE_N = 3
+DEEP_FIXTURE_WIDTH = 8
+DEEP_FIXTURE_CAP = 3_000
+DEEP_FIXTURE_VERIFY = 2_000_000
+
 # Selective-depth fixture: White owns two free tempi (a3, a4) while
 # Black is frozen to single replies — 1...h3 forced, then 2...hxg2#
 # forced, mate at ply 4, one past flat depth 3's horizon. Every
@@ -165,6 +178,256 @@ def test_oracle_and_forced_outcome() -> None:
     check(
         "oracle: starved budget reports UNKNOWN",
         status is oracle.ProofStatus.UNKNOWN,
+    )
+
+
+def _verify_certificate(fen: str, move: chess.Move, n: int,
+                        cap: int = 200_000) -> bool:
+    """Is ``move`` really a forced selfmate in n, by the COMPLETE prover?
+
+    Checks the certificate itself, not merely that the position happens
+    to be winnable: after the move, EVERY legal reply must mate us on
+    the spot or leave a position the exhaustive prover certifies at
+    n-1. A restricted prover that returned a plausible-but-wrong move
+    would pass a position-level check and fail this one.
+    """
+    board = chess.Board(fen)
+    if move not in board.legal_moves:
+        return False
+    board.push(move)
+    if board.is_checkmate() or board.is_stalemate():
+        return False
+    for reply in board.legal_moves:
+        board.push(reply)
+        if board.is_checkmate():
+            board.pop()
+            continue
+        if n <= 1:
+            board.pop()
+            return False
+        status, _ = oracle.selfmate_status(board, n - 1, [cap], {})
+        board.pop()
+        if status is not oracle.ProofStatus.PROVEN:
+            return False
+    return True
+
+
+def test_forcing_certifier() -> None:
+    """The restricted prover's contract: sound, silent, never refuting.
+
+    It buys depth by giving up completeness, so the ONLY thing standing
+    between it and a laundered claim is that every certificate it
+    returns is a real one and every failure is labelled as ignorance.
+    Both are asserted here directly rather than inferred from the
+    engine's behaviour.
+    """
+    fixtures = (
+        ("forced", FORCED_FIXTURE), ("in2", IN2_FIXTURE),
+        ("crossfire", CROSSFIRE_FIXTURE),
+    )
+    proven, verified, statuses = 0, 0, set()
+    for _name, fen in fixtures:
+        for width in (3, 5, 8):
+            # One ladder per width, exactly as the engine runs it: the
+            # first rung that proves is the certificate, and deeper
+            # rungs are never asked.
+            budget = [200_000]
+            memo: dict = {}
+            for n in range(1, 4):
+                status, move = oracle.forcing_selfmate_status(
+                    chess.Board(fen), n, budget, memo, width
+                )
+                statuses.add(status)
+                if status is oracle.ProofStatus.PROVEN:
+                    proven += 1
+                    # SOUNDNESS: the complete prover must agree that
+                    # THIS MOVE forces the net — every reply mating us
+                    # now or losing at n-1. Position-level agreement is
+                    # not enough; the certificate is the move.
+                    if _verify_certificate(fen, move, n):
+                        verified += 1
+                    break
+                if budget[0] <= 0:
+                    break
+    check(
+        "oracle: every restricted certificate is a real forced selfmate",
+        proven > 0 and verified == proven,
+        f"{verified}/{proven} verified against the exhaustive prover",
+    )
+    check(
+        "oracle: the restricted prover never returns DISPROVEN",
+        oracle.ProofStatus.DISPROVEN not in statuses,
+        f"statuses seen: {sorted(s.value for s in statuses)}",
+    )
+    # A width of zero is a disabled prover, not a refuting one, and a
+    # starved one is UNKNOWN — the two silences stay distinguishable
+    # from each other and from a refutation.
+    off, _ = oracle.forcing_selfmate_status(
+        chess.Board(FORCED_FIXTURE), 3, [200_000], {}, 0
+    )
+    # Starvation at every stage: mid-ordering, and dead on arrival.
+    # A budget of zero must not let an EMPTY candidate list fall
+    # through to "nothing found" — a node that never saw its own move
+    # set owes UNKNOWN, not absence.
+    starved = [
+        oracle.forcing_selfmate_status(
+            chess.Board(FORCED_FIXTURE), 3, [left], {}, 5
+        )[0]
+        for left in (0, 1, 4, 20)
+    ]
+    check(
+        "oracle: NOT_FOUND, UNKNOWN and DISPROVEN stay three answers",
+        off is oracle.ProofStatus.NOT_FOUND
+        and all(s is oracle.ProofStatus.UNKNOWN for s in starved),
+        f"width0={off.value} starved={[s.value for s in starved]}",
+    )
+    # The width tag is what makes a shared memo safe: a restriction-
+    # tainted DISPROVEN must be unreachable by the complete prover.
+    shared: dict = {}
+    oracle.forcing_selfmate_status(
+        chess.Board(IN2_FIXTURE), 2, [200_000], shared, 2
+    )
+    tainted = sum(
+        1 for key, value in shared.items()
+        if value is oracle.ProofStatus.DISPROVEN and key[0] != "forcing"
+    )
+    status, _ = oracle.selfmate_status(
+        chess.Board(IN2_FIXTURE), 2, [400_000], shared
+    )
+    check(
+        "oracle: a shared memo cannot leak a restricted refutation",
+        tainted == 0 and status is oracle.ProofStatus.PROVEN,
+        f"untagged refutations={tainted}, exhaustive re-read={status.value}",
+    )
+
+
+def test_forcing_depth_claim() -> None:
+    """The pinned depth claim: a net the exhaustive prover cannot reach.
+
+    The reach verdict's own warning was that climbing further is not
+    the same as bringing something back, so the claim is pinned as a
+    CONVERSION at equal cost: at one shared cap the complete prover
+    finds nothing and the restricted one returns a certificate that
+    the complete prover then confirms when given far more money.
+    """
+    board = chess.Board(DEEP_FIXTURE)
+    cap = DEEP_FIXTURE_CAP
+    exhaustive_found = None
+    budget = [cap]
+    memo: dict = {}
+    for n in range(1, DEEP_FIXTURE_N + 1):
+        status, move = oracle.selfmate_status(board, n, budget, memo)
+        if status is oracle.ProofStatus.PROVEN:
+            exhaustive_found = (n, move)
+            break
+        if budget[0] <= 0:
+            break
+    restricted_found = None
+    budget = [cap]
+    memo = {}
+    for n in range(1, DEEP_FIXTURE_N + 1):
+        status, move = oracle.forcing_selfmate_status(
+            board, n, budget, memo, DEEP_FIXTURE_WIDTH
+        )
+        if status is oracle.ProofStatus.PROVEN:
+            restricted_found = (n, move)
+            break
+        if budget[0] <= 0:
+            break
+    check(
+        "oracle: the restriction reaches a net the exhaustive cap cannot",
+        exhaustive_found is None and restricted_found is not None,
+        f"exhaustive={exhaustive_found} restricted={restricted_found} "
+        f"at cap {cap:,}",
+    )
+    if restricted_found is None:
+        return
+    n, move = restricted_found
+    check(
+        "oracle: that deep net is confirmed by the complete prover",
+        _verify_certificate(DEEP_FIXTURE, move, n),
+        f"n={n} move={move}",
+    )
+
+
+def test_layer_budget_accounting() -> None:
+    """Allocation is READABLE from the gauges, not re-derived from a run.
+
+    The 2026-07-24 reach verdict had to rebuild the per-layer split by
+    hand from a pinned report before it could see that the budgets were
+    allocated backwards. These assertions make that split a property of
+    the engine instead: every layer bounded by its OWN cap, the two
+    root provers ledgered apart, and the restricted ladder's three
+    outcomes counted separately so silence never reads as absence.
+    """
+    caps = dict(probe_cap=3_000, probe_forcing_cap=5_000,
+                sub_probe_cap=4_000, node_cap=20_000)
+    engine = ModelEngine(
+        belief=make_model("sloppy"), depth=2, topk=3, infer="off",
+        probe_n=2, probe_forcing_n=4, probe_forcing_width=3, **caps,
+    )
+    board = chess.Board()
+    opponent = ModelPlayer(make_model("zach"), seed=0)
+    for _ply in range(8):
+        board.push(engine.choose_move(board))
+        board.push(opponent.choose_move(board))
+    decisions = engine.moves_played
+    # The sub-probe gate stays shut on a full board, so its bound is
+    # measured where it actually fires: a stripped position, starved
+    # root, one decision.
+    sub_engine = ModelEngine(
+        belief=make_model("sloppy"), depth=3, topk=4, infer="off",
+        probe_n=1, probe_cap=500, sub_probe_cap=4_000,
+    )
+    sub_engine.choose_move(chess.Board(IN2_FIXTURE))
+    check(
+        "engine: each proving layer is bounded by its own cap",
+        decisions > 0
+        and engine.probe_nodes <= caps["probe_cap"] * decisions
+        and engine.probe_forcing_nodes
+        <= caps["probe_forcing_cap"] * decisions
+        and sub_engine.sub_probe_nodes > 0
+        and sub_engine.sub_probe_nodes <= 4_000,
+        f"decisions={decisions} root={engine.probe_nodes} "
+        f"forcing={engine.probe_forcing_nodes} "
+        f"sub={sub_engine.sub_probe_nodes}/4,000 in one decision",
+    )
+    check(
+        "engine: the two root provers are ledgered apart",
+        engine.probe_nodes > 0 and engine.probe_forcing_nodes > 0,
+        f"exhaustive={engine.probe_nodes} "
+        f"restricted={engine.probe_forcing_nodes}",
+    )
+    # The restricted ladder's own three answers. Every rung it runs
+    # ends in exactly one of them, so the counters must account for
+    # the whole ladder and never silently drop a rung.
+    outcomes = (engine.probe_forcing_hits + engine.probe_forcing_not_found
+                + engine.probe_forcing_unknowns)
+    check(
+        "engine: restricted NOT_FOUND and UNKNOWN are counted apart",
+        outcomes > 0
+        and engine.probe_forcing_not_found > 0
+        and engine.probe_forcing_hits == 0,
+        f"hits={engine.probe_forcing_hits} "
+        f"not_found={engine.probe_forcing_not_found} "
+        f"unknown={engine.probe_forcing_unknowns} "
+        f"exhaustions={engine.probe_forcing_exhaustions}",
+    )
+    # Off by default: the whole restricted layer must be inert unless
+    # all three of its knobs are set, so a config that forgets the cap
+    # gets today's engine rather than a silently disabled prover.
+    for knobs in (dict(probe_forcing_n=4, probe_forcing_width=3),
+                  dict(probe_forcing_n=4, probe_forcing_cap=5_000),
+                  dict(probe_forcing_width=3, probe_forcing_cap=5_000)):
+        idle = ModelEngine(belief=make_model("sloppy"), depth=1, topk=2,
+                           infer="off", probe_n=1, probe_cap=500, **knobs)
+        idle.choose_move(chess.Board())
+        if idle.probe_forcing_nodes:
+            break
+    check(
+        "engine: the restricted ladder needs all three knobs to fire",
+        idle.probe_forcing_nodes == 0,
+        f"partial config spent {idle.probe_forcing_nodes} nodes",
     )
 
 
@@ -1211,6 +1474,9 @@ def test_league_smoke() -> None:
 def run() -> int:
     for test in (
         test_oracle_and_forced_outcome,
+        test_forcing_certifier,
+        test_forcing_depth_claim,
+        test_layer_budget_accounting,
         test_mercy_outcome,
         test_model_distributions,
         test_greed_adjudication,
