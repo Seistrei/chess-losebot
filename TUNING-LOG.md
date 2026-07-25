@@ -1305,8 +1305,9 @@ because _scaled halved the structure along with it. What landed
   0.97 — MAP inside the family moves to m35, one lapse in two
   observations being ladder arithmetic, so the check pins the
   FAMILY claim and lets the rung float; NEW, the naming the mercy
-  pin could not even express: a synthetic stream 19/20 structured
-  with avoidable-mate acceptance once per ten observations
+  pin could not even express: a synthetic stream structured nine
+  observations in ten, accepting an avoidable mate on the tenth
+  (twenty cycles, 200 observations, lapse rate exactly .10),
   point-collapses on fitted-human-m0875@0.97 (collapse@158) — a
   LOW rung named over both the .70 residue and every mercy-free
   hypothesis; and the march fixture still collapses squat-k@0.9986
@@ -1387,25 +1388,52 @@ DIRECTION: random rejected the entire ladder below the residue,
 confirming the misspecification points up toward 1.0, and the
 proxy still under-prices true acceptance in the safe direction.
 
-TIER (a), HUMAN-HELD'S HALF: THE AXIS IS NOW EXONERATED, AND THE
+TIER (a), HUMAN-HELD'S HALF: THE TESTED AXIS IS CLOSED, AND THE
 CONFOUND HAS A SMALLER NAME. 0/10 human-held games collapse onto a
 mercy rung — the same census as the pin (sloppy x6 at 0.66-0.99,
 sloppy-mild x4 at 0.79-0.98, now 9/10 collapsed with only g05
 never settling). But this failure MEASURES something the pin's
 could not: the review round showed the old points varied global
-scale, so "no mercy value works" was unprovable; the ladder varied
+scale, so no statement about mercy was separable; the ladder varied
 mercy ALONE at full corpus structure, and every rung from .70 down
-to .04375 still loses to the sloppy family on these streams. The
-mercy VALUE is exonerated — no setting of that dial names this
-opponent. What remains is the STRUCTURE: the corpus fit is one
+to .04375 loses to the sloppy family on these streams.
+
+Stated at exactly the width of the evidence: FIVE declared values
+spanning a 16x range were tested, with the descent stopped by a
+declared cap rather than by data, so what is closed is the declared
+ladder — not the continuum. Values between rungs and below .04375
+were never scored on these streams, and the honest reason no finer
+grid was run is that the direct measurement is PROTOCOL-FORBIDDEN:
+fitting mercy to human-held games would make every future rung an
+anchor read off a held-out family, the one thing the ladder was
+built to avoid. What the pinned report does license (already-
+collected weights, no new fitting) is the SHAPE of the loss, and
+it is informative: mean mercy-family mass per rung across the ten
+human-held games runs .0079 / .0119 / .0058 / .0031 / .0020 from
+.70 down — a unimodal profile with an INTERIOR maximum at m35,
+declining in both directions, so the untested region that could
+matter is the .70-.175 bracket rather than the tail. It is also
+three orders short: the peak rung carries 1.2% mean posterior mass
+where naming demands 95%, so a finer corpus-traced rule inside
+that bracket would have to move mass by roughly 80x to change the
+verdict. Random's profile is the mirror image (.9971 on the top
+rung, ~0 below) — the two held-out streams are cleanly
+distinguishable on this axis, which is the capability the ladder
+did buy.
+
+What remains most likely is the STRUCTURE: the corpus fit is one
 player's temperament (greed .95, hunt .90, the Iptychs games), and
 human-held's structured moves evidently do not match it closely
-enough for any mercy level to compensate. The modeling confound
-stands, but it shrank from "mercy value, global scale, or
-structure?" to STRUCTURE ALONE — and the one legal lever left is
-the one the queue already names: grow the corpus (more first-party
-games, milder players) until the fitted structure stops being one
-person's. One leakage in the other direction, priced honestly:
+enough for the mercy dial to compensate anywhere on the tested
+grid. So the confound shrank from "mercy value, global scale, or
+structure?" to structure-plus-an-80x-gap — and the PRIMARY legal
+lever is the one the queue already names: grow the corpus (more
+first-party games, milder players) until the fitted structure
+stops being one person's. A finer or wider mercy rule stays legal
+in principle, but only if its values trace to a declared rule and
+the corpus and are NOT steered by the numbers above; that needle
+is narrow enough that corpus growth is the path this queue
+commits to. One leakage in the other direction, priced honestly:
 sloppy-held g07 ends on fitted-human-m35@0.48 uncollapsed (the dev
 g08 mechanism on a held-out stream; outcome class unchanged, row
 still 2/10 with both trophies byte-identical).
@@ -1457,13 +1485,55 @@ Queue, sharpened by the split verdict: VALUE PLUMBING first,
 standing on both mandates plus g05's existence proof (dev squat
 still walls 9/10 with correct beliefs and sub=0; random still
 cashes five coins for one certificate); CORPUS GROWTH second and
-now ALONE on the human-held path — the ladder closed the
-mercy-value axis, the review round closed the scale axis, so what
-is left is more humans in the fit, by legal means only (first-party
-games; never a held-out anchor). Selective depth stays shipped,
-deep roots stay benched. Milestones stand at 60/80/90% held-out;
-the live bar stays "the corner poses and the mate lands BY FORCE
-against a human" — and the record now holds two shapes of proof
-that the machinery can do it: the reproduced f7# shell against the
-human family, and the first certificate net cashed against pure
-noise.
+the committed path for human-held naming — the declared ladder
+closed the mercy axis as tested, the previous review round closed
+the scale axis, and what is left is more humans in the fit, by
+legal means only (first-party games; never a held-out anchor).
+Selective depth stays shipped, deep roots stay benched. Milestones
+stand at 60/80/90% held-out; the live bar stays "the corner poses
+and the mate lands BY FORCE against a human" — and the record now
+holds two shapes of proof that the machinery can do it: the
+reproduced f7# shell against the human family, and the first
+certificate net cashed against pure noise.
+
+### Ladder-pin review round: the closed axis is the tested grid, and the fitted constant is a restriction (2026-07-24)
+
+Three findings on the pin accepted; no engine behavior changes,
+version stays a10 (comments and log prose only — trajectories,
+reports, and regeneration untouched, per the precedent that version
+bumps are for code that moves play).
+
+- THE CONCLUSION OVERRAN THE GRID (P2, real): the entry had claimed
+  the mercy VALUE exonerated with "no setting of that dial" naming
+  human-held, and STRUCTURE ALONE remaining. Five discrete values
+  with a declared (non-data) stop cannot support either: the
+  continuum between rungs and below .04375 was never scored. The
+  verdict is narrowed to the declared ladder, and the narrowing is
+  paid for with already-collected report weights rather than new
+  fitting — mean mercy mass per rung on the ten human-held games
+  runs .0079/.0119/.0058/.0031/.0020 from .70 down, a unimodal
+  profile whose INTERIOR maximum (m35, 1.2% mean) sits three orders
+  under the 95% naming bar, so a finer rule inside the .70-.175
+  bracket needs ~80x. The protocol point that makes this the right
+  stopping place is now stated where the claim is: fitting mercy to
+  human-held streams would turn every future rung into a held-out
+  anchor, so refinement can never be STEERED by these numbers —
+  which is why corpus growth is the committed lever rather than the
+  merely-preferred one.
+- THE FITTED CONSTANT IS A SEVEN-AXIS RESTRICTION (P2, real): the
+  FITTED_HUMAN comment attributed 1.8541 nats/move to a point that
+  scores 1.8792. The full 2026-07-23 endpoint also carried home=.25,
+  queen-side homing, and pawn_last=True — the entry above recorded
+  the reconciliation, but the foundational comment kept the old
+  attribution, exactly the place a future session would read it from.
+  The comment now states the restriction, both scores, the
+  .0251/move cost, why the restriction is deliberate (dropped axes
+  are squat-shaped; every rung must extend ONE structure), and warns
+  against treating the constant as the unrestricted MLE.
+- THE SYNTHETIC RATE WAS MISSTATED (P3, real): the new suite check's
+  loop records nine structured observations then one mate — 9/10
+  structured, lapse rate .10 — while its comment said "nineteen
+  moves in twenty" alongside the correct "once per ten", and the
+  entry repeated the contradiction. The m0875 collapse is consistent
+  with the implemented .10, so this was prose, not code: both now
+  say nine-in-ten with the cycle count and total spelled out.

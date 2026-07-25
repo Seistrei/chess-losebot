@@ -101,10 +101,21 @@ def _scaled(params: UrgeParams, factor: float) -> UrgeParams:
 
 
 #: The corpus-fitted human point (TUNING-LOG 2026-07-23, models/fit.py):
-#: coordinate-descent MLE over the eight Iptychs live games — 768
-#: observations, 1.8541 nats/move from the sloppy start, beating
-#: uniform by .11/move and hand-seeded sloppy by .64/move. Every value
-#: traces to that fit; none to a frozen preset. What it says about a
+#: the SEVEN-AXIS RESTRICTION of the coordinate-descent MLE over the
+#: eight Iptychs live games (768 observations, from the sloppy start).
+#: Read the provenance precisely — the 2026-07-24 rescoring pinned it:
+#: the full descent endpoint ALSO carried home=.25 with queen-side
+#: homing and pawn_last=True, and 1.8541 nats/move is THAT point's
+#: score; this constant, with those three axes dropped, scores
+#: 1.8792/move. Both beat uniform (1.9663) and hand-seeded sloppy
+#: (2.4927); the .0251/move difference is the restriction's measured
+#: cost, accepted because the dropped axes are squat-shaped behaviors
+#: the hypothesis set already prices in the squat family, and because
+#: every mercy-ladder rung extends THIS point (a moving structure
+#: would make rung comparisons meaningless). Do not treat the constant
+#: as the unrestricted MLE when building future hypotheses. Every
+#: value traces to that fit; none to a frozen preset. What it says
+#: about a
 #: real human: hunts and grabs near-certainly, never once sought a
 #: check — and 70% of its mass is a uniform-over-legal component the
 #: structured urges cannot explain. That 70% is the family's

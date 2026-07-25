@@ -895,9 +895,10 @@ def test_posterior_mercy() -> None:
         f"P(mate|fitted)={fitted_p:.4f}",
     )
 
-    # THE LADDER'S REASON TO EXIST: a stream that is structured
-    # nineteen moves in twenty but accepts an avoidable mate once per
-    # ten observations. The residue rung (.70) tithes 70% of its mass
+    # THE LADDER'S REASON TO EXIST: a stream that is structured nine
+    # observations in ten and accepts an avoidable mate on the tenth —
+    # twenty such cycles, 200 observations, lapse rate exactly .10.
+    # The residue rung (.70) tithes 70% of its mass
     # to uniform and cannot explain the structured run; the mercy-free
     # seven explain the run but price every taken mate at the epsilon
     # floor. Only a LOW rung holds both ends — the lapse rate ~.10
