@@ -1410,16 +1410,45 @@ built to avoid. What the pinned report does license (already-
 collected weights, no new fitting) is the SHAPE of the loss, and
 it is informative: mean mercy-family mass per rung across the ten
 human-held games runs .0079 / .0119 / .0058 / .0031 / .0020 from
-.70 down — a unimodal profile with an INTERIOR maximum at m35,
-declining in both directions, so the untested region that could
-matter is the .70-.175 bracket rather than the tail. It is also
-three orders short: the peak rung carries 1.2% mean posterior mass
-where naming demands 95%, so a finer corpus-traced rule inside
-that bracket would have to move mass by roughly 80x to change the
-verdict. Random's profile is the mirror image (.9971 on the top
-rung, ~0 below) — the two held-out streams are cleanly
-distinguishable on this axis, which is the capability the ladder
-did buy.
+.70 down — a DESCRIPTIVE average, not a Bayes factor, and read only
+for its SHAPE: unimodal with an INTERIOR maximum at m35, declining
+in both directions, so the untested region that could matter is the
+.70-.175 bracket rather than the tail. The peak rung's 1.19% mean
+mass sits ~80x under the 0.95 naming bar (1.9 orders in mass) —
+and because averaging ten posteriors is not evidence arithmetic,
+the size of the miss is quoted per game in the unit that IS well
+defined. Posterior odds equal prior odds times likelihood ratio, so
+the factor a rung must gain over a game's own stream to reach odds
+19 is exactly its odds gap:
+
+```
+game  best rung   weight    obs  odds gap   short by (nats)  /obs
+g00   m35         8.0e-04    89  2.4e+04    10.1             0.113
+g01   fitted-.70  6.9e-03    44  2.7e+03     7.9             0.180
+g02   m35         6.9e-08   119  2.8e+08    19.4             0.163
+g03   fitted-.70  2.9e-04    69  6.6e+04    11.1             0.161
+g04   m35         8.2e-03    89  2.3e+03     7.7             0.087
+g05   m35         9.1e-02    54  1.9e+02     5.2             0.097
+g06   fitted-.70  7.4e-05    89  2.6e+05    12.5             0.140
+g07   m35         7.5e-03    59  2.5e+03     7.8             0.133
+g08   m35         6.7e-03    30  2.8e+03     7.9             0.265
+g09   m35         2.0e-03    43  9.4e+03     9.1             0.213
+odds gap: median 9.4e+03, min 1.9e+02 (g05), max 2.8e+08
+per-observation shortfall: median 0.161 nats, range 0.087-0.265
+```
+
+The total gaps span six orders because streams differ in length —
+which is precisely why an average of them says little. The stable
+quantity is the RATE: the best tested rung trails by ~0.09-0.27
+nats per observation, median 0.16, in every single game. That rate
+is the number with teeth, because it is directly comparable to what
+the mercy axis can BUY: one halving step is worth .09-.14 nats/move
+on the corpus. So the missing likelihood is one to two rung-steps
+in MAGNITUDE but unavailable in DIRECTION — moving along the axis
+past m35 made things worse, not better, in all ten games. Random's
+profile is the mirror image (.9971 on the top rung, ~0 below) — the
+two held-out streams are cleanly distinguishable on this axis,
+which is the capability the ladder did buy.
 
 What remains most likely is the STRUCTURE: the corpus fit is one
 player's temperament (greed .95, hunt .90, the Iptychs games), and
@@ -1496,9 +1525,10 @@ holds two shapes of proof that the machinery can do it: the
 reproduced f7# shell against the human family, and the first
 certificate net cashed against pure noise.
 
-### Ladder-pin review round: the closed axis is the tested grid, and the fitted constant is a restriction (2026-07-24)
+### Ladder-pin review round: the closed axis is the tested grid, the fitted constant is a restriction, and the gap gets its units (2026-07-24)
 
-Three findings on the pin accepted; no engine behavior changes,
+Four findings on the pin accepted across two passes; no engine
+behavior changes,
 version stays a10 (comments and log prose only — trajectories,
 reports, and regeneration untouched, per the precedent that version
 bumps are for code that moves play).
@@ -1511,15 +1541,23 @@ bumps are for code that moves play).
   verdict is narrowed to the declared ladder, and the narrowing is
   paid for with already-collected report weights rather than new
   fitting — mean mercy mass per rung on the ten human-held games
-  runs .0079/.0119/.0058/.0031/.0020 from .70 down, a unimodal
-  profile whose INTERIOR maximum (m35, 1.2% mean) sits three orders
-  under the 95% naming bar, so a finer rule inside the .70-.175
-  bracket needs ~80x. The protocol point that makes this the right
+  runs .0079/.0119/.0058/.0031/.0020 from .70 down, read for shape
+  only: unimodal with an INTERIOR maximum at m35, so the untested
+  region that could matter is the .70-.175 bracket, not the tail.
+  The protocol point that makes this the right
   stopping place is now stated where the claim is: fitting mercy to
   human-held streams would turn every future rung into a held-out
   anchor, so refinement can never be STEERED by these numbers —
   which is why corpus growth is the committed lever rather than the
-  merely-preferred one.
+  merely-preferred one. The size of the miss is requantified in the
+  unit that survives scrutiny (a second review pass caught the first
+  attempt mixing 80x-in-mass with "three orders" and treating an
+  average of ten posteriors as evidence arithmetic): per-game
+  posterior-odds gaps, median 9.4e3, min 1.9e2, max 2.8e8 — six
+  orders of spread, so their mean was never the story — whose
+  stable rate is 0.09-0.27 nats/observation, median 0.16, against
+  the .09-.14 nats/move one halving step buys on the corpus. One to
+  two rung-steps in size, wrong direction.
 - THE FITTED CONSTANT IS A SEVEN-AXIS RESTRICTION (P2, real): the
   FITTED_HUMAN comment attributed 1.8541 nats/move to a point that
   scores 1.8792. The full 2026-07-23 endpoint also carried home=.25,
