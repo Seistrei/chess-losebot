@@ -2119,3 +2119,68 @@ promised column that was never computed, a description of a design
 that was rejected. The reviewer caught in one pass what four
 instrument failures in one session should have taught already: state
 what was measured, exactly, and nothing else.
+
+ADDENDUM, THE SWEEP THE REVIEW DEMANDED (same day). Five arms, 30
+games each, baseline seeds, baked image, one knob apiece; divergence
+replay run on every arm, reconstruction mismatches ZERO everywhere —
+all movement below is the knob, never inference.
+
+```
+arm                zach  sloppy  squat  nodes/dec   sub/dec  sub hits
+A base (100k)      3/10    0/10   1/10    139,159    75,256        12
+E cap 50k          2/10    0/10   1/10    103,179    38,916        15
+F cap 25k          2/10    0/10   1/10     85,596    19,835         8
+G cap 10k          2/10    0/10   1/10     73,849     8,087         8
+H men 0 (checks)   2/10    0/10   1/10     74,840    10,332         0
+I n=1 only         3/10    2/10   1/10    116,347    49,471       272
+C off (from above) 2/10    0/10   1/10     64,508         0         0
+every arm except A and I: lost=zach_g03, gained=none
+I: lost=zach_g03, gained=sloppy_g07, sloppy_g09, zach_g01 — NET +2
+```
+
+THE REVIEW'S QUESTION HAS A CLEAN ANSWER: the interpolation was
+unlicensed and TRUE ON ITS OWN AXIS. Every partial budget sampled —
+50%, 25%, 10% — loses zach_g03, exactly as zero does, so the tested
+grid now brackets the range and the trophy needs FULL funding. The
+mechanism is the design comment's own arithmetic: the share is
+cap // ~30 branches, an n=2 proof costs ~2,056, and 100k//30 = 3,333
+funds one while 50k//30 = 1,666 funds none. zach_g03's critical hit
+is an n=2 proof, so the cliff sits between 50k and 100k and every
+sampled rung below it falls off. The checks-only gate (H) makes the
+complement point: 3% of the calls, 63% definitive — and ZERO hits,
+because the finds live behind the MATERIAL gate, in the stripped
+zugzwang positions, not in the check chains.
+
+AND THE THESIS GOT ITS IN-VIVO PROOF, for free: arms F and G played
+THIRTY BYTE-IDENTICAL GAMES while spending 19,835 vs 8,087 sub-nodes
+per decision. The 11,748-node difference bought only UNKNOWNs and
+refutations — non-PROVEN answers, which steering maps to None — and
+play did not move by one ply. Only PROVEN changes play; here are 30
+games of it.
+
+THE SURPRISE IS ARM I, AND IT IS THE FINDER THESIS WITH DATA. n=1-only
+sub-probes: 272 hits against the base's 12, at 16% fewer total nodes
+per decision — and TWO SLOPPY CONVERSIONS, a family that has never
+converted in any league since the pivot, plus zach_g01, against
+zach_g03 lost. Net +2 conversions on the dev board (6/30 vs 4/30),
+cheaper. Mechanically consistent: n=1 proofs cost ~60-200 nodes, so
+the same shares that starve n=2 proofs fund DOZENS of n=1 finds, and
+272 nudges steered two sloppy games into nets nothing else has ever
+reached. Every trajectory reconstructs; the movement is the knob.
+
+WHAT ARM I IS NOT, yet: a result. One seed set, dev families only,
+and a +2 delta that two games of seed noise could erase. By the
+standing standard the verdict waits on a fresh-seed A/B (base vs n=1,
+seed0 100, launched as this addendum is written). If it holds there,
+sub_probe_n=1 is the first CONFIG-CHANGE candidate this session has
+produced — it would owe the one pinned league, and the interesting
+question becomes whether the reclaimed 26k/decision plus the sloppy
+capability survive held-out families. If it does not hold, it joins
+the slice result as evidence about the layer's character (finder, not
+prover) without being a shippable setting.
+
+The review item stands answered either way: three settings were not
+irreducibility, and the sweep that replaced the interpolation found
+both a confirmation (the trophy needs full funding on every sampled
+partial budget) and a candidate the narrower grid could never have
+seen.
