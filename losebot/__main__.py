@@ -45,10 +45,12 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--probe-cap", type=int, default=50_000)
     parser.add_argument(
         "--probe-forcing-n", type=int, default=0,
-        help="root oracle depth for the FORCING-RESTRICTED ladder, "
-        "which continues from --probe-n+1 on whatever budget the "
-        "exhaustive ladder leaves. Sound but incomplete: its failures "
-        "are NOT_FOUND, never refutations (0 disables)",
+        help="top rung of the FORCING-RESTRICTED ladder, an "
+        "independent prover that runs AFTER the exhaustive one and "
+        "re-climbs n=1 up to this rung on its own "
+        "--probe-forcing-cap (never on the exhaustive ladder's "
+        "budget). Sound but incomplete: its failures are NOT_FOUND, "
+        "never refutations (0 disables)",
     )
     parser.add_argument(
         "--probe-forcing-width", type=int, default=0,
@@ -255,6 +257,7 @@ def _cmd_league(args) -> int:
         max_plies=args.max_plies,
         out_dir=out_dir,
         seed0=args.seed0,
+        engine_desc=engine_desc,
     )
     metadata = league_metadata(
         engine_desc, families, args.games, args.max_plies, args.seed0

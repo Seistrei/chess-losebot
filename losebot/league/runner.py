@@ -31,8 +31,14 @@ def run_league(
     out_dir: Path | None = None,
     seed0: int = 0,
     log=print,
+    engine_desc: dict | None = None,
 ) -> tuple[dict, list]:
-    """``engine_factory()`` must return a fresh engine per call."""
+    """``engine_factory()`` must return a fresh engine per call.
+
+    ``engine_desc`` is the same description the metadata records; the
+    summary's layer block uses it to state caps and saturations, so a
+    report answers "how full was each layer" without a metadata join.
+    """
     records = []
     for family in families:
         for index in range(games_per_family):
@@ -102,7 +108,7 @@ def run_league(
             )
             if out_dir is not None:
                 save_pgn(board, record, Path(out_dir))
-    summary = summarize(records)
+    summary = summarize(records, engine=engine_desc)
     log("")
     log(render(summary))
     return summary, records

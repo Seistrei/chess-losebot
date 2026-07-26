@@ -589,6 +589,34 @@ def test_report_rollups() -> None:
         f"dev={summary['dev']} held={summary['held_out']}",
     )
 
+    # The layer block must carry ACTUAL caps and saturations when the
+    # engine description is supplied — a report that only names the
+    # cap's knob sends its reader back to the metadata join this block
+    # exists to remove. Two decisions at 40,000 root nodes against a
+    # 50,000 cap is 80% saturation, readable from summary and render
+    # alike; a knob the description lacks (here the forcing cap) stays
+    # null rather than guessed.
+    records[0].probes = {"moves_played": 2, "probe_nodes": 80_000,
+                         "sub_probe_nodes": 40_000, "search_nodes": 8_000}
+    engine = {"probe_cap": 50_000, "sub_probe_cap": 100_000,
+              "node_cap": 400_000}
+    layered = summarize(records, engine=engine)["layers"]
+    root = layered["by_layer"]["root_probe"]
+    sub = layered["by_layer"]["sub_probe"]
+    forcing = layered["by_layer"]["root_forcing"]
+    rendered = render(summarize(records, engine=engine))
+    check(
+        "report: layer block states caps and saturation, not knob names",
+        layered["decisions"] == 2
+        and root["cap"] == 50_000
+        and abs(root["saturation"] - 0.80) < 1e-9
+        and abs(sub["saturation"] - 0.20) < 1e-9
+        and forcing["cap"] is None
+        and forcing["saturation"] is None
+        and "80% of cap" in rendered,
+        f"root={root} forcing_cap={forcing['cap']}",
+    )
+
 
 def test_evaluate_shape() -> None:
     bare = evaluate(chess.Board("8/8/8/8/8/4k3/8/4K3 w - - 0 1"),

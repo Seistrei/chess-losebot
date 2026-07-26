@@ -1955,7 +1955,8 @@ trophy regression covers all 465 decisions of the ten games that ever
 converted. The wall sweeps that produced zero gains cover five random
 games and are NOT a corpus-wide statement.
 
-ITEM 1 ANSWERED, AND THE ANSWER IS THAT THE COST IS NOT RECOVERABLE.
+ITEM 1, ANSWERED FOR WHAT WAS TESTED: THE TWO NAMED KNOBS DO NOT
+RECLAIM IT, AND ZERO FUNDING COSTS A TROPHY.
 Four dev arms, all complete: zach/sloppy/squat, 10 games, baseline
 seeds, one knob each. Arms A/B/C ran the BAKED image (unmodified
 main); arm D needed the new `--sub-probe-slice` flag and so ran the
@@ -1994,11 +1995,20 @@ AND EVERY CANDIDATE FAILS, EACH IN ITS OWN WAY:
   re-budget and not an inference regression) — and the conversions are
   identical. Four times the certificates, the same outcomes.
 
-So the queue's premise was right about the SIZE of the waste and wrong
-about its RECOVERABILITY. The layer costs ~75k nodes per decision and
-neither knob moves that materially; the only lever that does is
-deletion, and deletion costs a trophy. Whatever reclaims this budget,
-it is not a re-budget of these two parameters.
+So the queue's premise was right about the SIZE of the waste, and the
+two knobs it NAMED do not recover it: the gate saves 2.6%, the slice
+2%, and the only material saving tested — deletion — costs a trophy.
+WHAT THIS DOES NOT ESTABLISH, review round: irreducibility. These
+three settings bracket nothing between them — no arm varied
+`sub_probe_cap` itself, tried `sub_probe_n 1`, narrowed the gate to
+checks only, or sampled any budget between zero and full, and zero
+losing a trophy does not imply every partial budget does. On the
+contrary, D is weak evidence AGAINST irreducibility: it showed hits
+get CHEAPER when refutation-spend is starved, so a halved or
+quartered cap keeping zach_g03 is a live possibility, not a settled
+question. The five-arm sweep that settles it (cap 50k / 25k / 10k,
+gate checks-only via men 0, n=1) is running as this is written; its
+table is the addendum below.
 
 Read D against the session's own thesis before calling it a failure.
 Cutting the price of a refutation is what made the ROOT layer better
@@ -2021,15 +2031,16 @@ material), not DEEPER (the gain is n=4, and the tier asks n>=5), not
 METRIC (held-out untouched; the arms were dev-only by protocol).
 
 THE NEXT ARMS, DECLARED. Item 3's reallocation was never tested,
-because it was gated on a reclamation that did not materialise: with
-the sub-probe irreducible, there is no freed budget for steering to
-spend, and steering still sits at 4% of its own cap with clamps at
-0.01%. The honest next questions are (a) whether steering can be made
-to spend its 24x headroom on its OWN account — raised depth/topk as
-their own arm, priced against the 96% of its cap it never touches; and
-(b) whether the sub-probe layer should be a FINDER rather than a
-prover at all, since D shows finds are cheap and refutations are what
-the layer actually buys. Both are arms, not conclusions.
+because it was gated on a reclamation these arms did not produce —
+and whether one EXISTS is exactly what the cap sweep above will say.
+Steering still sits at 4% of its own cap with clamps at 0.01%. The
+honest next questions are (a) whether steering can be made to spend
+its 24x headroom on its OWN account — raised depth/topk as their own
+arm, priced against the 96% of its cap it never touches; and (b)
+whether the sub-probe layer should be a FINDER rather than a prover
+at all, since D shows finds are cheap and refutations are what the
+layer actually buys — the cap sweep's 10k arm is a first crude cut of
+exactly that. Both are arms, not conclusions.
 
 A NOTE ON THE INSTRUMENT, because it bit three times. Docker Desktop
 updated mid-session twice; the FIRST outage did destroy five in-flight
@@ -2058,3 +2069,53 @@ ZERO times, D diverges four times, and reconstruction mismatches are
 zero everywhere. The mercy-pin round warned about session tooling
 summing a key that does not exist; this is the same warning about
 tooling ASSUMING a key's value.
+
+## Sub-probe review round: three settings are not irreducibility, saturation lands in the report, and the help text tells the truth (2026-07-25)
+
+Outside review of the a11 session, three items, all three accepted.
+Selftest 70/70 (one new check).
+
+ITEM ONE, THE SUBSTANTIVE ONE: the entry generalized three settings
+into "the cost is not recoverable." The arms established exactly
+three points — men 4 saves 2.6%, slice 800 saves ~2% while
+quadrupling hits, zero funding loses zach_g03 — and nothing between
+zero and full was ever sampled: not `sub_probe_cap` itself, not
+`sub_probe_n 1`, not a checks-only gate. Zero losing a trophy does
+not imply every partial budget does; if anything, D's
+cheaper-hits-when-starved result points the other way. The headline
+and the recoverability paragraph are narrowed IN PLACE to the tested
+settings, and the missing sweep is running as this entry is written —
+five arms, baseline seeds, baked image, one knob each: cap 50k, cap
+25k, cap 10k (a crude first cut of the finder-not-prover question),
+men 0 (checks-only gate), n 1. Its table lands in an addendum below
+when the arms finish. Until then the strongest licensed claim is: the
+two knobs the QUEUE NAMED do not reclaim the layer's cost.
+
+ITEM TWO: the entry promised "per-layer saturation FROM report.json"
+and the layer block delivered nodes, share, and only the NAME of the
+cap's knob — the saturation line in this log was hand-joined from
+metadata, the exact archaeology the block claims to remove. The
+docstring even said "saturation is against the layer's own cap" while
+computing none. Fixed by threading the engine description (the same
+dict the metadata records) through `run_league` into `summarize`: the
+block now carries `cap` and `saturation` per layer, the render line
+prints both ("root_probe 50,000/dec (52% of nodes, 100% of cap)"),
+and knobs the description lacks stay null rather than guessed. A
+focused selftest pins 80%/20% saturations and the null case.
+
+ITEM THREE: `--probe-forcing-n`'s help text still described the
+REJECTED design — "continues from --probe-n+1 on whatever budget the
+exhaustive ladder leaves" — while the shipped prover re-climbs n=1 up
+to its rung on its own additive cap and touches no exhaustive budget.
+The engine docstrings were correct; the CLI lied. Rewritten to
+describe the independent ladder. A user reading the old text would
+have mis-set both the depth range and the budget arithmetic, which
+for a layer whose whole design argument is "never carve the
+exhaustive cap" is not a cosmetic error.
+
+The pattern across all three is worth naming: each is a claim that
+outran its evidence — a generalization past the tested grid, a
+promised column that was never computed, a description of a design
+that was rejected. The reviewer caught in one pass what four
+instrument failures in one session should have taught already: state
+what was measured, exactly, and nothing else.

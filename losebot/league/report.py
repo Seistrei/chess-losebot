@@ -59,11 +59,16 @@ def _rollup(records: list[GameRecord]) -> dict:
     }
 
 
-def summarize(records: list[GameRecord]) -> dict:
+def summarize(records: list[GameRecord], engine: dict | None = None) -> dict:
     """Aggregate a run. The milestone metrics are the HELD-OUT rollup
     and the worst held-out family — a pooled mean would rise from dev
     improvement alone, which is exactly the self-grading the league
-    exists to prevent."""
+    exists to prevent.
+
+    ``engine`` is the run's engine description (the same dict the
+    metadata carries). It is what lets the layer block report actual
+    caps and saturations instead of only naming which knob would have
+    to be joined in by hand."""
     families = family_table(records)
     held = {
         name: row for name, row in families.items()
@@ -86,7 +91,7 @@ def summarize(records: list[GameRecord]) -> dict:
         "worst_family_forced_rate": (
             scored[worst_name]["forced_rate"] if worst_name else 0.0
         ),
-        "layers": _layers(records),
+        "layers": _layers(records, engine),
     }
 
 
@@ -102,13 +107,18 @@ _LAYERS = (
 )
 
 
-def _layers(records: list[GameRecord]) -> dict:
+def _layers(records: list[GameRecord], engine: dict | None = None) -> dict:
     """Per-layer node allocation: cost per decision and cap saturation.
 
     Reported per run so "where did the compute go" is a column rather
-    than an archaeology exercise. Saturation is against the layer's own
-    configured cap, which is what makes a 4%-saturated layer next to a
-    94%-saturated one legible at a glance.
+    than an archaeology exercise. Saturation is per-decision spend
+    against the layer's own configured cap — the reading that makes a
+    4%-saturated layer next to a 94%-saturated one legible at a
+    glance — and it is COMPUTED HERE, from the engine description the
+    caller passes, because a report that only names the cap's knob
+    sends its reader back to exactly the metadata join this block
+    exists to remove. Without an engine description (older callers,
+    specialist runs) the caps are honestly null rather than guessed.
     """
     total = {}
     decisions = 0
@@ -119,13 +129,18 @@ def _layers(records: list[GameRecord]) -> dict:
             total[gauge] = total.get(gauge, 0) + probes.get(gauge, 0)
     spent = sum(total.values())
     out = {"decisions": decisions, "nodes": spent, "by_layer": {}}
-    for name, gauge, cap in _LAYERS:
+    for name, gauge, cap_key in _LAYERS:
         nodes = total.get(gauge, 0)
+        per_decision = nodes / decisions if decisions else 0.0
+        cap = (engine or {}).get(cap_key)
+        cap = cap if isinstance(cap, int) and cap > 0 else None
         out["by_layer"][name] = {
             "nodes": nodes,
-            "per_decision": nodes / decisions if decisions else 0.0,
+            "per_decision": per_decision,
             "share": nodes / spent if spent else 0.0,
-            "cap_gauge": cap,
+            "cap_gauge": cap_key,
+            "cap": cap,
+            "saturation": per_decision / cap if cap else None,
         }
     return out
 
@@ -163,9 +178,16 @@ def render(summary: dict) -> str:
     )
     layers = summary.get("layers")
     if layers and layers["decisions"]:
+
+        def cell(name: str, row: dict) -> str:
+            text = (f"{name} {row['per_decision']:,.0f}/dec "
+                    f"({100.0 * row['share']:.0f}% of nodes")
+            if row.get("saturation") is not None:
+                text += f", {100.0 * row['saturation']:.0f}% of cap"
+            return text + ")"
+
         parts = " ".join(
-            f"{name} {row['per_decision']:,.0f}/dec "
-            f"({100.0 * row['share']:.0f}%)"
+            cell(name, row)
             for name, row in layers["by_layer"].items() if row["nodes"]
         )
         lines.append(
