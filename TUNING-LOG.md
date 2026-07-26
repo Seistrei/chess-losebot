@@ -2401,3 +2401,35 @@ caught the places where the statement was exact but the MEASUREMENT'S
 BOUNDS were not — an untested interval called closed, a changed read
 called unchanged, and a string no measurement ever rendered. The
 suite gates what it renders; it cannot gate what nothing exercises.
+
+ADDENDUM, THE INTERVAL ARMS (same day): both landed, and the open
+intervals close at tested bounds.
+
+```
+arm            zach  sloppy  squat  nodes/dec   sub/dec  hits  vs base
+A base (100k)  3/10    0/10   1/10    139,159    75,256    12  —
+J cap 75k      3/10    0/10   1/10    120,930    57,020    24  lost NONE
+E cap 50k      2/10    0/10   1/10    103,179    38,916    15  lost zach_g03
+K men 3        2/10    0/10   1/10    131,743    67,451    13  lost zach_g03
+```
+
+THE CAP CLIFF IS BRACKETED: (50k, 75k]. Cap 75k keeps every
+conversion — 29 of 30 games BYTE-IDENTICAL to base, the thirtieth
+(squat_g09) converting anyway by a longer route — at 24% less
+layer spend and 13% less total. The share arithmetic predicted the
+cliff near 63k and the bracket agrees; a 60-70k bisection could
+tighten it, but 75k is already a validated point with margin.
+
+THE GATE FLOOR IS EXACTLY men 4: arm B kept the trophy at men 4,
+arm K loses it at men 3 — which incidentally MEASURES the critical
+decision's opponent material as exactly four non-king men. The
+men-4 saving remains 2.6%; the gate axis is closed.
+
+So the layer's final characterization, all bounds tested: cap
+reducible to 75k for a quarter of the layer's cost (validated
+point, cliff somewhere in the 25k above 50k); gate reducible one
+step for 2.6%; rung reducible by a third at the pinned price of one
+held-out box. Cap 75k is the standing dev-validated candidate for a
+NEXT session: fresh-seed A/B first by the standard, then its own
+pinned league if the default flips — this session's pin is spent
+and its verdict stands.
