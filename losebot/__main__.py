@@ -69,7 +69,7 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "--sub-probe-n", type=int, default=2,
         help="oracle depth for sub-root probes at steering our-nodes "
         "(0 disables them). 1 is the FINDER setting, fully priced by "
-        "the 2026-07-25 pinned league: hits x9.6 at -19.8% total "
+        "the 2026-07-25 pinned league: hits x9.6 at -19.8%% total "
         "nodes, +2 dev conversions — and one HELD-OUT box conversion "
         "lost (squat-held_g01), because the n=2 rung is the assembly "
         "horizon of the organic box devices. Held-out outranks "
@@ -350,7 +350,15 @@ def _cmd_oracle(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The full CLI, buildable without parsing.
+
+    Split from ``main`` so the selftest can RENDER every subcommand's
+    help: argparse percent-interpolates help strings only at render
+    time, so a stray ``%`` is invisible until a user asks for --help —
+    which is exactly how one shipped in a11 and crashed both play and
+    league help.
+    """
     parser = argparse.ArgumentParser(prog="losebot")
     sub = parser.add_subparsers(dest="command")
 
@@ -400,7 +408,11 @@ def main(argv=None) -> int:
         help="descent start point (a mercy=1 fit from zeros deadens "
         "the urge axes; try both starts before believing either)",
     )
+    return parser
 
+
+def main(argv=None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     command = args.command or "selftest"
     if command == "play" or (command == "league" and args.engine == "model"):

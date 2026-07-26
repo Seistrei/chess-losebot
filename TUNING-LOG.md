@@ -2288,13 +2288,19 @@ still missed, which is the project's own hierarchy working as
 designed. Dev boards do not generalize; the worst held-out row is the
 scoreboard; a first is not a bar.
 
-POSTERIOR DIAGNOSTICS, unchanged by construction and verified anyway:
-family naming is identical to the ladder pin row for row (zach 10/10
+POSTERIOR DIAGNOSTICS: the posterior CODE is unchanged; its READS are
+not, and the first version of this paragraph said "unchanged" while
+listing a changed row in its own parenthesis — review caught the
+contradiction. A pure function of the observed sequence changes its
+answer exactly when a diverged game shows it a different sequence.
+Six of seven families match the ladder pin row for row (zach 10/10
 zach, sloppy 10/10 sloppy, squat 10/10 squat-k, squat-held 10/10
 squat-greedy-q, random 10/10 fitted-human, human-held the same 6/4
-sloppy/sloppy-mild split; sloppy-held 10/10 sloppy vs the ladder's
-9+1) — the posterior is a pure function of observed moves, and where
-play did not diverge neither did belief. Median collapse plies 9-24.
+sloppy/sloppy-mild split). The seventh moved: sloppy-held's 9 sloppy
++ 1 fitted-human-m35 becomes 10/10 sloppy — one diverged trajectory,
+one changed read, which is the posterior WORKING, not drifting, and
+the reconstruction checks (zero mismatches on every arm) are what
+license that sentence. Median collapse plies 9-24.
 
 THE TROPHY LEDGER: 22/22 re-derived under the shipped code, zero
 mismatches, zero misses over all 465 pinned decisions
@@ -2323,14 +2329,25 @@ the default reverts") fires as written. sub_probe_n=1 remains one
 flag away for any run that wants the finder behavior, now with a
 complete price tag: +2 dev, -1 held-out box, -19.8% nodes, hits x9.6.
 
-ITEM 1 CLOSES WITH THE LAYER FULLY CHARACTERIZED, three sessions of
-suspicion resolved into numbers: 52.8% of all node work, irreducible
-by cap (the cliff is the n=2 proof price against the per-branch
-share), irreducible by gate (the finds live behind the material gate;
-checks-only found zero), reducible a third by rung — at the measured
-price of one held-out box conversion. The layer is a finder that must
-stay funded as a prover, because the one rung that is expensive to
-prove is the rung the boxes are assembled on.
+ITEM 1 CLOSES WITH THE LAYER CHARACTERIZED TO ITS TESTED BOUNDS —
+"fully characterized, irreducible by cap and gate" stood here first,
+and review struck it for the same sin as the round before: the grid
+proves the trophy needs MORE THAN 50k, not that it needs all 100k,
+and it brackets nothing between men 4 and men 0. What the numbers
+license: 52.8% of all node work; every sampled cap at or below 50k
+loses the trophy and 100k keeps it, with the 50-100k interval open —
+the share arithmetic (share = cap // branches, an n=2 proof at
+~2,056 nodes) predicts the cliff near branches x ~2,100, which is
+~63k for a thirty-branch root, so a 75k arm is the declared probe
+and runs as this correction lands, a men-3 arm beside it for the
+gate's untested middle. Reducible a third by rung, at the measured
+price of one held-out box conversion. What stands regardless of the
+open intervals: the layer is a finder that must stay funded as a
+prover on SOME n=2 budget, because the rung that is expensive to
+prove is the rung the boxes are assembled on — the open question is
+only how much of the 100k that budget actually needs. Neither arm
+can ship a config this session either way: the pinned league is
+spent, and a cap or gate change would owe its own.
 
 WHAT REMAINS SHIPPED FROM THE SESSION, all off by default or
 play-inert, byte-identity with pre-session main re-verified after the
@@ -2340,3 +2357,47 @@ decisions, at width 8 / cap 20k); the oracle starvation-labelling fix;
 the report's native per-layer caps and saturations; the divergence
 replay reading beliefs from run metadata; eleven new selftest checks
 (59 -> 70).
+
+## Second review round: the help that crashed, the interval the grid skipped, and the posterior that did move (2026-07-25)
+
+Three items, all three accepted; selftest 71/71 (one new check).
+
+ITEM ONE, P1, A REAL CRASH: argparse percent-interpolates help
+strings at render time, so the "-19.8% total" in the reverted
+--sub-probe-n help raised ValueError ("unsupported format character
+'t'") on both `play --help` and `league --help` — demonstrated on the
+baked image before fixing, per this session's own rule about
+verifying before believing. The % is escaped, and the class is gated,
+not just the instance: parser construction is split out of main() as
+`build_parser()`, and a new selftest renders the help of the root and
+every subcommand, because a stray % is invisible to every code path
+except a user typing --help — which is why 70 green checks never saw
+it.
+
+ITEM TWO, P2, THE SAME SIN AS THE ROUND BEFORE, one level down: the
+pinned entry declared the layer "irreducible by cap" off a grid that
+proves the trophy needs MORE THAN 50k, not that it needs all 100k —
+the 50-100k interval was never sampled, and men 1-3 sit untested
+between the gate's endpoints. Corrected in place to the tested
+bounds, with the share arithmetic's prediction stated (cliff near
+branches x ~2,100 ≈ 63k for a thirty-branch root) and the two probes
+it implies — cap 75k and men 3, baseline seeds, one knob each —
+launched before this entry was written. Their table lands below when
+they finish. Neither can ship a config this session: the pinned
+league is spent, and a cap or gate change would owe its own.
+
+ITEM THREE, P3, A SELF-CONTRADICTION: the pinned entry called the
+posterior diagnostics "unchanged... row for row" while its own
+parenthesis recorded sloppy-held moving from 9+1 to 10/10. The
+implementation is unchanged; the reads are not, and cannot be where
+trajectories diverged — a pure function of the observed sequence
+answers differently when shown a different sequence. Reworded to say
+exactly that, with the delta retained and the zero-mismatch
+reconstruction checks cited as what licenses "working, not drifting."
+
+The round's shape, for the log's memory: last round's lesson was
+"state what was measured, exactly, and nothing else." This round
+caught the places where the statement was exact but the MEASUREMENT'S
+BOUNDS were not — an untested interval called closed, a changed read
+called unchanged, and a string no measurement ever rendered. The
+suite gates what it renders; it cannot gate what nothing exercises.

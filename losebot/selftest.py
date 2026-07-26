@@ -7,6 +7,7 @@ the Docker image's default command and the gate on every commit.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import tempfile
@@ -1358,6 +1359,26 @@ def test_posterior_engine() -> None:
         "cli: held-out beliefs at default inference stop at the boundary",
         not failures,
         f"failures={failures if failures else 'none'}",
+    )
+
+    # Help must RENDER, for the root and every subcommand. argparse
+    # percent-interpolates help strings only at render time, so a
+    # stray % in any help text is invisible to every code path except
+    # a user typing --help — a11 shipped exactly that ("-19.8% total")
+    # and both play --help and league --help crashed with ValueError.
+    from .__main__ import build_parser
+
+    parser = build_parser()
+    rendered = {"root": parser.format_help()}
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, sub in action.choices.items():
+                rendered[name] = sub.format_help()
+    empty = [name for name, text in rendered.items() if not text.strip()]
+    check(
+        "cli: --help renders for the root and every subcommand",
+        len(rendered) >= 6 and not empty,
+        f"rendered={sorted(rendered)} empty={empty or 'none'}",
     )
 
 
