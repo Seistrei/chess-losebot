@@ -66,9 +66,13 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "shared budget forfeits real trophies for speculative ones",
     )
     parser.add_argument(
-        "--sub-probe-n", type=int, default=2,
+        "--sub-probe-n", type=int, default=1,
         help="oracle depth for sub-root probes at steering our-nodes "
-        "(0 disables them)",
+        "(0 disables them). Default 1 — the finder setting: n=1 "
+        "proofs cost ~60-200 nodes against ~2,056 for n=2, so the "
+        "same branch shares fund an order of magnitude more finds, "
+        "conversion-neutral across two seed sets at ~18% less total "
+        "node work (the 2026-07-25 sweep and fresh-seed A/B)",
     )
     parser.add_argument("--sub-probe-cap", type=int, default=100_000)
     parser.add_argument(

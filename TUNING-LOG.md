@@ -2165,8 +2165,11 @@ converted in any league since the pivot, plus zach_g01, against
 zach_g03 lost. Net +2 conversions on the dev board (6/30 vs 4/30),
 cheaper. Mechanically consistent: n=1 proofs cost ~60-200 nodes, so
 the same shares that starve n=2 proofs fund DOZENS of n=1 finds, and
-272 nudges steered two sloppy games into nets nothing else has ever
-reached. Every trajectory reconstructs; the movement is the knob.
+272 nudges steered two sloppy games into nets. Every trajectory
+reconstructs; the movement is the knob. (A phrase that stood here —
+"nets nothing else has ever reached" — is struck by the fresh-seed
+addendum below: the base engine reaches sloppy nets fine at other
+seeds. Self-caught this time.)
 
 WHAT ARM I IS NOT, yet: a result. One seed set, dev families only,
 and a +2 delta that two games of seed noise could erase. By the
@@ -2184,3 +2187,50 @@ irreducibility, and the sweep that replaced the interpolation found
 both a confirmation (the trophy needs full funding on every sampled
 partial budget) and a candidate the narrower grid could never have
 seen.
+
+FRESH-SEED A/B, AND A SELF-CAUGHT CORRECTION FIRST. At seed0 100 the
+BASE engine converts sloppy 5/10. The previous addendum's framing of
+arm I's sloppy conversions as reaching "nets nothing else has ever
+reached" was seed luck dressed as capability, and it is struck in
+place above. The deeper reading: base converts 4/30 at baseline seeds
+and 10/30 at seed0 100 — the family conversion rate on a 10-game
+sample swings by a factor of 2.5 on seeds ALONE, so a ±2 conversion
+delta between arms is weather, and the durable readings in all these
+tables are the mechanism-level ones: which specific decision lost its
+hit, what a hit costs, where the cliff sits. The taste for byte-level
+evidence this session developed is not a style; it is what survives
+the seed noise.
+
+THE A/B ITSELF (base vs sub_probe_n=1, seed0 100, 30 games each,
+baked image, divergence-replayed clean):
+
+```
+arm            zach  sloppy  squat   nodes/dec   sub/dec   hits
+base           3/10    5/10   2/10     141,428    74,152     47
+n=1 only       3/10    5/10   2/10     116,124    48,213    169
+n=1 swaps zach games (loses g03+g08@s100, gains g00+g06@s100);
+family and total counts IDENTICAL.  Nodes -17.9%.
+POOLED ACROSS BOTH SEED SETS (the unit): base 14/60, n1 16/60;
+n1 cheaper by ~18% on each set independently.
+```
+
+THE VERDICT THE UNIT LICENSES: n=1-only sub-probing is
+conversion-neutral (never worse in total on either seed set, +2
+pooled, which the seed-noise reading above says to treat as zero) and
+MATERIALLY CHEAPER — 17.9% of all node work at fresh seeds, 16.4% at
+baseline, the sub layer itself down ~35%. The layer's character
+claim holds at both seed sets: restricted to the rung where finding
+is cheap, it finds 3.6x to 22x more and spends a third less.
+
+THE DECISION: sub_probe_n's default flips 2 -> 1. That is a code
+change that changes play, so it owes THE pinned league, and the
+tier-(a) CHEAPER case is the claim it will test: nodes per decision
+down materially with the 22 intact. The 22 are structurally
+untouched — they are root-prover certificates and the root prover is
+unchanged — and the replay re-verification runs alongside the league
+anyway. The risk is named now, before the report: the n=2 sub-nudges
+being given up are the assembly horizon of the organic recapture
+devices, and those lived in HELD-OUT families (human-held, the
+squat-held boxes). Dev families cannot price that loss; the pinned
+league is the instrument that can. If held-out forced regresses, the
+default reverts and this entry prices the attempt.
