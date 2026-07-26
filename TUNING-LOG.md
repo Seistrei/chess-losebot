@@ -1800,6 +1800,13 @@ zach          4         4  10,000,000 (ceiling)          UNKNOWN
 REACHABLE NETS AT ANY RUNG, ANY FAMILY: none
 ```
 
+[Count note, third review round: this header's "23 positions" and
+the zach rows above predate the outage forensics; the corrected
+account in COST AND COVERAGE below — 24 of 27 planned, zach 6 of 9,
+five runs reaching n=4 — was written with the rescued console logs
+in hand and supersedes them where they disagree. No verdict moves:
+every completed run is DISPROVEN except zach's n=4 UNKNOWNs.]
+
 The verdict GENERALIZES and the re-budget can be global — with the
 honesty the reach entry itself demanded: zach's n=4 is UNKNOWN at a
 10M ceiling, NOT DISPROVEN. Three rungs are definitive in all three
@@ -1820,14 +1827,27 @@ n=1 x10  max     86 nodes      n=3 x3  4,311 / 11,898 / 45,282
 n=2 x 8  max  1,254 nodes      n=4 x1  24,285
 ```
 
+(Census prices are each n ALONE. In play the ladder pays the lower
+rungs first, so the same trophy bills cumulatively — the 45,282
+n=3 here is the 49,559 the engine docstring and the reach entry
+cite: alone + n1/n2 spend. The bridge holds for all four deep
+certs: 5,438=4,311+1,127; 13,945=11,898+2,047; 28,297=24,285+4,012;
+49,559=45,282+4,277.)
+
 THE DEAREST TROPHY IS AN n=3 FIND. A cheap exhaustive n<=2 phase does
 NOT protect it, so any design funding a second prover out of
 `probe_cap` spends money the first one provably needs. That was not
 feared, it was MEASURED: the shared-budget hybrid (exhaustive n<=2,
 then restricted n=3..8 at width 5, one 50k cap) was built, run, and
-LOST EXACTLY THE TWO DEEP TROPHIES THE CENSUS PREDICTS — random_g05
-ply83 (the n=3 net) and sloppy-held_g03 ply47 (the n=4 net) — for zero
-gains across five wall games. Rejected on its own evidence.
+LOST ALL FOUR n>=3 FIRST-CERTIFICATES — random_g05 ply83 and
+sloppy-held_g03 ply47 as first written, PLUS zach_g03 ply49 and
+zach_g05 ply73 (hybrid-trophy-w5.json; each trio's later, shallower
+certificates were still found) — for zero gains across the TEN wall
+games in hybrid-walls-w5.json (five random, one each sloppy-held/
+squat-held/zach, two squat). Rejected on its own evidence. [Third
+review round: the entry had said "exactly the two deep trophies";
+its own artifact says every deep first-cert died, which strengthens
+the rejection it documents.]
 
 WHAT SHIPPED: TWO PROVERS, TWO BUDGETS, THE SECOND ADDITIVE. The
 exhaustive ladder is untouched — same order, same cap, same breaks —
@@ -2420,12 +2440,21 @@ layer spend and 13% less total. The share arithmetic predicted the
 cliff near 63k and the bracket agrees; a 60-70k bisection could
 tighten it, but 75k is already a validated point with margin.
 
-THE GATE FLOOR IS EXACTLY men 4: arm B kept the trophy at men 4,
-arm K loses it at men 3 — which incidentally MEASURES the critical
-decision's opponent material as exactly four non-king men. The
-men-4 saving remains 2.6%; the gate axis is closed.
+MEN 4 IS THE LOWEST TESTED SUCCESSFUL GATE: arm B kept the trophy
+at men 4, arm K loses it at men 3 — adjacent settings, so the flip
+MEASURES the critical decision's opponent material as exactly four
+non-king men (that part is licensed and stands). NOT established:
+that men 4 is the floor. Men 1-2 were never run, and this session's
+own tables show trajectories recovering non-monotonically after a
+knob change, so "3 and 0 lose" does not price 1 and 2. They stay
+untested deliberately: nothing ships on an axis worth 2.6%, so the
+claim narrows to the tested points instead of buying two arms.
+The men-4 saving remains 2.6%; the gate axis is closed at its
+tested points — 4 keeps, 3 and 0 lose, 1-2 open. [Third review
+round: "exactly" and "closed" outran the grid, in the round that
+had just coined the phrase.]
 
-So the layer's final characterization, all bounds tested: cap
+So the layer's characterization at its tested bounds: cap
 reducible to 75k for a quarter of the layer's cost (validated
 point, cliff somewhere in the 25k above 50k); gate reducible one
 step for 2.6%; rung reducible by a third at the pinned price of one
@@ -2433,3 +2462,36 @@ held-out box. Cap 75k is the standing dev-validated candidate for a
 NEXT session: fresh-seed A/B first by the standard, then its own
 pinned league if the default flips — this session's pin is spent
 and its verdict stands.
+
+## Third review round: the floor becomes the lowest tested rung, and three counts meet their artifacts (2026-07-26)
+
+Four items accepted — one from outside review, three from the
+reviewing session's artifact pass over dev-rebudget/. Log-only: no
+code, no behavior, version stays a11, selftest 71/71 untouched.
+Edits are in place at the claims; this entry is the index.
+
+- THE GATE FLOOR OUTRAN ITS GRID (P2, outside review): "exactly
+  men 4" and "the gate axis is closed" asserted men 1-2 results
+  never run — the third instance of the class in three rounds,
+  caught in the round that coined "the closed axis is the tested
+  grid." Narrowed in place: lowest TESTED successful gate; the
+  men4/men3 adjacency measurement stands; 1-2 stay open and
+  untested by choice, priced against an axis worth 2.6% with no
+  config shipping on it.
+- THE HYBRID LOST FOUR, NOT TWO: hybrid-trophy-w5.json records all
+  four n>=3 first-certificates dead — the two the entry named plus
+  zach_g03 ply49 and zach_g05 ply73, each trio's later certs
+  retained — and its wall file covers ten games, not five. The
+  correction strengthens the rejection it documents.
+- ONE TROPHY, TWO CURRENCIES: the census's 45,282 (n=3 alone) and
+  the docstring's 49,559 (in-game, ladder-cumulative) are the same
+  certificate; the bridge (alone + lower-rung spend) is now stated
+  at the census table and verified for all four deep certs.
+- ITEM 0 DISAGREED WITH ITSELF: the outage forensics corrected the
+  cost paragraph (24 of 27, zach 6 of 9, five n=4 runs) but not the
+  table above it (23, zach 5, four). The later account is marked
+  as superseding; no tabled verdict moves.
+
+The round's one-line lesson is the second round's, unchanged: the
+suite gates what it renders, and artifacts gate what they record —
+prose that cites neither is where the drift lives.
