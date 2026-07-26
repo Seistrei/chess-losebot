@@ -2234,3 +2234,109 @@ devices, and those lived in HELD-OUT families (human-held, the
 squat-held boxes). Dev families cannot price that loss; the pinned
 league is the instrument that can. If held-out forced regresses, the
 default reverts and this entry prices the attempt.
+
+## The finder priced and returned: n=1 wins the dev board, loses a held-out box, and the default walks back (2026-07-25)
+
+THE pinned league for the a11 config flip (sub_probe_n 2 -> 1), run
+because that flip is a code change that changes play: rebuilt image,
+fresh out dir games/league/finder-n1/, all seven families, standard
+seeds. Selftest 70/70 before and after. The verdict first, because the
+rule that decides it was declared before the run: held-out forced
+REGRESSED, 6/40 to 5/40, so the default REVERTS, and this entry prices
+the attempt.
+
+```
+family       split      n  forced  mercy  st-us  insuf  maxply  forced%
+sloppy       dev       10       2      0      1      0       6      20%
+squat        dev       10       1      0      0      0       9      10%
+zach         dev       10       3      0      0      0       7      30%
+human-held   held-out  10       1      0      0      0       9      10%
+random       held-out  10       1      6      0      0       3      10%
+sloppy-held  held-out  10       2      0      3      0       5      20%
+squat-held   held-out  10       1      0      0      0       9      10%
+
+forced — held-out 5/40 (12%); dev 6/30 (20%); overall 11/70 (16%)
+worst held-out family: human-held (10%)
+nodes/decision 108,051 (ladder: 134,758, -19.8%) over 7,023 decisions
+per-layer, NATIVE from report.json's new layers block:
+  root_probe 46,966/dec (43% of nodes, 94% of cap)
+  sub_probe  44,551/dec (41% of nodes, 45% of cap)
+  steering   16,533/dec (15% of nodes,  4% of cap)
+clamps 18,556 = 2.64/dec (0.016% of search nodes); sub hits 394
+(ladder: 41); oracle certificates fired 18; ext_nodes 23.97M
+```
+
+THE EXACT TRADE, GAME BY GAME, at seeds every prior pin shares —
+deterministic engine, so these swaps are the CONFIG, not weather:
+
+```
+lost    squat-held_g01  HELD-OUT — the named risk, verbatim: the box
+                        whose two certificates ride plies 165/167
+                        behind a long n=2-nudged assembly
+        zach_g03        dev — the known n=2-hit conversion
+gained  sloppy_g07, sloppy_g09   the first sloppy conversions in any
+                                 pinned league (ladder: 0/10)
+        zach_g01        dev
+```
+
+Benchmarks: posterior-ladder 6/40 held-out, 10/70 overall;
+posterior-ext 6/40, 12/70. finder-n1 lands 5/40, 11/70 — MORE overall
+than the config it replaced and one short of both bars that matter.
+The no-zero board WIDENS: for the first time no family on the full
+seven-row board has a zero forced column — and the held-out bar is
+still missed, which is the project's own hierarchy working as
+designed. Dev boards do not generalize; the worst held-out row is the
+scoreboard; a first is not a bar.
+
+POSTERIOR DIAGNOSTICS, unchanged by construction and verified anyway:
+family naming is identical to the ladder pin row for row (zach 10/10
+zach, sloppy 10/10 sloppy, squat 10/10 squat-k, squat-held 10/10
+squat-greedy-q, random 10/10 fitted-human, human-held the same 6/4
+sloppy/sloppy-mild split; sloppy-held 10/10 sloppy vs the ladder's
+9+1) — the posterior is a pure function of observed moves, and where
+play did not diverge neither did belief. Median collapse plies 9-24.
+
+THE TROPHY LEDGER: 22/22 re-derived under the shipped code, zero
+mismatches, zero misses over all 465 pinned decisions
+(dev-rebudget/trophy-revalidate-n1.json) — the root prover is
+untouched by the sub knob, and now that is measured rather than
+argued.
+
+TIER SCORING, against the declared bars:
+  (a) CHEAPER — DEMONSTRATED, NOT CLAIMED: -19.8% nodes/decision with
+      the 22 intact is exactly the tier's text, but the config walks
+      back, and an unshipped config claims nothing.
+  (b) DEEPER — not attempted; the forcing certifier stayed off by
+      default throughout, as shipped.
+  (c) METRIC — missed by one game: 5/40 against >= 6/40, the no-zero
+      held-out board holding (and widening to the full board).
+
+WHY THE REVERT IS RIGHT even though 11 > 10 overall: the regression
+is in the held-out column, in the exact mechanism named before the
+run — the n=2 sub-nudges are the assembly horizon of the organic box
+devices, and squat-held_g01 is such a box. At pinned seeds that loss
+is causal, not noise. The brief's hierarchy puts held-out above
+overall and the worst row above the mean; a 20% compute saving buys
+nothing the project is short of, and one held-out box is something it
+has exactly six of. The declared rule ("if held-out forced regresses,
+the default reverts") fires as written. sub_probe_n=1 remains one
+flag away for any run that wants the finder behavior, now with a
+complete price tag: +2 dev, -1 held-out box, -19.8% nodes, hits x9.6.
+
+ITEM 1 CLOSES WITH THE LAYER FULLY CHARACTERIZED, three sessions of
+suspicion resolved into numbers: 52.8% of all node work, irreducible
+by cap (the cliff is the n=2 proof price against the per-branch
+share), irreducible by gate (the finds live behind the material gate;
+checks-only found zero), reducible a third by rung — at the measured
+price of one held-out box conversion. The layer is a finder that must
+stay funded as a prover, because the one rung that is expensive to
+prove is the rung the boxes are assembled on.
+
+WHAT REMAINS SHIPPED FROM THE SESSION, all off by default or
+play-inert, byte-identity with pre-session main re-verified after the
+revert: the NOT_FOUND status and the forcing-restricted certifier
+(priced: one verified n=4 conversion two plies early per 465 pinned
+decisions, at width 8 / cap 20k); the oracle starvation-labelling fix;
+the report's native per-layer caps and saturations; the divergence
+replay reading beliefs from run metadata; eleven new selftest checks
+(59 -> 70).
