@@ -2500,8 +2500,15 @@ prose that cites neither is where the drift lives.
 
 Two levers from the standing queue, by the house standard — dev arms,
 fresh-seed A/B, at most one pinned league. The verdict first: the 75k
-candidate passed its pre-declared pooled rule, took the league seat,
-and SHIPS — sub_probe_cap 100,000 -> 75,000, version 2.0.0a12. Both
+candidate passed its acceptance rule, took the league seat, and
+SHIPS — sub_probe_cap 100,000 -> 75,000, version 2.0.0a12. A word on
+that rule's provenance, because the log's prior entry commits only to
+"fresh-seed A/B first by the standard, then its own pinned league if
+the default flips" and records no acceptance criterion: the
+neutral-or-better-pooled rule was declared in the SESSION BRIEF,
+before any fresh-seed game ran — outside this log, which is why its
+first in-repo appearance is beside its result. [Review round, same
+day: this provenance note replaces an unqualified "pre-declared".] Both
 steering knobs failed their fresh-seed A/Bs and no steering config
 ships; the negative is characterized to its tested bounds below.
 Selftest 71/71 at every code state (the flip adds none and breaks
@@ -2636,14 +2643,32 @@ game; what it does not do is convert more.
 
 THE MECHANISMS, from the native layer blocks, at tested bounds:
 
-- THE NODE_CAP WAS NEVER THE WALL. At 7x steering spend the layer
-  reaches 29-31% saturation and clamps 304-433 nodes/dec — which is
-  0.26-0.35% of the layer's own nodes, evaluated-in-place at the
-  per-branch share, not a hard stop. Uniform depth 4 is the first
-  config to make steering spend real budget, and the budget was
-  never what withheld conversions at depth 3. Depth 5 and topk 10
-  stay untested; what is measured is that the FIRST rung of each
-  axis reshuffles rather than grows.
+- THE NODE_CAP BINDS PER-BRANCH, AND THE AGGREGATE HID IT. [Review
+  round, same day: this bullet's first draft was headlined "the
+  node_cap was never the wall" off 29-31% aggregate saturation —
+  the same overclaim class as three rounds running, and wrong twice
+  over. The cap splits evenly across root candidates with NO
+  rollover (share = cap // moves), so cheap branches strand
+  allowance while dear ones clamp: a low aggregate is fully
+  consistent with heavy per-branch binding. And clamped_nodes
+  COUNTS positions answered by leaf eval past a branch's share —
+  each one truncates a subtree of unmeasured size, so "0.26-0.35%
+  of the layer's nodes" priced clamp EVENTS against SPENT nodes,
+  a denominator that says nothing about withheld work.] What the
+  depth-4 arms measure: 807,094 (s0) and 1,217,292 (s100) clamped
+  nodes — binding OCCURRED, at 304-433 events/dec, so the depth-4
+  verdict is a verdict on depth 4 AT A BINDING 400k CAP, not on
+  depth 4 with room. At depth 3 the cap engages three orders of
+  magnitude more rarely (1.6-4.7 clamp-nodes/dec) — rare, not
+  never. Whether either engagement withholds conversions is
+  exactly the cell the grid skipped, and two probe arms are
+  running as this correction lands: the shipped a12 config with
+  the cap DISABLED (node_cap 0, one knob), and depth 4 at a 4x cap
+  (1,600,000, one knob off the depth-4 arm, sub cap pinned 100k).
+  Their table lands in an addendum below. Until it does, the
+  licensed claims stop at: depth 5 and topk 10 untested, the cap
+  axis untested, and the FIRST rung of depth/topk at the DEFAULT
+  cap reshuffles rather than grows.
 
 - DEPTH MULTIPLIES THE SUB-PROBE LAYER'S CALL SITES AND DILUTES ITS
   SHARES. Gated calls 16.2M -> 88.8M (s0), 18.4M -> 104.7M (s100),
@@ -2659,15 +2684,20 @@ THE MECHANISMS, from the native layer blocks, at tested bounds:
   endgames the relocated trajectories reach; the prover itself
   neither pays nor saves.
 
-So the steering-headroom question closes at its tested bounds the
-way the reach question did: NOTHING WAS BEING WITHHELD. Steering's
-4% saturation at depth 3 is not a starved budget waiting to pay; it
-is what steering costs at the depths where it decides anything. The
-knob depth 4 actually turns hardest is one it does not name —
-sub-probe site count — and that turn buys +1/60 pooled for +80%
-spend with a family zeroed. The axis is closed at depth {3,4} and
-topk {6,8}; deeper and wider rungs stay open and unpriced, and
-nothing in these six arms argues for buying them.
+So the steering-headroom question, at the bounds these six arms
+tested: the depth and topk rungs reshuffle rather than grow, AT THE
+DEFAULT CAP. [Review round, same day: the first draft closed this
+paragraph with "NOTHING WAS BEING WITHHELD", a sentence the grid
+does not license — the depth-4 arms ran against a per-branch
+binding cap (previous bullet), and no arm varied the cap at fixed
+depth. The two probe arms running as this lands are what can close
+it; their addendum below says whether the withheld subtrees were
+buying anything.] What stands regardless: the knob depth 4 turns
+hardest is one it does not name — sub-probe site count — and that
+turn buys +1/60 pooled for +80% spend with a family zeroed. Depth
+{3,4} and topk {6,8} are priced at cap 400k; deeper and wider rungs
+stay open and unpriced, and nothing in these six arms argues for
+buying them.
 
 TIER SCORING, against the declared bars:
   (a) CHEAPER — SHIPPED: a validated default (sub_probe_cap 75,000,
@@ -2675,19 +2705,76 @@ TIER SCORING, against the declared bars:
       games as the ladder pin, the 22-certificate ledger re-derived
       node-for-node, at -12.6% nodes/decision against the pin it
       reproduces.
-  (b) CHARACTERIZED — the steering-headroom question answered at
-      tested bounds both ways, with mechanisms: cap never binding,
-      site-dilution the real coupling, reshuffle not growth.
+  (b) CHARACTERIZED — the depth and topk rungs answered at tested
+      bounds with mechanisms (site-dilution the real coupling,
+      reshuffle not growth at the default cap); the CAP AXIS opened
+      by review and probed by the two arms in the addendum below —
+      the tier is not fully claimed until that table lands.
   (c) METRIC — not retaken and not claimed: 6/40 ties the standing
       bar, posterior-ext's 12/70 overall stands.
 
-WHAT SHIPS: the a12 default flip (engine + CLI, help text stating
-the priced claim at its tested width), the pinned league
-subcap-75k/ (report + ten trophy PGNs), the revalidate instrument
-and its two artifacts in dev-rebudget/. WHAT DOES NOT: any steering
-change — both knobs revert to defaults untouched, priced in this
-entry. The cap cliff interval stands OPEN at (50k, 75k]: 75k is a
+WHAT SHIPS — meaning lands in the COMMIT: the a12 default flip
+(engine + CLI, help text stating the priced claim at its tested
+width) and the pinned league subcap-75k/ (report + ten trophy
+PGNs). The revalidate instrument and its two artifacts PERSIST
+LOCALLY in dev-rebudget/ but do NOT ship: dev-* is untracked
+wholesale by the standing artifact policy, deliberately (the
+.gitignore states why), so a fresh checkout gets the claim and the
+recipe, not the instrument — it is reproducible, and it proved
+itself by re-deriving the n=1 artifact exactly before being
+believed about a12. [Review round, same day: the first draft
+listed the instrument under "ships", conflating persisted-on-disk
+with in-the-commit.] WHAT DOES NOT SHIP: any steering change —
+both knobs revert to defaults untouched, priced in this entry. The cap cliff interval stands OPEN at (50k, 75k]: 75k is a
 validated point with margin, not a floor; 60-70k was deliberately
 not bisected because nothing ships on that refinement. sub_probe_n=1
-remains one flag away with its complete price tag. The steering axes
-close at their tested rungs only.
+remains one flag away with its complete price tag. The depth and
+topk axes close at their tested rungs at the default cap; the cap
+axis is open until the addendum's probe arms land.
+
+## Review round on the a12 entry: the aggregate hid the binding, the rule names its source, and ships means the commit (2026-07-27)
+
+Three items from outside review, all three accepted — the third in
+part, with the disagreement stated. Log-only: no code, no behavior,
+version stays a12, selftest 71/71 untouched. Edits are in place at
+the claims (each marked "[Review round, same day]"); this entry is
+the index.
+
+- THE AGGREGATE HID THE BINDING (P1, the substantive one): "the
+  node_cap was never the wall" rested on 29-31% aggregate
+  saturation — but the cap splits per root branch with no rollover,
+  so cheap branches strand allowance while dear ones clamp, and the
+  arms' own 807,094 / 1,217,292 clamped nodes prove binding
+  OCCURRED. Worse, the "0.26-0.35% of layer nodes" reassurance
+  priced clamp events against spent nodes when every clamped node
+  truncates a subtree of unmeasured size. The depth-4 rejection
+  therefore stands as measured — depth 4 AT A BINDING 400k CAP
+  loses its fresh-seed A/B — but "nothing was withheld" outran the
+  grid: no arm varied the cap at fixed depth. Two probe arms
+  launched with the correction, one knob each: the shipped a12
+  config with node_cap 0 (does the cap's rare depth-3 engagement
+  withhold anything from the DEFAULT?), and depth 4 at cap
+  1,600,000 with sub cap pinned at 100k (was depth 4's reshuffle
+  an artifact of starvation?). Addendum below when they land.
+  Fourth instance of the outran-the-grid class in four rounds, in
+  the entry that quoted the class by name.
+- THE RULE NAMES ITS SOURCE (P2): "pre-declared" pooled acceptance
+  was declared in the SESSION BRIEF before any fresh-seed game ran,
+  but the log's prior entry records only "fresh-seed A/B first by
+  the standard" — inside the repo, the rule first appears beside
+  its result. The opening paragraph now states the provenance
+  instead of the adjective. A rule that lives outside the log is a
+  rule the log cannot gate; recording acceptance criteria in the
+  candidate's own entry, before the run, is the cheap fix the next
+  candidate should get.
+- SHIPS MEANS THE COMMIT (P3, accepted in part): the entry listed
+  the revalidate instrument under "WHAT SHIPS" while dev-rebudget/
+  is untracked wholesale — a fresh checkout gets neither script nor
+  artifacts. The wording is fixed (persists locally, does not
+  ship). The review's remedy of promoting them to a tracked path is
+  DECLINED as policy: dev-* untracked is the standing artifact
+  policy, stated with its rationale in .gitignore, and the
+  instrument is reproducible — it re-derived the n=1 artifact
+  node-for-node before being believed about a12. If instruments
+  ever warrant tracking, that is a policy change to make
+  deliberately, not a side effect of a wording fix.
