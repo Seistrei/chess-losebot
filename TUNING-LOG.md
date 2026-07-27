@@ -2834,8 +2834,53 @@ where it failed — fifth instance of the class, caught one addendum
 after the fourth. The missing cell — depth 4, cap 1.6M, seed 100 —
 launched with this correction; its verdict lands below.]
 
-So the cap axis closes at these tested points: {400k, disabled} at
-depth 3 with zero flips; {400k, 1.6M} at depth 4 at BASELINE seeds
-with churn both ways and the family zero unmoved. The fresh-seed
-cap cell is running; tier (b)'s cap-axis claim stands at
-baseline-seed width until it lands.
+THE FRESH-SEED CAP CELL (same day, closing the follow-up): depth 4,
+cap 1.6M, seed 100 — the cell where the depth-4 rejection was
+actually earned, and the binding was heaviest.
+
+```
+arm                   zach  sloppy  squat  total  nodes/dec  steer/dec  clamp/dec
+base-s100 (depth 3)   3/10    5/10   2/10  10/30    141,428     20,123        4.7
+depth4-s100 (400k)    3/10    2/10   0/10   5/30    256,926    123,825      433.2
+depth4-cap1600k-s100  3/10    2/10   1/10   6/30    384,242    252,130      167.3
+```
+
+UN-STARVING DEPTH 4 AT THE FAILURE SEEDS DOES NOT RECOVER THE
+FAILURE: 6/30 against the depth-3 base's 10/30 — the collapse
+stands at -4 with the cap paid 4x — and the movement it does buy is
+the same churn signature as every other cell: lost sloppy_g00,
+sloppy_g02, zach_g01, zach_g06; gained sloppy_g05, sloppy_g08,
+squat_g04, zach_g02, zach_g04 (net +1 over its own 400k arm, 4
+lost / 5 gained, replay diverged 26/30, reconstruction 0). The cap
+still binds at 1.6M (456,348 clamped nodes, 167/dec — more than
+the s0 cell, consistent with s100 being the clampier set), sub
+sites grow 104.7M -> 216.6M calls and hits stay collapsed at 21
+(base-s100: 47). Starvation is dead at both seed sets: relieving
+it reshuffles, at every tested cell, and never restores what the
+depth change took.
+
+STATED BEFORE A REVIEW STATES IT: the two 1.6M arms pool to 17/60
+against the base's 14/60 — pooled POSITIVE — and that number is
+not a candidacy. The squat family floor pools 1/20 vs the base's
+3/20; the fresh-seed side alone is -4 (the finder precedent's
+exact shape, the hierarchy's decisive column); the price is +173%
+nodes/dec; and every cell's gains are 40-50% churn of the set they
+join, which is what seed-weather looks like, not what a lever
+looks like. A depth-4 candidacy would need the full standard
+(fresh-seed A/B it just failed at, a league seat this session
+already spent) and nothing in six depth-4 cells argues for
+spending either on it.
+
+So the cap axis at its tested points: {400k, 1.6M} at depth 4 now
+closes at BOTH seed sets — churn in every cell, the fresh-seed
+collapse cap-independent, the squat floor never restored. The
+depth-3 disable cell stands at BASELINE seeds (zero flips, 29/30
+byte-identical) — and the first draft of this paragraph wrote
+"both seed sets covered", which the grid does not contain: no
+disable arm had run at seed 100, where the shipped config clamps
+three times more per decision (4.73/dec vs 1.57). Sixth instance
+of the class, caught in-draft before commit this time; the s100
+disable cell launched with this correction and its one-line
+verdict lands below. Until it does, "the shipped config withholds
+nothing" is a baseline-seed measurement and a fresh-seed open
+cell.
