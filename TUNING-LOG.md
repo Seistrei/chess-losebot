@@ -2711,8 +2711,10 @@ TIER SCORING, against the declared bars:
       by review, probed same-day, and closed at its tested points:
       cap {400k, disabled} at depth 3 flips nothing (29/30
       byte-identical, zero conversions moved), cap {400k, 1.6M} at
-      depth 4 churns both ways with squat still zero. Claimed at
-      that width — see the review round's addendum.
+      depth 4 churns both ways with squat still zero AT BASELINE
+      SEEDS — the fresh-seed cap cell, where depth 4 actually
+      failed, is probed in the addendum's follow-up. Claimed at
+      the width the addendum states.
   (c) METRIC — not retaken and not claimed: 6/40 ties the standing
       bar, posterior-ext's 12/70 overall stands.
 
@@ -2803,26 +2805,37 @@ ZERO conversions at +0.8% steering nodes. For the default at its
 tested seeds, "nothing withheld" is now a measurement with a zero
 in it, not an inference from an aggregate.
 
-DEPTH 4 WAS NOT STARVED INTO FAILING: its tree's appetite is at
-least 246k/dec — the 400k cap was withholding roughly half of what
-it wanted — and paying 4x reshuffles the conversion set AGAIN: lost
-sloppy_g06 and zach_g00/g05/g09, gained sloppy_g08 and
-zach_g01/g03/g04/g07, net +1 at +52% nodes over the 400k arm
-(+173% over base), squat STILL 0/10, and clamping still present
-(138/dec — the appetite exceeds even 4x in some branches; a full
-disable at depth 4 was not run because unbounded worst-case depth-4
-trees are exactly the stall the cap exists to prevent, so the
-bounded raise is the sound instrument). The dilution mechanism
-lands its starkest number here: gated sub-probe sites grow 88.8M ->
-200.9M calls against the same 100k sub cap and hits COLLAPSE
-131 -> 25. More search below the root buys thinner probes
-everywhere it matters. The 11/30 is a BASELINE-SEED note, not a
-candidate: the depth axis already failed its fresh-seed A/B at the
-cheaper rung, this arm shows the same churn signature, and the
-probe's question was starvation — answered, no.
+DEPTH 4 AT BASELINE SEEDS WAS NOT STARVATION-LIMITED: its tree's
+appetite is at least 246k/dec — the 400k cap was withholding
+roughly half of what it wanted — and paying 4x reshuffles the
+conversion set AGAIN: lost sloppy_g06 and zach_g00/g05/g09, gained
+sloppy_g08 and zach_g01/g03/g04/g07, net +1 at +52% nodes over the
+400k arm (+173% over base), squat STILL 0/10, and clamping still
+present in 27 of 30 games (361,446 nodes, 138/dec — the appetite
+exceeds even 4x in some branches; a full disable at depth 4 was not
+run because unbounded worst-case depth-4 trees are exactly the
+stall the cap exists to prevent, so the bounded raise is the sound
+instrument). The dilution mechanism lands its starkest number here:
+gated sub-probe sites grow 88.8M -> 200.9M calls against the same
+100k sub cap and hits COLLAPSE 131 -> 25. More search below the
+root buys thinner probes everywhere it matters. The 11/30 is a
+BASELINE-SEED note, not a candidate: the depth axis already failed
+its fresh-seed A/B at the cheaper rung, and this arm shows the same
+churn signature.
 
-So the cap axis closes at its tested points: {400k, disabled} at
-depth 3 with zero flips; {400k, 1.6M} at depth 4 with churn both
-ways and the family zero unmoved. Tier (b) is claimed at exactly
-that width, and the a12 entry's tier line is updated in place to
-say so.
+[Review follow-up, same day: this section's first headline was
+"DEPTH 4 WAS NOT STARVED INTO FAILING" — but THE FAILING was the
+fresh-seed collapse (5/30 vs 10/30 at seed 100), the probe reran
+only seed 0 where depth 4 had WON its side (10/30 vs 4/30), and
+the s100 arm is where the binding was HEAVIEST (1,217,292 clamped
+nodes across 29 of 30 games, vs 807,094 at s0). A probe on the
+seeds where the knob succeeded cannot acquit the cap on the seeds
+where it failed — fifth instance of the class, caught one addendum
+after the fourth. The missing cell — depth 4, cap 1.6M, seed 100 —
+launched with this correction; its verdict lands below.]
+
+So the cap axis closes at these tested points: {400k, disabled} at
+depth 3 with zero flips; {400k, 1.6M} at depth 4 at BASELINE seeds
+with churn both ways and the family zero unmoved. The fresh-seed
+cap cell is running; tier (b)'s cap-axis claim stands at
+baseline-seed width until it lands.
