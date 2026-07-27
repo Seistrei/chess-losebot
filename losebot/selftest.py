@@ -642,6 +642,100 @@ def test_evaluate_shape() -> None:
     )
 
 
+def test_eval_proximity() -> None:
+    """The value-plumbing terms: off is identity, on is the priced
+    feature and nothing else — each fixture compares one board to
+    ITSELF so every legacy term cancels exactly."""
+    from .evaluate import (
+        CHECK_MENU_CAP,
+        RING_DONATION_CAP,
+        EvalParams,
+        evaluate,
+    )
+
+    boards = (
+        chess.Board(),
+        chess.Board(CROSSFIRE_FIXTURE),
+        chess.Board(FORCED_FIXTURE),
+    )
+    zero = EvalParams()
+    defaults = ModelEngine(make_model("sloppy")).eval_params
+    zeroed = ModelEngine(
+        make_model("sloppy"), eval_king_approach=0
+    ).eval_params
+    check(
+        "eval: all-zero params are the a12 eval; a13 arms approach 18",
+        all(
+            evaluate(b, c, zero) == evaluate(b, c)
+            for b in boards for c in (chess.WHITE, chess.BLACK)
+        )
+        and defaults == EvalParams(king_approach=18)
+        and zeroed is None,
+        f"defaults={defaults}; explicit zeros -> {zeroed}",
+    )
+
+    # Their menu holds exactly one checking reply (d6-d5+): the bonus
+    # is the price, once.
+    one_check = chess.Board("k7/8/3p4/8/4K3/8/8/8 b - - 0 1")
+    armed = EvalParams(check_menu=45)
+    check(
+        "eval: check_menu prices a checking reply",
+        evaluate(one_check, chess.WHITE, armed)
+        - evaluate(one_check, chess.WHITE) == 45,
+        f"delta={evaluate(one_check, chess.WHITE, armed) - evaluate(one_check, chess.WHITE):.0f} want 45",
+    )
+    # Two checking replies (Ra1+, Rf2+) meet the cap exactly.
+    two_checks = chess.Board("8/8/8/8/8/p7/r7/5K1k b - - 0 1")
+    check(
+        "eval: check_menu caps at CHECK_MENU_CAP",
+        CHECK_MENU_CAP == 2
+        and evaluate(two_checks, chess.WHITE, armed)
+        - evaluate(two_checks, chess.WHITE) == 90,
+        f"delta={evaluate(two_checks, chess.WHITE, armed) - evaluate(two_checks, chess.WHITE):.0f} want 90",
+    )
+
+    # Our knight stands on the king's ring, en prise to their rook.
+    ring = chess.Board("k7/8/8/8/8/8/r5N1/6K1 w - - 0 1")
+    armed = EvalParams(ring_donation=30)
+    check(
+        "eval: ring_donation prices a man offered at the box",
+        RING_DONATION_CAP == 2
+        and evaluate(ring, chess.WHITE, armed)
+        - evaluate(ring, chess.WHITE) == 30,
+        f"delta={evaluate(ring, chess.WHITE, armed) - evaluate(ring, chess.WHITE):.0f} want 30",
+    )
+
+    # Approach: the a2 pawn is FROZEN (front blocked, nothing to
+    # take), so the nearest legitimate target is their king at
+    # distance 4 — not the pawn at distance 2. Unblock the pawn and
+    # the target flips to it.
+    frozen = chess.Board("k7/8/8/8/1K6/8/p7/N7 w - - 0 1")
+    mobile = chess.Board("k7/8/8/8/1K6/8/p7/8 w - - 0 1")
+    armed = EvalParams(king_approach=9)
+    frozen_delta = (evaluate(frozen, chess.WHITE, armed)
+                    - evaluate(frozen, chess.WHITE))
+    mobile_delta = (evaluate(mobile, chess.WHITE, armed)
+                    - evaluate(mobile, chess.WHITE))
+    check(
+        "eval: king_approach targets mobile men, never frozen pawns",
+        frozen_delta == -36 and mobile_delta == -18,
+        f"frozen={frozen_delta:.0f} want -36; mobile={mobile_delta:.0f} want -18",
+    )
+
+    # Six non-king men with pieces among them: the stripped gate is
+    # shut and the two GATED terms are inert (check_menu is
+    # menu-native — its own gate is MENU_LIMIT, tested above). The
+    # approach term carries this check non-vacuously: were the gate
+    # broken, the a3 knight at distance 2 would show up as -18.
+    heavy = chess.Board("4k3/3pp3/8/2K5/8/n6n/8/r6r w - - 0 1")
+    armed = EvalParams(ring_donation=30, king_approach=9)
+    check(
+        "eval: gated proximity terms are inert outside the strip",
+        evaluate(heavy, chess.WHITE, armed) == evaluate(heavy, chess.WHITE),
+        "their_men=6 with pieces: armed == shipped",
+    )
+
+
 def test_sub_probe() -> None:
     from .search import best_move
 
@@ -1533,6 +1627,7 @@ def run() -> int:
         test_reply_support,
         test_report_rollups,
         test_evaluate_shape,
+        test_eval_proximity,
         test_sub_probe,
         test_selective_depth,
         test_posterior,

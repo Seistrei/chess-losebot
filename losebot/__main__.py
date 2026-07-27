@@ -133,6 +133,32 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "half is balanced across dev hypothesis families (--belief "
         "must match a dev hypothesis)",
     )
+    parser.add_argument(
+        "--eval-check-menu", type=int, default=0,
+        help="proximity price: bonus per opponent reply that gives "
+        "check (capped at 2) — a menu with no checks on it cannot "
+        "mate us however small it is squeezed (0 disables; "
+        "default-off, value-plumbing study 2026-07-27)",
+    )
+    parser.add_argument(
+        "--eval-ring-donation", type=int, default=0,
+        help="proximity price: bonus per own man adjacent to our king "
+        "and attacked by them (capped at 2) — the recapture devices "
+        "run on men donated INTO the box; gated to the stripped "
+        "region (0 disables)",
+    )
+    parser.add_argument(
+        "--eval-king-approach", type=int, default=18,
+        help="proximity price: penalty per square from our king to "
+        "the nearest opponent man that could ever mate — their king, "
+        "pieces, or MOBILE pawns; a frozen pawn is no target, and the "
+        "squat wall is our king glued to one. Gated to the stripped "
+        "region (0 disables). Default 18, the 2026-07-27 value-"
+        "plumbing pin: held-out forced 11/40 against the prior 6/40 "
+        "record with no held-out family row below its pin, at the "
+        "priced cost of the dev squat row (1/10 to 0/10 at pinned "
+        "seeds)",
+    )
 
 
 def _build_engine(args) -> ModelEngine:
@@ -156,6 +182,9 @@ def _build_engine(args) -> ModelEngine:
         deep_topk=args.deep_topk,
         node_cap=args.node_cap,
         infer=args.infer,
+        eval_check_menu=args.eval_check_menu,
+        eval_ring_donation=args.eval_ring_donation,
+        eval_king_approach=args.eval_king_approach,
     )
 
 
@@ -246,6 +275,9 @@ def _cmd_league(args) -> int:
             "deep_topk": args.deep_topk,
             "node_cap": args.node_cap,
             "infer": args.infer,
+            "eval_check_menu": args.eval_check_menu,
+            "eval_ring_donation": args.eval_ring_donation,
+            "eval_king_approach": args.eval_king_approach,
         }
         if args.infer != "off":
             # Persist the exact posterior, not aliases whose parameter

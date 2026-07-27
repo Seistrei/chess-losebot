@@ -59,6 +59,7 @@ from __future__ import annotations
 import chess
 
 from . import oracle
+from .evaluate import EvalParams
 from .models.base import OpponentModel
 from .models.posterior import HypothesisPosterior
 from .outcomes import adjudicate_draw
@@ -88,6 +89,9 @@ class ModelEngine:
         node_cap: int = 400_000,
         draw_contempt: float = 400.0,
         infer: str = "map",
+        eval_check_menu: int = 0,
+        eval_ring_donation: int = 0,
+        eval_king_approach: int = 18,
     ):
         if infer not in ("off", "map", "mix"):
             raise ValueError(f"infer must be off/map/mix, got {infer!r}")
@@ -111,6 +115,21 @@ class ModelEngine:
         self.node_cap = node_cap
         self.draw_contempt = draw_contempt
         self.infer = infer
+        self.eval_check_menu = eval_check_menu
+        self.eval_ring_donation = eval_ring_donation
+        self.eval_king_approach = eval_king_approach
+        # None when every proximity price is zero: the search then
+        # runs the shipped eval on its unchanged fast path, and the
+        # defaults-off identity claim is structural.
+        self.eval_params = (
+            EvalParams(
+                check_menu=eval_check_menu,
+                ring_donation=eval_ring_donation,
+                king_approach=eval_king_approach,
+            )
+            if (eval_check_menu or eval_ring_donation or eval_king_approach)
+            else None
+        )
         # One posterior per engine, and the league builds one engine
         # per game: inference state resets with the opponent, and its
         # updates are pure functions of this game's observed moves —
@@ -207,6 +226,7 @@ class ModelEngine:
             probe_factory=self._make_sub_probe(board.turn, memo, len(pool)),
             forced_ext=self.forced_ext,
             node_cap=self.node_cap,
+            eval_params=self.eval_params,
         )
         self.search_nodes += stats.nodes
         self.ext_nodes += stats.extensions

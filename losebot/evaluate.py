@@ -22,6 +22,8 @@ against ANY opponent:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import chess
 
 MATE = 100_000
@@ -60,10 +62,67 @@ HERDING_ADJACENCY_BONUS = 120
 FLIGHT_SQUARE_PENALTY = 24
 CLOCK_PRESSURE = 1.5
 
+# Proximity-term caps (the terms themselves are default-off knobs on
+# EvalParams; these caps are structural, mirroring MATING_MOVE_CAP).
+CHECK_MENU_CAP = 2
+RING_DONATION_CAP = 2
+# The proximity gate: the region every certificate the project has
+# ever landed lived in — opponent reduced to king+pawns (any count)
+# or to at most STRIPPED_MEN non-king men (the sub-probe gate's own
+# region). Middlegame positions never pay for these terms.
+STRIPPED_MEN = 5
 
-def evaluate(board: chess.Board, us: chess.Color) -> float:
-    """Score the position for the player trying to get mated."""
+
+@dataclass(frozen=True)
+class EvalParams:
+    """Default-off proximity prices (2026-07-27 value plumbing).
+
+    The reach verdict: in 1,600 wall and mercy decisions no
+    certificate existed within four own-moves — the objective has to
+    change where the engine GOES tens of plies earlier, not what it
+    prefers when a net appears. These terms price PROXIMITY to
+    net-bearing structure, measured (dev-plumb feature study over the
+    subcap-75k pin) as what separates cert corridors from walls:
+
+    check_menu    — bonus per opponent reply that gives CHECK (capped
+                    at CHECK_MENU_CAP): a menu with no checks cannot
+                    mate us, and walls are exactly where the check
+                    supply dies. 0 disables.
+    ring_donation — bonus per own non-king man adjacent to our king
+                    and attacked by them (capped at
+                    RING_DONATION_CAP): the recapture devices run on
+                    men donated INTO the box, not anywhere on the
+                    board. 0 disables.
+    king_approach — penalty per square of distance from our king to
+                    the nearest opponent man that could ever deliver
+                    or escort a mate (their king, their pieces, their
+                    MOBILE pawns — a frozen pawn cannot step into a
+                    mating pattern, and the squat wall is our king
+                    glued to one). 0 disables.
+
+    All-zero is the a12 eval, byte-identical. The a13 default arms
+    king_approach at 18 — the value-plumbing pin (held-out forced
+    11/40 against the prior 6/40 record, dev squat 1/10 -> 0/10 the
+    priced cost); the other two prices stay off, each rejected by its
+    own fresh-seed A/B (ring_donation pooled -4) or advanced-but-
+    outearned (check_menu pooled +1 on churn).
+    """
+
+    check_menu: int = 0
+    ring_donation: int = 0
+    king_approach: int = 0
+
+
+def evaluate(board: chess.Board, us: chess.Color,
+             params: EvalParams | None = None) -> float:
+    """Score the position for the player trying to get mated.
+
+    ``params`` carries the proximity prices; None is the pre-plumbing
+    eval, bit for bit — the engine passes None whenever every price
+    is zero, so knob-off runs stay on the historical code path.
+    """
     them = not us
+    check_menu = params.check_menu if params is not None else 0
     v = 0.0
 
     # Material: count our men (not points — promoting must gain nothing),
@@ -95,7 +154,7 @@ def evaluate(board: chess.Board, us: chess.Color) -> float:
 
     # Their menu of options (mate-aware squeeze).
     if board.turn == them:
-        v += _menu_term(board)
+        v += _menu_term(board, check_menu)
     elif board.is_check():
         # We are being checked: progress; few escapes means nearly mated.
         v += CHECK_BONUS + CHECK_ESCAPE_BONUS * max(
@@ -103,7 +162,7 @@ def evaluate(board: chess.Board, us: chess.Color) -> float:
         )
     else:
         board.push(chess.Move.null())
-        v += _menu_term(board)
+        v += _menu_term(board, check_menu)
         board.pop()
 
     # Kings: ours walks toward their pawns and smothers itself in our men.
@@ -148,24 +207,60 @@ def evaluate(board: chess.Board, us: chess.Color) -> float:
                     continue
                 v -= FLIGHT_SQUARE_PENALTY
 
+    # Proximity to net-bearing structure (default-off; the value
+    # plumbing session). Gated to the stripped region where every
+    # certificate has ever lived, so the middlegame never pays.
+    if params is not None and our_king is not None and (
+            their_pieces == 0 or their_pieces + their_pawns <= STRIPPED_MEN):
+        if params.ring_donation:
+            ring = 0
+            for nb in chess.SquareSet(chess.BB_KING_ATTACKS[our_king]):
+                piece = board.piece_at(nb)
+                if (piece is not None and piece.color == us
+                        and piece.piece_type != chess.KING
+                        and board.is_attacked_by(them, nb)):
+                    ring += 1
+            v += params.ring_donation * min(ring, RING_DONATION_CAP)
+        if params.king_approach:
+            targets = []
+            for sq, piece in board.piece_map().items():
+                if piece.color != them:
+                    continue
+                if (piece.piece_type == chess.PAWN
+                        and not _pawn_can_move(board, sq, them, us)):
+                    continue  # frozen pawns cannot step into a net
+                targets.append(sq)
+            if targets:
+                v -= params.king_approach * min(
+                    chess.square_distance(our_king, t) for t in targets
+                )
+
     # We fear the draw clock; they do not.
     v -= CLOCK_PRESSURE * board.halfmove_clock
 
     return v
 
 
-def _menu_term(board: chess.Board) -> float:
+def _menu_term(board: chess.Board, check_menu: int = 0) -> float:
     """Board has THEM to move: score their option pool for us.
 
     Counts every legal move: for the final zugzwang to be forceable,
     ALL their non-mating moves must be gone. Their POLICY (which moves
-    they prefer) is the search tree's business, not this leaf's."""
+    they prefer) is the search tree's business, not this leaf's.
+
+    ``check_menu`` (default-off) additionally prizes replies that give
+    CHECK: mate is a check our king cannot answer, so a menu with no
+    checks on it cannot mate us no matter how small it is squeezed —
+    the squat wall in one sentence. A check reply still counts toward
+    ``nonmating`` exactly as before; the bonus rides on top, so the
+    zugzwang branch and the squeeze arithmetic are untouched."""
     legal = list(board.legal_moves)
     if not legal:
         return 0.0  # terminal; the search scores it
     if len(legal) > MENU_LIMIT:
         return -LARGE_MENU_PENALTY * len(legal)
     mating = 0
+    checking = 0
     nonmating = 0.0
     for reply in legal:
         is_king_move = board.piece_type_at(reply.from_square) == chess.KING
@@ -173,6 +268,8 @@ def _menu_term(board: chess.Board) -> float:
         if board.is_checkmate():
             mating += 1
         else:
+            if check_menu and board.is_check():
+                checking += 1
             # A free king is the great draw engine.
             nonmating += KING_MOVE_WEIGHT if is_king_move else 1.0
         board.pop()
@@ -181,25 +278,34 @@ def _menu_term(board: chess.Board) -> float:
     return (
         -NONMATING_MOVE_PENALTY * nonmating
         + MATING_MOVE_BONUS * min(mating, MATING_MOVE_CAP)
+        + check_menu * min(checking, CHECK_MENU_CAP)
     )
+
+
+def _pawn_can_move(board: chess.Board, sq: chess.Square,
+                   owner: chess.Color, enemy: chess.Color) -> bool:
+    """True if this pawn of owner's can ever push or capture again."""
+    step = 8 if owner == chess.WHITE else -8
+    front = sq + step
+    if not (0 <= front <= 63):
+        return False
+    if board.piece_at(front) is None:
+        return True
+    rank = chess.square_rank(front)
+    file = chess.square_file(sq)
+    for df in (-1, 1):
+        f = file + df
+        if 0 <= f <= 7:
+            piece = board.piece_at(chess.square(f, rank))
+            if piece is not None and piece.color == enemy:
+                return True
+    return False
 
 
 def _any_pawn_can_move(board: chess.Board, owner: chess.Color,
                        enemy: chess.Color) -> bool:
     """True if any of owner's pawns can ever push or capture again."""
-    step = 8 if owner == chess.WHITE else -8
-    for sq in board.pieces(chess.PAWN, owner):
-        front = sq + step
-        if not (0 <= front <= 63):
-            continue
-        if board.piece_at(front) is None:
-            return True
-        rank = chess.square_rank(front)
-        file = chess.square_file(sq)
-        for df in (-1, 1):
-            f = file + df
-            if 0 <= f <= 7:
-                piece = board.piece_at(chess.square(f, rank))
-                if piece is not None and piece.color == enemy:
-                    return True
-    return False
+    return any(
+        _pawn_can_move(board, sq, owner, enemy)
+        for sq in board.pieces(chess.PAWN, owner)
+    )

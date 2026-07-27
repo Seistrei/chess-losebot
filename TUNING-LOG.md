@@ -2906,3 +2906,361 @@ the cap stays at its default purely as stall protection. Tier
 3 changes nothing on either seed set; 4x at depth 4 changes the
 weather on both and rescues neither the fresh-seed collapse nor
 the squat floor.
+
+## Value plumbing opens: the walls are not material-bound, and three proximity prices are declared before any arm (2026-07-27)
+
+The queue's standing objective change, unblocked because the
+search-knob space closed at tested bounds. The reach verdict set the
+mandate: in 1,600 wall and mercy decisions no certificate existed
+within four own-moves, so the objective has to change where the
+engine GOES tens of plies earlier — the eval must price PROXIMITY to
+net-bearing structure, not certificates (a categorical certificate
+bonus would fire 22 times in 7,094 decisions and change nothing).
+This entry is the study, the feature definitions, and the prices,
+written BEFORE any arm runs — the provenance lesson from the a12
+round, applied as written: the acceptance criteria are at the
+bottom of this entry, in the log, before the first game.
+
+THE CENSUS INSTRUMENT (games/league/dev-plumb/feature_study.py,
+untracked by the artifact policy): every decision of all 70 pinned
+subcap-75k games — the shipped a12 baseline — with cheap structural
+features measured at each of the 7,076 decisions, bucketed CERT (a
+certificate fired at this ply), CORRIDOR (within 12 plies before the
+game's first cert, the mandate's 2-6 own-moves), APPROACH (earlier in
+a forced game), TAIL (last 40 plies of a non-forced game, the reach
+sweep's convention), EARLY (the rest). Cert plies re-derived from the
+subcap-75k PGNs themselves (dev-plumb/trophy-certs-subcap75k.json:
+21 in-game certs, matching the pin's own count) because squat_g09
+diverged from the ladder pin — its conversion runs through ONE cert
+at ply 87, not the ladder's plies 79/81, and the first census run
+mislabeled exactly that game before the re-derivation caught it.
+
+THE HEADLINE, AND IT KILLS A CANDIDATE: the walls are NOT
+material-bound. Median opponent men in wall tails is 3 — identical
+to the cert and corridor medians, already inside the sub-probe gate
+(<=5) and inside the K+P flight gate (pieces 0). "Progress toward
+the gate region" cannot be the missing gradient because the engine
+ALREADY GETS THERE and stalls with the clock running (median
+halfmove 16 in tails vs 2 in corridors). For the same reason the
+flight term is not the lever: it is ACTIVE in most tails (pieces 0,
+pawns > 0) and the box is locally closed or closing — what is
+missing is not closure but closure IN THE RIGHT PLACE.
+
+WHAT SEPARATES CORRIDORS FROM WALLS, at 7,076 decisions (medians,
+and rates where medians are too coarse):
+
+```
+feature                    cert  corridor   tail  early
+their check replies >0     0.45      0.46   0.25   0.19
+ring donations >0          0.71      0.44   0.17   0.15
+our hanging men (avg)      2.43      1.53   0.77   0.93
+king-king distance (avg)   2.52      3.22   4.27   4.74
+open flights (avg)         0.29      0.46   1.85   1.82
+their menu size (avg)       4.7       4.1    4.9    8.1
+```
+
+Menu size does NOT separate — the walls are already squeezed. The
+corridor signature is: the box closed (flights ~0), kings near
+(2.5-3.2), our men EN PRISE next to our king (the donation
+structure), and — the sharpest family read — CHECK SUPPLY on the
+opponent's menu. The wall taxonomies, from the boards themselves:
+
+- THE SQUAT WALL IS A LOCATION FAILURE. squat tails: our_men 14
+  (nothing donated), flights 0 (fully self-smothered), their menu 2
+  (fully squeezed) — and kings 6 apart with ZERO opponent replies
+  giving check in 69% of tail positions (squat-held tails: 99%). A
+  menu with no checks on it cannot mate us at ANY size. The g00
+  board says why the king never walks: our king sits glued to the
+  opponent's FROZEN c4 pawn — KING_TARGET_DISTANCE_PENALTY is a min
+  over pawns, so one stray frozen pawn absorbs the whole approach
+  gradient at distance 1 while the mate-capable structure (their
+  king + pawns, h7 corner) is five files away. In squat_g09's
+  actual conversion corridor, opponent check replies exist in 100%
+  of decisions (tail: 31%).
+- THE SLOPPY WALL IS A SEQUENCING FAILURE. sloppy/sloppy-held
+  tails: our_men 4 and 2 (median; the engine donated everything
+  without a box), flights 3+ OPEN with nothing left to close them.
+  The flight term fires there and cannot be satisfied. No eval term
+  can rebuild spent material; what a proximity term can do is make
+  donations pay only where boxes get built.
+- THE TROPHY DEVICES CONFIRM BOTH. All 22 pinned certs: flights
+  0-2, our men 10-14 with 2-7 hanging, and the g09 device in full:
+  king walked to f7 INTO the f5 pawn's strike zone, queen donated
+  to g6, fxg6 answers with mate — their pawn was the executioner,
+  their king never moved off home.
+
+THE THREE FEATURES, THEIR DEFINITIONS AND PRICES, verbatim what the
+code implements (losebot/evaluate.py EvalParams, all default-off,
+all-zero == the shipped a12 eval bit for bit):
+
+1. CHECK_MENU (--eval-check-menu, armed price 45): +45 per opponent
+   legal reply that gives CHECK (not mate; mates keep their own
+   bonus), capped at 2, counted inside _menu_term — so it prices
+   exactly the menus the squeeze already walks (<= MENU_LIMIT 10),
+   costs one is_check per reply there, and nothing anywhere else.
+   Mate is a check the king cannot answer; a checkless menu cannot
+   mate; the term is the proto-mate gradient. 45 is half a
+   MATING_MOVE_BONUS.
+2. RING_DONATION (--eval-ring-donation, armed price 30): +30 per
+   own non-king man standing ADJACENT TO OUR KING and attacked by
+   them, capped at 2. The recapture devices run on men donated INTO
+   the box; a man en prise across the board is the sloppy bleed,
+   worth nothing here. 30 sits just above OUR_MAN_VALUE 25: an
+   offered man at the box outbids a safe man anywhere.
+3. KING_APPROACH (--eval-king-approach, armed prices 18 AND 36 as
+   separate rungs): -price per square of Chebyshev distance from
+   our king to the nearest opponent man that could ever deliver or
+   escort a mate — their king, any piece, or a MOBILE pawn. Frozen
+   pawns are excluded BY DEFINITION (front blocked, no capture
+   available — the _pawn_can_move test the frozen-pawns penalty
+   already uses), which is the exact c4-glue failure measured
+   above. Two rungs because the static probe (below) puts the
+   one-ply visibility threshold at 18 and the first king-toward
+   argmax flips at 36.
+
+GATE, shared by terms 2 and 3 (term 1 rides the menu term's own
+gate): opponent reduced to king+pawns of any count, OR to at most 5
+non-king men — the region every certificate the project has ever
+landed lived in (20 of 22 at pieces 0; both exceptions at men <=
+3). The middlegame never pays a proximity price. Implementation
+threads EvalParams from the engine through best_move into the leaf
+evaluate; None (every default) is the shipped code path.
+
+THE STATIC PRICE PROBE (dev-plumb/price_probe.py, one-ply argmax
+over 480 wall-tail positions of squat/squat-held/zach and the 80
+corridor+cert positions; direction and scale ONLY — arms price
+play):
+
+```
+config          wall argmax moved    corridor played medrank/top1
+off                    0/480                6 / 0.26
+check_menu 45         66/480                9 / 0.25
+ring_donation 30      18/480                6 / 0.25
+approach 6             7/480                6 / 0.25
+approach 9            10/480                6 / 0.24
+approach 18           35/480                6 / 0.24
+approach 36           72/480 (5 king-toward)  6 / 0.23
+combo 45/30/18       114/480                9 / 0.19
+```
+
+No config collapses the corridor rankings (the played corridor
+moves keep their one-ply standing within noise), and the wall
+argmax starts moving at exactly the scales the tug-of-war predicts:
+a king stepping out of its smother nest pays ~2 flights + a
+neighbor (~-66), so approach at 6-9 moves almost nothing and 36 is
+the first rung that overcomes local box terms often enough to show
+king-toward picks. One-ply argmax cannot see a multi-ply walk; the
+depth-3 arms are the instrument for that.
+
+STATE OF THE CODE, before any arm: selftest 71 -> 77 (defaults
+inertness on three fixtures plus engine-default None; each term's
+arithmetic pinned to its price on single-purpose fixtures; the
+frozen-pawn target exclusion pinned with a knight-block fixture
+whose delta flips -36 to -18 when the blocker leaves; the stripped
+gate pinned non-vacuously by the approach term). Byte-identity at
+defaults verified against the baked a12 image: zach/sloppy/squat/
+random, seed 0, 120 plies, all four PGNs BYTE-IDENTICAL (the image
+itself hash-verified against HEAD modulo CRLF checkout). Version
+stays 2.0.0a12 — nothing ships in this entry.
+
+THE ARMS, DECLARED WITH THEIR ACCEPTANCE CRITERIA BEFORE THE FIRST
+GAME RUNS:
+
+- Four dev arms, one knob each, baseline seeds, 30 games each
+  (zach/sloppy/squat x10): check_menu 45, ring_donation 30,
+  approach 18, approach 36. Divergence replay on every arm with
+  belief read from run metadata; reconstruction mismatches must be
+  zero or the arm is an instrument bug, not a result.
+- ASSEMBLY TIER (the named target): dev squat >= 2/10 forced with
+  correct posterior reads, against 1/10 in every pinned league
+  since the pivot. A one-game squat gain at baseline seeds is the
+  tier's floor, not seed noise dismissed — squat has converted
+  exactly once in every pin.
+- A combo arm runs only if two single knobs each show a dev gain
+  (any family) without losing a baseline conversion.
+- FRESH-SEED A/B (seed0 100, 30 a side) for any dev gainer; the
+  advance rule is the a12 session's: conversion totals pooled
+  across both seed sets neutral-or-better, with the mechanism-level
+  reads (which decision, what it cost) carrying the verdict past
+  seed weather.
+- AT MOST ONE PINNED LEAGUE, spent on the best earner. THE SHIP
+  RULE, recorded here before that league exists: held-out forced
+  >= 6/40 with NO held-out regression against the subcap-75k pin
+  ships the config and bumps the version; any held-out regression
+  reverts the default and prices the attempt in this log. 6/40 tied
+  is a PASS only if the trophy set is not diminished (posterior-ext
+  12/70 overall remains the record to beat, not the bar).
+- HONEST-FAILURE BRANCH, pre-committed: if no proximity term moves
+  dev assembly, the deliverable is the characterization — whether
+  the blocker is eval-shaped (terms fire, search still sits) or
+  belief/constructor-shaped (the walk needs plans no leaf gradient
+  expresses) — and the queue falls to corpus growth and the
+  forcing-certifier league arm.
+
+## The proximity pin: king_approach ships at 18, held-out doubles to 11/40, and the dev squat row is the named price (2026-07-27)
+
+Version 2.0.0a13, selftest 77/77 at every code state. The verdict
+first, because the rule that decides it was recorded in the entry
+above BEFORE the first arm ran: the pinned league lands held-out
+forced 11/40 with every held-out family row at or above its
+subcap-75k value, the declared ship rule fires on its ship branch,
+and --eval-king-approach's default flips 0 -> 18. Everything below
+is the evidence in the order it was produced.
+
+THE FOUR DEV ARMS (one knob each, baseline seeds, current source —
+byte-identical to the baked a12 image at defaults, verified on the
+four protocol games before any arm; divergence replay on every arm,
+reconstruction mismatches ZERO on all):
+
+```
+arm            zach  sloppy  squat  total  nodes/dec   vs a12 base 4/30
+base (a12, J)  3/10    0/10   1/10   4/30    120,930   —
+check_menu 45  3/10    1/10   1/10   5/30    106,140   +1: lost 4 (g09 + all
+                                             three zach cert games), gained 5
+ring_don 30    3/10    0/10   2/10   5/30    118,012   +1: SQUAT 2/10 — the
+                                             assembly floor — lost g09+zach_g03
+approach 18    5/10    3/10   0/10   8/30    112,557   +4: best zach and first
+                                             baseline-seed sloppy rows; squat 0
+approach 36    3/10    0/10   1/10   4/30    111,281   0: churn only
+```
+
+MECHANISM READS, from the corridor instrument (dev-plumb/
+corridor_report.py — probe ladder verdict + term features per
+decision): both ring30 squat conversions are PROMOTION-TOMB devices
+(the random_g05 shape — their passed pawn promotes into our
+back-rank box), squat_g03 converting in 57 PLIES where the base
+walled at 240, ring donations 1-2 parked through both corridors.
+approach18's zach_g06 is the corner tomb with the OPPONENT king
+walking in (ring 1 and check supply 1 sustained, appr 2); its
+sloppy conversions are king-extraction check chains. And its
+squat_g09 LOSS has a clean shape: a queen-shuffle repetition dance
+with TWO unforced mate-in-1s sitting on the squatter's menu
+(halfmove clock climbing 13 -> 27) — the approach term holds
+proximity at 3-4 and never rebuilds the base's f7 pawn-mate box.
+Proximity with offers is not a net against a non-flipper.
+
+THE FRESH-SEED A/Bs (seed0 100, 30 a side, base side standing from
+the a12 session; replay clean on all three). The declared advance
+rule is pooled-across-both-seed-sets neutral-or-better:
+
+```
+arm            zach  sloppy  squat  total   pooled vs 14/60
+base-s100      3/10    5/10   2/10  10/30   —
+check_menu 45  4/10    4/10   2/10  10/30   15/60  +1  PASSES, pure churn
+                                            (5 lost / 5 gained fresh-side)
+ring_don 30    2/10    1/10   2/10   5/30   10/60  -4  FAILS — the sloppy
+                                            column collapses 5 -> 1
+approach 18    5/10    2/10   2/10   9/30   17/60  +3  PASSES — zach 5/10 on
+                                            BOTH seed sets, squat HELD at 2
+```
+
+RING30'S ASSEMBLY CELL DOES NOT SURVIVE ITS OWN A/B — the tier-(a)
+claim dies with it, and precisely: ring_donation 30 cracked the dev
+squat wall at baseline seeds (2/10 with correct squat-k reads,
+against 1/10 in every pin since the pivot) and then went pooled -4,
+so no config carries the tier and the cell stands as an EXISTENCE
+result: the wall is crackable by a leaf term. approach18's squat
+story is seed-split: 0/10 at baseline (lost g09, the dance above),
+2/10 held at fresh seeds — the dev-side zero is a pinned-seed fact,
+not a family fact. The combo arm never ran: its declared condition
+(two singles gaining without losing a baseline conversion) was met
+by nothing.
+
+THE PINNED LEAGUE (games/league/appr18/, all seven families,
+standard seeds, --eval-king-approach 18 the only non-default;
+metadata carries it; 70 games):
+
+```
+family       split      n  forced  vs pin           labels beyond forced/maxply
+zach         dev       10       5  +2
+sloppy       dev       10       3  +3               st-us 2, fifty 2
+squat        dev       10       0  -1               all max-plies
+sloppy-held  held-out  10       5  +3               insuf 1
+human-held   held-out  10       2  +1               fifty 1
+squat-held   held-out  10       2   0
+random       held-out  10       2  +1               mercy 1 (pin: 5)
+
+held-out 11/40 (27%) vs 6/40 in posterior-ladder, posterior-ext AND
+subcap-75k; overall 19/70 (27%) vs posterior-ext's 12/70 record.
+worst held-out family: human-held and squat-held and random (20%);
+nodes/decision 119,468 (subcap pin 117,813, +1.4%) over 7,053
+decisions; in-game certificates 33 (pin: 21); per-layer native:
+  root_probe 47,602/dec (40% of nodes, 95% of cap)
+  sub_probe  54,313/dec (45% of nodes, 72% of cap)
+  steering   17,553/dec (15% of nodes, 4.4% of cap)
+divergence replay vs subcap-75k: compared 70, diverged 68,
+reconstruction mismatches 0. posterior reads: six families
+row-identical to the pin; sloppy-held's tenth game reads
+sloppy-mild where the pin read fitted-human-m35 — one diverged
+trajectory, one changed read, the posterior working as a pure
+function of what it observed.
+```
+
+THE SHIP RULE READS, term by term: held-out 11/40 >= 6/40; family
+rows vs pin: sloppy-held 5 >= 2, human-held 2 >= 1, squat-held
+2 >= 2, random 2 >= 1 — no held-out regression. SHIPS. The
+composition honesty the totals hide: the held-out trophy set is
+five-sixths NEW — of the pin's six held-out conversions only
+sloppy-held_g03 survives in place; g02/g01(hh)/g01+g02(sqh)/
+g05(random) are replaced by ten different games. 11/40 is a record
+BOARD, not the pin's board plus five. The engine plays different
+games under a leaf term armed in every stripped position — 68/70
+trajectories diverge — and the record is the count, not the roster.
+
+THE TROPHY LEDGER: all 22 pinned certificates re-derived under the
+armed-capable source before the flip, zero mismatches, zero misses,
+zero extras, node-for-node with the a12 artifact (dev-plumb/
+trophy-revalidate-plumb.json) — the root prover reads no eval knob,
+measured a third time. The FLIP identity, both directions: a13
+defaults vs explicit --eval-king-approach 18, four protocol games
+BYTE-IDENTICAL; --eval-king-approach 0 vs the baked a12 image, four
+protocol games BYTE-IDENTICAL — the historical path is one flag
+away, exactly.
+
+TIER SCORING, against the bars declared before the arms:
+  (a) ASSEMBLY — NOT CLAIMED. The shipped config's dev squat row is
+      0/10 at pinned seeds, a regression from the standing 1/10 and
+      the priced cost of the pin; ring30's 2/10 cell demonstrated
+      the wall is crackable and then failed its A/B pooled -4. The
+      named wall outlived the session that moved everything else.
+  (b) THE TRADE — PARTIAL, and the tier's own wording is not met:
+      random forced 1 -> 2 but total mates against random fall 6 ->
+      3 (five mercy coins become one). The trade ran TOWARD forced
+      and AWAY from volume; the tier asked for more forced WITHOUT
+      losing total mates.
+  (c) METRIC — RETAKEN OUTRIGHT: 11/40 held-out against a 6/40 bar
+      and record; 19/70 overall against 12/70. The no-zero-rows
+      full board from subcap-75k ends (squat 0/10); the no-zero
+      HELD-OUT board holds and strengthens.
+
+WHAT SHIPS — in the commit: the a13 default flip (engine + CLI,
+help stating the priced claim), the EvalParams plumbing with
+check_menu and ring_donation still default-off, six new selftest
+checks (71 -> 77), and the pinned league appr18/ (report.json +
+nineteen trophy PGNs). WHAT DOES NOT SHIP: check_menu 45 (passed
+its A/B pooled +1, pure churn, outearned — one flag away, priced);
+ring_donation 30 (failed pooled -4 with the sloppy collapse — one
+flag away, priced, its squat cell the assembly existence proof);
+approach 36 (dev null). Instruments persist untracked in
+games/league/dev-plumb/ (feature_study, price_probe,
+corridor_report, the census and cert JSONs) per the artifact
+policy.
+
+OPEN CELLS, named: approach rungs between 18 and 36 and below 18
+are priced only by the one-ply static probe, never armed; no combo
+of any two terms has ever run (condition unmet, so the interaction
+surface is fully open); check_menu's fresh-side pass was never
+leagued; the dev squat 0/10 is a pinned-seed cell with the
+fresh-seed cell at 2/10 — a squat-recovery arm (approach 18 plus
+ring's device, or a squat-gated approach) is the obvious next
+probe and nothing here prices it. The sloppy self-draw signature
+under armed terms (st-us/fifty replacing max-plies on both seed
+sets) is observed, consistent, and unexplained at mechanism level.
+
+The mandate's question closes eval-shaped: a leaf gradient CAN
+move where the engine goes tens of plies early — 11/40 says the
+corridors it now walks bear nets the old eval never approached —
+and the one wall the mandate named still stands at its pinned
+seeds, with its crackability demonstrated and unshipped. The queue
+keeps corpus growth (user-side) and the forcing-certifier league
+arm, and adds the squat-recovery arm above.
