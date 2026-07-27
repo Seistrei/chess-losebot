@@ -2864,9 +2864,15 @@ against the base's 14/60 — pooled POSITIVE — and that number is
 not a candidacy. The squat family floor pools 1/20 vs the base's
 3/20; the fresh-seed side alone is -4 (the finder precedent's
 exact shape, the hierarchy's decisive column); the price is +173%
-nodes/dec; and every cell's gains are 40-50% churn of the set they
-join, which is what seed-weather looks like, not what a lever
-looks like. A depth-4 candidacy would need the full standard
+nodes/dec; and the churn is uniform where it counts — nine of
+thirty games flip forced status in EACH 1.6M cell (30% of the
+board, both seed sets), leaving the joined set 45% new at s0 and
+83% new at s100 — which is what seed-weather looks like, not what
+a lever looks like. [Fourth review round on this arc: the sentence
+first read "every cell's gains are 40-50% churn," true of the s0
+cell only (5 of 11); the fresh-seed set is five-sixths replaced
+(5 of 6), and the corrected figure argues the conclusion harder
+than the wrong one did.] A depth-4 candidacy would need the full standard
 (fresh-seed A/B it just failed at, a league seat this session
 already spent) and nothing in six depth-4 cells argues for
 spending either on it.
