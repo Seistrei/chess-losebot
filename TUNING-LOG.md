@@ -2708,8 +2708,11 @@ TIER SCORING, against the declared bars:
   (b) CHARACTERIZED — the depth and topk rungs answered at tested
       bounds with mechanisms (site-dilution the real coupling,
       reshuffle not growth at the default cap); the CAP AXIS opened
-      by review and probed by the two arms in the addendum below —
-      the tier is not fully claimed until that table lands.
+      by review, probed same-day, and closed at its tested points:
+      cap {400k, disabled} at depth 3 flips nothing (29/30
+      byte-identical, zero conversions moved), cap {400k, 1.6M} at
+      depth 4 churns both ways with squat still zero. Claimed at
+      that width — see the review round's addendum.
   (c) METRIC — not retaken and not claimed: 6/40 ties the standing
       bar, posterior-ext's 12/70 overall stands.
 
@@ -2778,3 +2781,48 @@ the index.
   node-for-node before being believed about a12. If instruments
   ever warrant tracking, that is a policy change to make
   deliberately, not a side effect of a wording fix.
+
+ADDENDUM, THE CAP-AXIS PROBES (same day): both landed, one knob
+each, reconstruction mismatches zero on both (the a12 probe
+diverges from its base in 1 of 30 games, the depth-4 probe in 26).
+
+```
+arm                     zach  sloppy  squat  total  nodes/dec  steer/dec    sat  clamp/dec
+j-cap75k (= a12 base)   3/10    0/10   1/10   4/30    120,930     16,264   4.1%      1.57
+nocap (a12 + cap 0)     3/10    0/10   1/10   4/30    121,060     16,394      —      0
+depth4 (cap 400k)       6/10    4/10   0/10  10/30    249,766    115,151  28.8%    303.9
+depth4-cap1600k         7/10    4/10   0/10  11/30    379,943    246,340  15.4%    138.2
+```
+
+THE SHIPPED CONFIG WITHHOLDS NOTHING — MEASURED THIS TIME: at a12
+defaults nine of thirty games clamp somewhere (4,965 nodes total,
+heaviest squat_g07 at 2,900). Disabling the cap returns 29 of 30
+games BYTE-IDENTICAL, perturbs exactly squat_g07's route without
+moving its outcome (max-plies, 240 plies, both ways), and flips
+ZERO conversions at +0.8% steering nodes. For the default at its
+tested seeds, "nothing withheld" is now a measurement with a zero
+in it, not an inference from an aggregate.
+
+DEPTH 4 WAS NOT STARVED INTO FAILING: its tree's appetite is at
+least 246k/dec — the 400k cap was withholding roughly half of what
+it wanted — and paying 4x reshuffles the conversion set AGAIN: lost
+sloppy_g06 and zach_g00/g05/g09, gained sloppy_g08 and
+zach_g01/g03/g04/g07, net +1 at +52% nodes over the 400k arm
+(+173% over base), squat STILL 0/10, and clamping still present
+(138/dec — the appetite exceeds even 4x in some branches; a full
+disable at depth 4 was not run because unbounded worst-case depth-4
+trees are exactly the stall the cap exists to prevent, so the
+bounded raise is the sound instrument). The dilution mechanism
+lands its starkest number here: gated sub-probe sites grow 88.8M ->
+200.9M calls against the same 100k sub cap and hits COLLAPSE
+131 -> 25. More search below the root buys thinner probes
+everywhere it matters. The 11/30 is a BASELINE-SEED note, not a
+candidate: the depth axis already failed its fresh-seed A/B at the
+cheaper rung, this arm shows the same churn signature, and the
+probe's question was starvation — answered, no.
+
+So the cap axis closes at its tested points: {400k, disabled} at
+depth 3 with zero flips; {400k, 1.6M} at depth 4 with churn both
+ways and the family zero unmoved. Tier (b) is claimed at exactly
+that width, and the a12 entry's tier line is updated in place to
+say so.
