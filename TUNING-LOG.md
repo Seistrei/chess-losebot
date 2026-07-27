@@ -2884,3 +2884,19 @@ disable cell launched with this correction and its one-line
 verdict lands below. Until it does, "the shipped config withholds
 nothing" is a baseline-seed measurement and a fresh-seed open
 cell.
+
+THE S100 DISABLE CELL (landed): zero flips there too. Board
+identical to the a12 fresh-seed arm (10/30, family for family,
+lost none gained none), 28 of 30 games byte-identical; the two
+perturbed trajectories are the two clampiest games (squat_g03 at
+8,682 clamped nodes, squat_g09 at 1,905) and BOTH keep their
+max-plies outcomes by different routes, at -0.3% total nodes.
+Replay diverged 2/30, reconstruction 0 — the eleventh run of the
+session, zero everywhere. So the disable cell now closes at both
+seed sets with the same zero: the shipped a12 config's node_cap
+withholds no conversion on any of the 60 dev games tested, and
+the cap stays at its default purely as stall protection. Tier
+(b)'s cap axis is claimed at full tested width: disable at depth
+3 changes nothing on either seed set; 4x at depth 4 changes the
+weather on both and rescues neither the fresh-seed collapse nor
+the squat floor.
