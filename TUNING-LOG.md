@@ -2495,3 +2495,199 @@ Edits are in place at the claims; this entry is the index.
 The round's one-line lesson is the second round's, unchanged: the
 suite gates what it renders, and artifacts gate what they record —
 prose that cites neither is where the drift lives.
+
+## The cap flip ships and the steering ledger closes: 75k reproduces the ladder pin game for game, and the headroom was never headroom (2026-07-26/27)
+
+Two levers from the standing queue, by the house standard — dev arms,
+fresh-seed A/B, at most one pinned league. The verdict first: the 75k
+candidate passed its pre-declared pooled rule, took the league seat,
+and SHIPS — sub_probe_cap 100,000 -> 75,000, version 2.0.0a12. Both
+steering knobs failed their fresh-seed A/Bs and no steering config
+ships; the negative is characterized to its tested bounds below.
+Selftest 71/71 at every code state (the flip adds none and breaks
+none); baked image byte-verified against the tree before every run
+block; divergence replay on ALL SEVEN runs this session — six dev
+arms and the pinned league — with reconstruction mismatches ZERO
+everywhere. Every movement below is its knob, never inference.
+
+THE PINNED LEAGUE (games/league/subcap-75k/, all seven families,
+standard seeds, a12 defaults, no overrides):
+
+```
+family       split      n  forced  mercy  st-us  insuf  maxply  forced%
+zach         dev       10       3      0      0      0       7      30%
+sloppy       dev       10       0      0      1      1       8       0%
+squat        dev       10       1      0      0      0       9      10%
+sloppy-held  held-out  10       2      0      0      3       5      20%
+human-held   held-out  10       1      0      0      0       9      10%
+squat-held   held-out  10       2      0      0      0       8      20%
+random       held-out  10       1      5      0      0       4      10%
+
+forced — held-out 6/40 (15%); dev 4/30 (13%); overall 10/70 (14%)
+worst held-out family: human-held (10%); no zero rows on the board
+nodes/decision 117,813 (ladder pin: 134,758, -12.6%) over 7,097 dec
+per-layer, native from report.json:
+  root_probe 47,004/dec (40% of nodes, 94% of cap)
+  sub_probe  54,144/dec (46% of nodes, 72% of cap)
+  steering   16,666/dec (14% of nodes,  4% of cap)
+clamps 13,055 = 1.84/dec (0.0016% of nodes); sub hits 53 (ladder:
+41); oracle certificates fired in-game 21 (ladder: 22, the delta is
+squat_g09 below); ext_nodes 24.48M
+```
+
+THE SHIP RULE READS: held-out forced 6/40 meets the >= 6/40 bar with
+no held-out regression — and the trophy board is not merely equal in
+count, it is THE SAME TEN GAMES as the posterior-ladder pin, game for
+game: lost NONE, gained NONE. Sixty-nine of seventy games are
+BYTE-IDENTICAL to the ladder pin; the seventieth, squat_g09, is the
+same diverger the dev arm found and it CONVERTS ANYWAY by a longer
+route (89 plies vs 83, one in-game certificate vs two). The pinned
+divergence replay: compared=70, diverged=1, reconstruction
+mismatches 0. Benchmarks for the record: posterior-ladder 6/40 +
+10/70; posterior-ext 6/40 + 12/70 (still the table of record —
+overall is tied with the ladder, not with ext, and no record is
+claimed); finder-n1 5/40 + 11/70 (reverted). subcap-75k lands 6/40 +
+10/70: the ladder pin's exact scoreboard at 87% of its price.
+
+THE TROPHY LEDGER, MEASURED NOT ARGUED, twice: the offline
+re-derivation of all 22 certificates over the ten pinned trophy PGNs
+runs under a12 with zero mismatches, zero misses, zero extras over
+all 465 pinned decisions — and NODE-FOR-NODE identical to the
+finder-session artifact, 22,251,688 nodes both times
+(dev-rebudget/trophy-revalidate-cap75k.json vs trophy-revalidate-n1
+.json; the root prover reads no sub-probe knob, and now that is a
+measurement under BOTH configs). The generator script itself is now
+persisted as dev-rebudget/trophy_revalidate.py — the n=1 session
+kept only its output, and this session had to rebuild the
+instrument before it could trust it: it reproduced the n=1 artifact
+exactly (dev-rebudget/trophy-revalidate-a11-check.json) before being
+believed about a12.
+
+POSTERIOR DIAGNOSTICS: six families read identically to the ladder
+pin row for row (zach 10/10 zach, sloppy 10/10 sloppy, squat 10/10
+squat-k, squat-held 10/10 squat-greedy-q, random 10/10 fitted-human,
+human-held the same 6/4 sloppy/sloppy-mild split), and sloppy-held
+is BACK to the ladder's 9 sloppy + 1 fitted-human-m35 — the read
+finder-n1 had moved, restored because the trajectory that moved it
+is restored. Median collapse ply 10 (range 0-60). A pure function of
+the observed sequence, observing near-identical sequences.
+
+THE 75K FRESH-SEED A/B that earned the seat (seed0 100, 30 games a
+side, one knob; baseline-seed side standing from the interval arms):
+
+```
+arm                    zach  sloppy  squat  total  nodes/dec   sub/dec  hits
+base-s100 (100k)       3/10    5/10   2/10  10/30    141,428    74,152    47
+cap75k-s100            3/10    5/10   2/10  10/30    122,456    56,211    32
+baseline side:  dev-sub-a-base 4/30 == dev-sub-j-cap75k 4/30 (J lost NONE)
+```
+
+The declared rule — flip if conversion totals are neutral-or-better
+pooled across both seed sets — reads 14/60 vs 14/60: NEUTRAL, at
+-13.4% total nodes fresh-side, -13.1% baseline-side. Two honesty
+notes the totals hide. FIRST, the fresh set ends the cap's
+conversion-inertness: 28 of 30 byte-identical, and the two divergers
+SWAP a conversion. zach_g03(s100) converts at 100k (ply 231, 12 sub
+hits) and dies to max-plies at 75k, diverging at ply 185 — the
+tighter share starves a late sub-read behind a long assembly, the
+mechanism the n=1 league priced. zach_g00(s100) runs the other way:
+max-plies at 100k, diverges at ply 138, converts at ply 152 under
+the tighter cap. One lost, one gained, same knob, same family — the
+full width of what 60 games license is "totals-neutral with one swap
+each way", and the baseline-seed "keeps every conversion" claim
+stays true at its own seeds only. SECOND, the fresh base side
+doubled as a determinism cross-check: the a11 rerun of the a10
+finder-session base is byte-identical in all 30 PGNs (replay:
+diverged 0, reconstruction 0) — fixed config, fixed seeds, two
+package versions, same game to the ply, on a seed set the post-revert
+byte-verification never touched.
+
+STEERING ON ITS OWN ACCOUNT — ~16.5k/dec against a 400k node_cap
+(4% saturation) was the last big untested search lever. One knob per
+arm, both seed sets, base rows repeated for reading:
+
+```
+arm            seeds  zach  sloppy  squat  total  nodes/dec  steer/dec  sat  clamp/dec
+base            s0    3/10    0/10   1/10   4/30    139,159     16,276   4%       1.6
+depth4          s0    6/10    4/10   0/10  10/30    249,766    115,151  29%     303.9
+topk8           s0    2/10    2/10   1/10   5/30    135,638     15,856   4%       2.4
+base            s100  3/10    5/10   2/10  10/30    141,428     20,123   5%       4.7
+depth4          s100  3/10    2/10   0/10   5/30    256,926    123,825  31%     433.2
+topk8           s100  5/10    2/10   1/10   8/30    140,681     19,190   5%       5.3
+```
+
+DEPTH 4 IS THE FINDER STORY A THIRD TIME, one layer up: +6 on the
+baseline dev board — zach 6/10 the best zach dev row ever recorded,
+sloppy 4/10 at seeds where sloppy had converted only under the
+reverted finder — and then fresh seeds take five back (5/30 against
+the same base's 10/30). Pooled +1/60 at +80% nodes/dec (+79.5% s0,
++81.7% s100), with dev-squat ZEROED on both seed sets (0/20 pooled
+vs base 3/20) and 23 of 60 game outcomes churned (s0: 2 lost, 8
+gained; s100: 9 lost, 4 gained). One of its four fresh-seed gains,
+zach_g00(s100), is the very game the 75k cap converts at -13%
+instead of +82%. Dev boards do not generalize; a pooled +1 whose
+family floor drops to zero is not an earner; no belief, no flip, no
+league seat. TOPK 8 fails without needing the hierarchy: pooled
+13/60 vs 14/60, and on baseline seeds it reshuffles the ENTIRE
+conversion set — loses all four of base's converts, gains five
+others — for +1 there and -2 on fresh. A reply-cap widening
+re-weights every chance node, re-sorts every line, relocates every
+game; what it does not do is convert more.
+
+THE MECHANISMS, from the native layer blocks, at tested bounds:
+
+- THE NODE_CAP WAS NEVER THE WALL. At 7x steering spend the layer
+  reaches 29-31% saturation and clamps 304-433 nodes/dec — which is
+  0.26-0.35% of the layer's own nodes, evaluated-in-place at the
+  per-branch share, not a hard stop. Uniform depth 4 is the first
+  config to make steering spend real budget, and the budget was
+  never what withheld conversions at depth 3. Depth 5 and topk 10
+  stay untested; what is measured is that the FIRST rung of each
+  axis reshuffles rather than grows.
+
+- DEPTH MULTIPLIES THE SUB-PROBE LAYER'S CALL SITES AND DILUTES ITS
+  SHARES. Gated calls 16.2M -> 88.8M (s0), 18.4M -> 104.7M (s100),
+  5.5-5.7x, while layer nodes rise only 14-16%: the shared
+  per-decision cap self-limits, each site's slice thins, and hits
+  swing in OPPOSITE directions by seed set — 12 -> 131 on s0,
+  47 -> 22 on s100. A deeper tree exposes more probe sites AND
+  starves each one; which effect wins is seed weather, which is what
+  a reshuffle looks like from the layer below.
+
+- THE ROOT PROVER: ~47k/dec in every arm (its own cap), certificates
+  10 -> 20 (s0) and 16 -> 7 (s100) — certificates follow which
+  endgames the relocated trajectories reach; the prover itself
+  neither pays nor saves.
+
+So the steering-headroom question closes at its tested bounds the
+way the reach question did: NOTHING WAS BEING WITHHELD. Steering's
+4% saturation at depth 3 is not a starved budget waiting to pay; it
+is what steering costs at the depths where it decides anything. The
+knob depth 4 actually turns hardest is one it does not name —
+sub-probe site count — and that turn buys +1/60 pooled for +80%
+spend with a family zeroed. The axis is closed at depth {3,4} and
+topk {6,8}; deeper and wider rungs stay open and unpriced, and
+nothing in these six arms argues for buying them.
+
+TIER SCORING, against the declared bars:
+  (a) CHEAPER — SHIPPED: a validated default (sub_probe_cap 75,000,
+      2.0.0a12) with held-out intact at 6/40, the same ten trophy
+      games as the ladder pin, the 22-certificate ledger re-derived
+      node-for-node, at -12.6% nodes/decision against the pin it
+      reproduces.
+  (b) CHARACTERIZED — the steering-headroom question answered at
+      tested bounds both ways, with mechanisms: cap never binding,
+      site-dilution the real coupling, reshuffle not growth.
+  (c) METRIC — not retaken and not claimed: 6/40 ties the standing
+      bar, posterior-ext's 12/70 overall stands.
+
+WHAT SHIPS: the a12 default flip (engine + CLI, help text stating
+the priced claim at its tested width), the pinned league
+subcap-75k/ (report + ten trophy PGNs), the revalidate instrument
+and its two artifacts in dev-rebudget/. WHAT DOES NOT: any steering
+change — both knobs revert to defaults untouched, priced in this
+entry. The cap cliff interval stands OPEN at (50k, 75k]: 75k is a
+validated point with margin, not a floor; 60-70k was deliberately
+not bisected because nothing ships on that refinement. sub_probe_n=1
+remains one flag away with its complete price tag. The steering axes
+close at their tested rungs only.

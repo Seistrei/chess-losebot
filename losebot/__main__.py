@@ -75,7 +75,14 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "horizon of the organic box devices. Held-out outranks "
         "compute, so 2 stays the default",
     )
-    parser.add_argument("--sub-probe-cap", type=int, default=100_000)
+    parser.add_argument(
+        "--sub-probe-cap", type=int, default=75_000,
+        help="sub-probe layer's per-decision node budget. 75k matched "
+        "the 100k it replaced conversion-for-conversion pooled over "
+        "two 30-game dev seed sets (game-identical on one, one swap "
+        "on the other) at -24%% layer spend; the cap cliff is "
+        "bracketed in (50k, 75k] — 50k loses a trophy",
+    )
     parser.add_argument(
         "--sub-probe-slice", type=int, default=8_000,
         help="ceiling on ONE gated sub-probe call. The branch share "

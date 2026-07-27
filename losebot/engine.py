@@ -78,7 +78,7 @@ class ModelEngine:
         probe_forcing_width: int = 0,
         probe_forcing_cap: int = 0,
         sub_probe_n: int = 2,
-        sub_probe_cap: int = 100_000,
+        sub_probe_cap: int = 75_000,
         sub_probe_slice: int = 8_000,
         sub_probe_men: int = 5,
         forced_ext: int = 6,
