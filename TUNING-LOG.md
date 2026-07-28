@@ -3662,3 +3662,52 @@ THE DECISION CELL, pre-committed in full before anything runs:
 - Suite 77/77 at every code state; any default flip re-runs it
   plus the byte-identity protocol before the version claim lands.
   Commits stay local for user review.
+
+ADDENDUM 1, THE DEV CENSUS AND A STAGE-1 AMENDMENT DECLARED BEFORE
+ITS NUMBER EXISTS (same day): suite 77/77 at session start; the
+dev census reads 3,158 rows — the exact arithmetic complement of
+the pooled census (7,076 - 3,918 held-out) — from exactly the 30
+whitelisted PGNs, 9 certs, 24 corridor rows, 516 tail rows. The
+as-declared direction test, at face value:
+
+```
+term           feature            corridor   tail    verdict
+check_menu     chk>0% rate           0.67    0.26    SEPARATES
+ring_donation  ring>0% rate          0.42    0.23    SEPARATES
+king_approach  range_dist median      2.0     2.0    FAILS AS DECLARED
+```
+
+THE MIS-SPECIFICATION, owned before any repair number is computed:
+the declaration bound king_approach to the census's range_dist —
+min distance from our king to the nearest opponent man OF ANY
+MOBILITY. The shipped term does not price that feature: its
+definition EXCLUDES frozen pawns (the c4-glue finding — a king
+glued to a frozen pawn scores distance ~1 on range_dist while the
+mate-capable structure sits files away, which is the exact failure
+the term exists to fix). range_dist 2.0-vs-2.0 on dev rows is
+partly that glue: it says raw adjacency is already achieved in
+walls, which is the term's own premise, not its refutation. The
+definitionally-correct feature is MOBILE-target distance (their
+king, pieces, and mobile pawns only — the probe instrument's
+approach_target_dist, identical to the term's target set).
+
+THE AMENDMENT, declared now, computed next: king_approach re-enters
+stage 1 iff dev corridor median mobile-target distance < dev tail
+median. This amendment is POST-DATA — it was written after the
+as-declared test failed, and that status is permanent: both
+verdicts stay in the log, and if the amended feature also fails to
+separate, king_approach is OUT with no further repair (its own
+feature failing on dev content is a clean kill). The result binds
+either way. The as-declared range_dist failure stands as recorded
+regardless; the ultimate protection is unchanged — the decision
+cell is virgin and its read was committed before any of this.
+
+Dev-table notes recorded before the amendment number: sloppy has
+ZERO dev corridor rows (no forced sloppy game in the pin), so every
+corridor feature here is fit on zach+squat corridors alone; sloppy
+tails show ring>0% 0.01 (nothing left to donate) and halfmove
+median 37.5 — the fifty-clock stall is a BASE sloppy-tail
+signature, already present in the a12 pin's own games. The squat
+conversion corridor is check-saturated on dev rows (chk>0% 1.00,
+ring>0% 1.00 at n=6), matching the pooled read. The clock-stall
+separation replicates dev-only (corridor halfmove 2.5 vs tail 17).
