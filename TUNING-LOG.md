@@ -4305,3 +4305,53 @@ fail them, the arms may move squat or not, and a layer that
 proposes nothing is a result with a stage attached. Whichever
 lands is reported at face value, and nothing outside outcome
 space touches the virgin cell or the frozen presets.
+
+ADDENDUM 1, THE FUNNEL RESULT AND TWO POST-DATA AMENDMENTS,
+recorded before any arm runs (2026-07-28). The layer is
+implemented (losebot/plan.py; engine plan_steer; suite 77 -> 83
+green; defaults byte-identical to the baked a12 image on all four
+protocol games — the image-side artifacts of the a14 protocol,
+not re-rolled, verdicts in games/league/dev-device/). The
+coverage funnel PASSES ABOVE ITS BAR: 4/4 subcap dev trophies AND
+2/2 ring30 tombs — the proposer, pointed at each game's last-cert
+decision position, generates the game's actual device and the
+oracle validates it at n=1; the engine's own adoption rule
+(first PROVEN in rank order, 16-validation window) adopts exactly
+it in all six, five at rank 0 (coverage.json + coverage_test.py
+in dev-device/). Three honest wrinkles, both verdicts kept:
+
+- AS-DECLARED CATALOG FAILED ring30 squat_g05: its g7# is a pawn
+  PUSH with a king escort — no donation to recapture, which the
+  declared PAWN_STRIKE requires. The PAWN_PUSH sibling template
+  (same fork geometry, guarded arrival, empty donation slot) is
+  the post-data amendment that covers it; without it the funnel
+  scores 5/6 and still passes its bar, with it 6/6.
+- AS-DECLARED VALIDATION DIRECTION FAILED squat_g09 and
+  zach_g05: the declaration validated P* with THEM to move (the
+  AND-node), but both games' nets complete through a final OUR
+  move no assignment lists (g09's h7h6 runway block, g05's g6g5
+  zugzwang squeeze) — with them to move their spare tempo
+  refutes n<=2. The amendment adds the US-TO-MOVE direction:
+  selfmate_status from the assembled position, the mandate's own
+  "selfmate_in from a hypothetical completed position" verbatim,
+  with the prover supplying the missing final move. Either
+  direction PROVEN adopts; both are exact prover machinery, so
+  certify-or-don't-aim is intact.
+- COVERAGE PLIES are each game's LAST cert decision (all n=1),
+  not its first: zach_g03/g05 open their nets with n=3 proofs
+  the plan layer never claims (VALIDATE_N = 2, declared); the
+  in-game root prover carries n<=4. The pre-terminal stand is
+  the n<=2 horizon's own.
+
+Also found by the funnel and folded into generation (generative-
+layer fixes, not read changes): slider mate-rays treat OUR men as
+transparent (zach_g03's mating rank runs through the donation
+queen's own pre-donation square); ring squares the executioner
+covers from its arrival do not pin our man standing there; and
+donation-man variants rank attackers-of-D first — zach_g02's
+queen must be the donation precisely because she is the one piece
+that could rescue the net by recapturing the executioner. Donate
+the refuter. Every optimism these introduce is arbitrated where
+all optimism is arbitrated: the P* validation refutes what does
+not certify. The arms run next, against the acceptance bars
+exactly as declared above.
