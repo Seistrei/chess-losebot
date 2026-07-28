@@ -3858,9 +3858,15 @@ THE SLOPPY SELF-DRAW MECHANISM (corridor replays in
 dev-clean/corridor-*.txt; armed games from the s0 arm, base
 contrasts from the subcap-75k pin, seed-paired):
 
-- Every armed draw ends in the SAME residue: our bare king vs
-  their K+Q(+stray pawn), the approach term active (gate open at
-  men<=5) and pulling our king after their mobile pieces, while
+- Every armed draw ends in the SAME residue CLASS: our king bare
+  or holding one immobilized pawn vs their K+Q(+stray pawn)
+  [review round, 2026-07-27: the first draft said "our bare king";
+  armed g00's final board keeps our BLOCKED h3 pawn — K+P(frozen)
+  vs K+Q+P, and the frozen pawn sharpens the st-us reading rather
+  than weakening it: it contributes zero legal moves, so the
+  stalemate needs only the king boxed], the approach term active
+  (gate open at men<=5) and pulling our king after their mobile
+  pieces, while
   sloppy's queen — check weight 0.25 — shuffles instead of
   mating. From there the ending is a coin with two faces: the
   halfmove clock burns out (fifty-move: g01 at halfmove 98, g06
@@ -3874,21 +3880,44 @@ contrasts from the subcap-75k pin, seed-paired):
   with the clock at only 71; base g00 wanders bare-king-vs-queen
   from ply ~150 but the cap arrives before the clock; base g01
   was ALREADY stalemate-us in the a12 pin.
-- So st-us/fifty is not new behavior and no longer unexplained:
-  it is the SAME sloppy wall crossing a draw-rule line before the
-  ply cap. Armed contact-seeking (donation-adjacent squeeze plus
-  queen-chasing) feeds sloppy's greed 0.85 faster and keeps our
-  king inside the stalemate radius, so the drawn residue arrives
-  inside the game window and takes its label from whichever rule
-  fires first. The armed g00 replay shows the extreme form: a
-  squeeze so tight the OPPONENT is one tempo from stalemate for
-  tens of plies (their menu 0-3), the engine burning tempi and
-  then fresh material to keep the game legally alive.
-- The replicated -4/20 independent cost now reads as mechanism,
-  not mystery: at fresh seeds the base's slower, chase-free
-  trajectories find real sloppy corridors (base s100: 5/10
-  forced); the armed trajectories spend that material on contact
-  against an opponent whose parameters never pay for it.
+- So st-us/fifty is not new behavior: it is the SAME sloppy wall
+  crossing a draw-rule line before the ply cap — and two of the
+  four s0 base twins were THEMSELVES boundary draws (g01 st-us,
+  g03 insufficient-material), which strengthens that reading.
+  [Review round, 2026-07-27: the first draft asserted armed
+  contact-seeking "feeds sloppy's greed 0.85 faster"; the residue
+  timelines (dev-clean/residue_timeline.py) REFUTE that as a
+  general claim — armed goes bare LATER than base in three of the
+  four s0 draw pairs (g01 bare@127 vs 121, g03 155 vs 113, g00
+  never bare at all) and only g06 runs the other way. What the
+  timelines DO support: every armed draw stops producing
+  irreversible moves early (last clock reset by ply 130-165 at
+  s0) and the draw rules then fire mechanically in the chase
+  residue, where the term's mobile-target keeps our king on the
+  queen — a residue base games also reach at some seeds without
+  any term.] The armed g00 replay still shows the extreme squeeze
+  form: the OPPONENT one tempo from stalemate for tens of plies
+  (their menu 0-3), the engine burning tempi and then fresh
+  material to keep the game legally alive.
+- The replicated -4/20 independent cost is LOCATED but not fully
+  named. [Review round, 2026-07-27: the first draft called it
+  "spent on contact" and inferred it from s0 replays; measured on
+  the independent seeds themselves (residue_timeline.py +
+  first_divergence.py over the s100 pairs), that story is
+  refuted.] The three lost s100 conversions (g03/g07/g09) were
+  EARLY base nets — forced at plies 77/111/97 — whose armed twins
+  diverged in the MIDGAME (first divergence at plies 48/46/48,
+  tens of plies before each base mate), then ran 209-240 plies
+  HOLDING material (bare only at plies 195-229) without finding a
+  net. The cost is midgame steering divergence away from
+  trajectories that were about to become corridors — the term
+  doing exactly what it was designed to do, move the engine tens
+  of plies early, in a family whose assembly structure dev
+  evidence never licensed it to price. WHY the steered paths are
+  net-poor is not established by these instruments and stays
+  open. (Also measured: the s100 g04 pair is move-identical — the
+  term changed zero decisions that game — and g06/g08 diverge at
+  plies 57/33 yet both still convert.)
 
 WHY THE DEV-ONLY DERIVATION PRICES SLOPPY DIFFERENTLY — it
 prices it not at all, and the census says why it never could: no
@@ -3948,3 +3977,58 @@ the forcing-certifier league arm. The clean room's method —
 declare inputs, funnel, and reads before any number exists;
 amend only in the open with both verdicts kept — is the standing
 template for whatever candidate next claims a default.
+
+## Review round on the a14 entry: the residue was not bare, and "faster" was a narrative — the timelines keep the labels and kill the cause (2026-07-27)
+
+Two findings from outside review, both verified against the games
+and then accepted; the P2 taken on its "or quantify" branch —
+measured on the independent seeds rather than reworded. Log and
+instruments only: no code, no behavior, version stays a14, suite
+untouched. Corrections are in place at the claims (marked "[review
+round, 2026-07-27]"); this entry is the index and the tables. New
+instruments persisted: dev-clean/residue_timeline.py (per-game
+bare/men1/last-reset/clock timeline, seed-paired) and
+dev-clean/first_divergence.py.
+
+- "FEEDS GREED FASTER" REFUTED BY ITS OWN PAIRS (P2, the
+  substantive one). The reviewer's numbers verify exactly: armed
+  g01 goes bare at ply 127 vs base 121, armed g03 at 155 vs base
+  113 — and the sweep goes further: armed g00 NEVER goes bare
+  (its blocked h3 pawn survives to the stalemate), so the draft's
+  causal story was wrong in three of the four s0 draw pairs, with
+  only g06 (armed bare@124, base never) running the claimed
+  direction. The draft had also inferred an s100 cost mechanism
+  from s0 replays alone. Quantified on the s100 pairs where the
+  -4/20 lives:
+
+```
+s100  base                    armed                 first-div
+g00   insuf@209  bare@120     fifty@236  bare@136     53
+g01   insuf@216  bare@201     fifty@235  bare@135     36
+g02   max@240    never        st-us@190  bare@174     29
+g03   FORCED@77  —            st-us@209  bare@195     48
+g04   insuf@163  bare@96      IDENTICAL GAME          —
+g05   max@240    bare@185     max@240    bare@209     64
+g06   FORCED@64  —            FORCED@64 (same nets)   57
+g07   FORCED@111 —            max@240    bare@205     46
+g08   FORCED@82  —            FORCED@54               33
+g09   FORCED@97  —            max@240    bare@229     48
+```
+
+  The three lost conversions were EARLY base nets whose armed
+  twins diverged at plies 48/46/48 — midgame, tens of plies
+  before each base mate — then held material for 200+ plies
+  without finding one. Burn-rate is dead as the cost mechanism;
+  what stands is midgame steering divergence away from would-be
+  corridors, with WHY those steered paths are net-poor explicitly
+  open. The labels story survives measurement (irreversible moves
+  cease by ply 130-165 in every s0 armed draw, then a draw rule
+  fires), and two of the four s0 base twins were themselves
+  boundary draws — st-us/fifty was never new behavior. Same
+  correction class the log keeps cataloging: the mechanism
+  narrative sounded stronger than its measurements.
+- ARMED g00 IS NOT A BARE-KING RESIDUE (P3): its final board is
+  our K + BLOCKED h3 pawn vs K+Q+P. Restated as a residue CLASS —
+  king bare or plus one immobilized pawn — and the frozen pawn
+  sharpens the st-us reading: zero legal moves from it, so the
+  stalemate needs only the king boxed.
