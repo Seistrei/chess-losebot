@@ -4609,3 +4609,22 @@ corrected entry is exactly as strong as its tables: the
 constructor's wins and refusals are untouched, the layer costs
 0.3-1.7% not 0.9%-flat, and the closing stage's sample size is
 bounded above as well as below.
+
+SECOND PASS (same day), one finding, accepted with the repro
+verified: FORCED MOVES STILL BYPASSED THE COMPLETION LATCH. The
+lone-legal-reply return sits above every plan hook — correctly,
+for the probe, the tick, and steering: a lone reply is a
+non-decision in every layer's accounting, and this fix
+deliberately does NOT run proposals or re-validation there (the
+declared cadence is per decision, and the tick always runs
+before the plan next steers, so soundness never depended on it)
+— but the forced move can itself be the move that completes an
+assembly (the reviewer's repro: sole move Ka1-b1 onto the
+plan's king target, completions stuck at 0). The latch is now a
+helper both return paths pass through, with a regression
+fixture pinning exactly that shape (suite 85/85). The gauge
+residue narrows to: completions the OPPONENT'S move can never
+create and our two return paths now both observe — the
+remaining as-run-arms undercount stands as already recorded.
+Defaults re-verified byte-identical against the baked a12 image
+after the fix (all four protocol games, byteid-device3/).

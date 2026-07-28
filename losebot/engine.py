@@ -213,7 +213,12 @@ class ModelEngine:
         self.moves_played += 1
         self.sync_observations(board)
         if len(legal) == 1:
-            return legal[0]
+            # A lone reply is a non-decision everywhere (no probe, no
+            # steering, no plan tick) — but it can still be the move
+            # that COMPLETES an active plan's assembly, so it must
+            # pass through the completion latch like any chosen move
+            # (2026-07-28 review round, second pass).
+            return self._latch_completion(board, legal[0])
 
         memo: dict = {}
         proven = self._probe(board, memo)
@@ -266,13 +271,23 @@ class ModelEngine:
         self.search_nodes += stats.nodes
         self.ext_nodes += stats.extensions
         self.clamped_nodes += stats.clamped
-        chosen = move if move is not None else pool[0]
+        return self._latch_completion(
+            board, move if move is not None else pool[0]
+        )
+
+    def _latch_completion(self, board: chess.Board,
+                          chosen: chess.Move) -> chess.Move:
+        """Latch plan completion on the move about to be played.
+
+        Completion is created by OUR moves (their moves can only
+        break it), so it is checked the moment the chosen move makes
+        it true — a decision-boundary check alone misses every
+        assembly their reply disrupts before we stand at the next
+        decision, and the forced single-reply path can complete one
+        too (2026-07-28 review round, both passes). Telemetry only:
+        the move passes through untouched.
+        """
         if self._plan is not None and not self._plan.completed:
-            # Completion is created by OUR moves (their moves can only
-            # break it), so latch it the moment the chosen move makes
-            # it true — a decision-boundary check alone misses every
-            # assembly their reply disrupts before we stand at the
-            # next decision (2026-07-28 review round).
             us = board.turn
             board.push(chosen)
             completed = self._plan.assembly_complete(board, us)

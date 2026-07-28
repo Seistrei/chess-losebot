@@ -883,6 +883,27 @@ def test_device_plan() -> None:
         f"deaths={exiled.plan_deaths} proposed={exiled.plans_proposed}",
     )
 
+    # The forced single-reply path latches completion too: Kb1 is the
+    # ONLY legal move (a2 frozen by a3, b2 covered by both their
+    # pawns) and it lands the king on the plan's target — the lone
+    # reply is a non-decision everywhere else, but it can still be
+    # the move that completes an assembly (review round, second
+    # pass).
+    forced_board = chess.Board("4k3/8/8/8/8/p1p5/P7/K7 w - - 0 1")
+    walker = ModelEngine(make_model("sloppy"), plan_steer=24)
+    walker._plan = device_plan.PlanState(
+        template="pawn-push", king_target=chess.B1, donation=None,
+        executioner=chess.C3, box=(), king_price=24, box_price=12,
+        validated_n=1,
+    )
+    forced_move = walker.choose_move(forced_board)
+    check(
+        "plan: a forced move latches completion",
+        forced_move == chess.Move.from_uci("a1b1")
+        and walker.plan_completions == 1 and walker._plan.completed,
+        f"move={forced_move} completions={walker.plan_completions}",
+    )
+
 
 def test_sub_probe() -> None:
     from .search import best_move
