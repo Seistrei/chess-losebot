@@ -3711,3 +3711,119 @@ signature, already present in the a12 pin's own games. The squat
 conversion corridor is check-saturated on dev rows (chk>0% 1.00,
 ring>0% 1.00 at n=6), matching the pooled read. The clock-stall
 separation replicates dev-only (corridor halfmove 2.5 vs tail 17).
+
+## The clean room returns empty: no proximity term survives its own dev-only funnel, and the default reverts with the virgin cell unspent (2026-07-27)
+
+The pre-declared funnel, applied mechanically to the dev-only
+tables, kills all three shipped terms. Survivor count zero fires
+pre-declared outcome (d): NO CANDIDATE — the default reverts to
+--eval-king-approach 0 (the a12 eval) as version 2.0.0a14, the
+revert cites the standing subcap-75k pin, and the held-out s200
+decision cell is NOT SPENT. It stays virgin for a candidate that
+earns it. Everything below is the evidence in funnel order, then
+the characterization the mandate asked for: what the held-out
+content was load-bearing FOR.
+
+THE DEV-ONLY PROBE (dev-clean/price_probe_dev.py; bar walls 320 =
+squat+zach dev tails, sloppy's 196 reported outside the bar,
+corridor+cert 33; artifact price-probe-dev.json):
+
+```
+config         bar argmax   sloppy   corridor top1/med   funnel
+off                0/320       0        0.24 / 6         —
+check45        59/320 18.4%   59       0.24 / 13        fail-GUARD
+ring30         12/320  3.8%   42       0.24 / 6         fail-VIS
+appr6           7/320  2.2%   13       0.21 / 6         (info)
+appr9          10/320  3.1%   14       0.21 / 6         (info)
+appr12         17/320  5.3%   34       0.21 / 6         (info)
+appr18         25/320  7.8%   37       0.21 / 6         (info)
+appr24         31/320  9.7%   52       0.24 / 6         (info)
+appr36         41/320 12.8%   54       0.24 / 6         (info)
+combo          88/320 27.5%   86       0.15 / 15        (info)
+```
+
+STAGE 1 killed king_approach before the probe: range_dist medians
+2.0-vs-2.0 as declared, mobile-target medians 2.0-vs-2.0 as
+amended — the approach rows above are informational only. What
+they inform: had the term survived, the dev-only visibility rung
+would be V=12, not the shipped 18 — even the rung was
+pooled-shaped. STAGE 2 kills both stage-1 survivors: check45
+passes visibility and then demotes the played corridor moves from
+median rank 6 to 13 (+7 against an allowed +1) — the dev corridor
+guard catches, harder, exactly the medrank-9 red flag the pooled
+probe showed and the original session's looser wording let pass;
+ring30 reads 3.8% visibility on dev bar-walls, the pooled probe's
+own rate, under the 5% bar. STAGE 4 is never reached by a
+survivor (for the record, fixed pre-derivation: appr18 -0.5/30,
+check45 0, ring30 -5 on independent blocks). STAGE 5: survivors
+ZERO. No candidate.
+
+THE GATE REFIT SAYS THE SHIPPED CONSTANT WAS POOLED-SHAPED TOO
+(dev-clean/gate_fit_dev.py, gate-fit-dev.json): the nine dev certs
+sit at pieces==0 except zach_g03's three (pieces 1, men 4); all 24
+dev corridor rows are pieces==0. k_dev = 4 — the men-branch is
+dev-supported, but at 4, not the shipped 5. Fitted on dev evidence
+alone the a13 gate constant does not come back.
+
+THE NEW-FEATURE DOOR, discretion exercised in the open: two
+non-shipped features separate more sharply than check-supply's
+0.67-vs-0.26 — halfmove_clock (corridor median 2.5 vs tail 17;
+the sharpest separation on the whole dev table) and flight_open
+(corridor mean 0.0 vs tail 1.5). Neither enters. Both are
+signatures of structure the eval already prices (CLOCK_PRESSURE
+1.5, FLIGHT_SQUARE_PENALTY 24), and both are consequence-shaped:
+corridors are clock-fresh because devices capture and push there,
+and closed because the box got built — a leaf term rewarding a
+fresh clock or closed flights rewards the past, not a reachable
+structure. Logged as named open cells (a clock-gradient or
+flight-place experiment is a different mandate than proximity),
+not smuggled in as candidates.
+
+WHAT THE HELD-OUT CONTENT WAS LOAD-BEARING FOR — the
+characterization that is this session's deliverable in place of a
+candidate:
+
+- THE DISTANCE GRADIENT ITSELF. The pooled census's headline
+  separation — kk_dist 3.22 corridor vs 4.27 tail (avg) — reads
+  4.12 vs 4.37 on dev rows, and flat 2.0-vs-2.0 at the medians
+  for both distance features. The corridor-vs-wall proximity
+  signal king_approach prices was substantially a held-out-family
+  regularity. Dev content knows the corridor signature as: box
+  closed (flights 0.0), men hanging at the ring, CHECK SUPPLY
+  (0.67 vs 0.26), fresh clock — not as king-distance.
+- ALL SLOPPY ASSEMBLY STRUCTURE. No sloppy dev game in the pin
+  ever converted, so the dev census contains ZERO sloppy corridor
+  rows; every sloppy-family corridor statistic in the pooled
+  study came from sloppy-held games. The pooled derivation priced
+  sloppy assembly on held-out structure exclusively — and sloppy
+  is where the shipped term's replicated -4/20 independent cost
+  lives. The dev-only derivation prices sloppy not at all: no
+  term survives to price anything, and the family contributes no
+  assembly evidence to fit on. (Mechanism read below, when the
+  corridor replays land.)
+- THE THRESHOLDS. {18,36} came off a wall set containing
+  squat-held tails. The dev-only wall set puts one-ply visibility
+  at 12. Neither 18 nor 36 is re-derivable from dev walls as a
+  distinguished rung.
+- THE GATE CONSTANT. k=5 fit the pooled cert population (12/22
+  held-out); dev certs fit k=4.
+
+THE ZACH PARADOX, stated at face value rather than resolved: the
+one replicated family-level gain of the a13 arc — zach +3/20 on
+independent blocks, 5/10 in every block — belongs to a term whose
+own gradient does not separate on zach's dev census rows (zach
+corridor mobile-target median 2.0 = tail 2.0; means 2.28 vs
+2.50). Whatever approach-18 does for zach, the census's proximity
+story does not explain it. That is consistent with the second
+review round's verdict that the design cannot name the cause of
+the benchmark gap, and it means the zach gain is an observed
+regularity without a derivable mechanism — not a basis for a
+default. The funnel's empty return and the independent totals
+(15/60 vs 16/60) now say the same thing from two directions.
+
+Sequencing note for the provenance record: the census landed
+before the funnel was applied (addendum 1, committed with the
+amendment before the amended number existed); the probe and gate
+tables landed after; no rule was altered after any number it
+governs existed, except the stage-1 amendment, which is marked
+post-data and whose both-ways verdicts stand recorded.
