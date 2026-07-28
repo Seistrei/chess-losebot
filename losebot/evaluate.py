@@ -100,12 +100,15 @@ class EvalParams:
                     mating pattern, and the squat wall is our king
                     glued to one). 0 disables.
 
-    All-zero is the a12 eval, byte-identical. The a13 default arms
-    king_approach at 18 — the value-plumbing pin (held-out forced
-    11/40 against the prior 6/40 record, dev squat 1/10 -> 0/10 the
-    priced cost); the other two prices stay off, each rejected by its
-    own fresh-seed A/B (ring_donation pooled -4) or advanced-but-
-    outearned (check_menu pooled +1 on churn).
+    All-zero is the a12 eval, byte-identical — and since 2.0.0a14 it
+    is the default again. The a13 default armed king_approach at 18
+    (the value-plumbing pin's 11/40 benchmark board at pinned seeds);
+    the declared validation cells then withdrew its generalization
+    claim, and the dev-only clean-room re-derivation could not
+    reproduce any term — the pooled study's gradients were
+    substantially held-out-family regularities (TUNING-LOG
+    2026-07-27, the clean-room entries). Every price is one flag
+    away; none is armed by default.
     """
 
     check_menu: int = 0

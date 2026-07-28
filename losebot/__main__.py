@@ -148,16 +148,16 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "region (0 disables)",
     )
     parser.add_argument(
-        "--eval-king-approach", type=int, default=18,
+        "--eval-king-approach", type=int, default=0,
         help="proximity price: penalty per square from our king to "
         "the nearest opponent man that could ever mate — their king, "
         "pieces, or MOBILE pawns; a frozen pawn is no target, and the "
         "squat wall is our king glued to one. Gated to the stripped "
-        "region (0 disables). Default 18, the 2026-07-27 value-"
-        "plumbing pin: held-out forced 11/40 against the prior 6/40 "
-        "record with no held-out family row below its pin, at the "
-        "priced cost of the dev squat row (1/10 to 0/10 at pinned "
-        "seeds)",
+        "region (0 disables). Default 0 again since 2.0.0a14: the a13 "
+        "default of 18 set an 11/40 benchmark board at pinned seeds, "
+        "then failed its declared validation cells and could not be "
+        "re-derived from dev-only content (clean-room revert, "
+        "2026-07-27)",
     )
 
 

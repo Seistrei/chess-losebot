@@ -3827,3 +3827,124 @@ amendment before the amended number existed); the probe and gate
 tables landed after; no rule was altered after any number it
 governs existed, except the stage-1 amendment, which is marked
 post-data and whose both-ways verdicts stand recorded.
+
+## The a14 revert lands: king_approach 0 by default again, the sloppy self-draws get their mechanism, and the virgin cell is preserved (2026-07-27)
+
+Version 2.0.0a14, selftest 77/77 at every code state. Outcome (d)
+of the clean-room declaration, executed as pre-committed: the
+funnel produced no candidate, so the default reverts to
+--eval-king-approach 0 without spending the decision cell.
+Held-out seed0 200 has still never been run — it stays virgin for
+a candidate that earns it. What changed in code: the engine and
+CLI defaults flip 18 -> 0, the EvalParams docstring and CLI help
+now state the revert and its provenance, and the eval selftest
+check flips to pin the DISARMED default (defaults is None — the
+historical fast path — and explicit 18 still arms; the check count
+stays 77). All three proximity knobs remain implemented,
+default-off, one flag away.
+
+BYTE-IDENTITY, the strongest form available: the baked
+losebot:latest image is pure a12 code (2.0.0a12, pre-EvalParams —
+it has no eval attributes at all), so the protocol compared a14
+defaults directly against the historical engine, not against a
+flag-path proxy: zach/sloppy/squat/random, seed 0, 120 plies,
+defaults both sides — all four PGNs BYTE-IDENTICAL, the random
+mercy conversion included (commands and verdict in
+dev-clean/byteid_protocol.md). The a14 default IS the a12 engine,
+measured, and its citable pin is subcap-75k (held-out 6/40) as
+declared.
+
+THE SLOPPY SELF-DRAW MECHANISM (corridor replays in
+dev-clean/corridor-*.txt; armed games from the s0 arm, base
+contrasts from the subcap-75k pin, seed-paired):
+
+- Every armed draw ends in the SAME residue: our bare king vs
+  their K+Q(+stray pawn), the approach term active (gate open at
+  men<=5) and pulling our king after their mobile pieces, while
+  sloppy's queen — check weight 0.25 — shuffles instead of
+  mating. From there the ending is a coin with two faces: the
+  halfmove clock burns out (fifty-move: g01 at halfmove 98, g06
+  at 98) or the chase walks our king inside the queen's box and
+  we are STALEMATED (st-us: g03 driven a5->a1, g00 cornered at g1
+  after donating its own freshly promoted queen).
+- The base games at the SAME SEEDS are the same walls without the
+  boundary crossing: base g06 holds a menu-1, zero-check smother
+  for 40+ plies with material intact — underpromoting d7d8=B at
+  ply 238 to keep the squeeze fed — and reaches the ply-240 cap
+  with the clock at only 71; base g00 wanders bare-king-vs-queen
+  from ply ~150 but the cap arrives before the clock; base g01
+  was ALREADY stalemate-us in the a12 pin.
+- So st-us/fifty is not new behavior and no longer unexplained:
+  it is the SAME sloppy wall crossing a draw-rule line before the
+  ply cap. Armed contact-seeking (donation-adjacent squeeze plus
+  queen-chasing) feeds sloppy's greed 0.85 faster and keeps our
+  king inside the stalemate radius, so the drawn residue arrives
+  inside the game window and takes its label from whichever rule
+  fires first. The armed g00 replay shows the extreme form: a
+  squeeze so tight the OPPONENT is one tempo from stalemate for
+  tens of plies (their menu 0-3), the engine burning tempi and
+  then fresh material to keep the game legally alive.
+- The replicated -4/20 independent cost now reads as mechanism,
+  not mystery: at fresh seeds the base's slower, chase-free
+  trajectories find real sloppy corridors (base s100: 5/10
+  forced); the armed trajectories spend that material on contact
+  against an opponent whose parameters never pay for it.
+
+WHY THE DEV-ONLY DERIVATION PRICES SLOPPY DIFFERENTLY — it
+prices it not at all, and the census says why it never could: no
+dev sloppy game in the pin ever converted, so dev content
+contains ZERO sloppy corridor rows; every sloppy-family assembly
+statistic in the pooled study came from sloppy-held games. The
+pooled derivation generalized held-out sloppy-held corridor
+structure onto dev sloppy; dev evidence never licensed any sloppy
+pricing, and the probe's info-walls show the terms' argmax moves
+MOST eagerly exactly there (37-86 of 196 sloppy tail rows at the
+tested prices) — maximal appetite, zero evidence. The -4/20 is
+what that unlicensed generalization bought.
+
+THE a13 ATTEMPT, PRICED: one league day carried the default
+a12 -> a13 -> a14. What stands from it: the appr18 pin as a
+benchmark table (held-out 11/40, overall 19/70 at pinned seeds,
+its addendum naming what it is not); the zach +3/20 independent
+observation, now explicitly a regularity WITHOUT a derivable
+mechanism (zach's own dev census rows show no distance
+separation); ring30's squat 2/10 existence result; and the
+clean-room instruments and funnel precedent under dev-clean/.
+What it cost: a pinned league, four validation cells, and this
+session's derivation spent to establish that the pooled study's
+gradients were substantially held-out-family regularities; a
+gate constant and thresholds that dev evidence does not produce
+(k_dev 4 vs shipped 5, V 12 vs shipped 18); and a default
+flip-flop inside one day. The provenance property is restored:
+the a14 default's eval derivation chain (a12's) predates every
+held-out study artifact, so the current default once again
+contains no held-out-informed constant.
+
+OPEN CELLS, named at the tested width:
+
+- Held-out s200: VIRGIN, preserved deliberately. The next
+  candidate that survives a clean funnel decides its default
+  there under the already-declared read.
+- STRIPPED_MEN stays 5 in code: dev evidence fits 4, but the
+  constant only matters on flag-armed paths, and changing armed
+  semantics without arm evidence at the new gate would be a new
+  experiment smuggled into a revert. Any future proximity
+  mandate refits it from its own corpus.
+- The dev probe's V=12 rung was never armed and is NOT a
+  candidate — the term it prices failed stage 1 on dev content.
+  It is the honest record of where dev walls put one-ply
+  visibility, nothing more.
+- halfmove_clock (corridor 2.5 vs tail 17, the sharpest dev
+  separation) and flight_open (0.0 vs 1.5 mean) remain named
+  non-candidates: consequence-shaped signatures of structure the
+  eval already prices. A clock-gradient or flight-place
+  experiment is a different mandate.
+- The a13 entry's squat-recovery arm survives as an open cell,
+  now under a12 defaults.
+
+THE QUEUE, as the honest-failure branch declared: corpus growth
+(user-side — the only full cure for family-content exposure) and
+the forcing-certifier league arm. The clean room's method —
+declare inputs, funnel, and reads before any number exists;
+amend only in the open with both verdicts kept — is the standing
+template for whatever candidate next claims a default.

@@ -660,18 +660,18 @@ def test_eval_proximity() -> None:
     )
     zero = EvalParams()
     defaults = ModelEngine(make_model("sloppy")).eval_params
-    zeroed = ModelEngine(
-        make_model("sloppy"), eval_king_approach=0
+    armed18 = ModelEngine(
+        make_model("sloppy"), eval_king_approach=18
     ).eval_params
     check(
-        "eval: all-zero params are the a12 eval; a13 arms approach 18",
+        "eval: all-zero params are the a12 eval; a14 defaults disarm",
         all(
             evaluate(b, c, zero) == evaluate(b, c)
             for b in boards for c in (chess.WHITE, chess.BLACK)
         )
-        and defaults == EvalParams(king_approach=18)
-        and zeroed is None,
-        f"defaults={defaults}; explicit zeros -> {zeroed}",
+        and defaults is None
+        and armed18 == EvalParams(king_approach=18),
+        f"defaults={defaults}; explicit 18 -> {armed18}",
     )
 
     # Their menu holds exactly one checking reply (d6-d5+): the bonus

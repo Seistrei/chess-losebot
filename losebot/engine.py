@@ -91,7 +91,7 @@ class ModelEngine:
         infer: str = "map",
         eval_check_menu: int = 0,
         eval_ring_donation: int = 0,
-        eval_king_approach: int = 18,
+        eval_king_approach: int = 0,
     ):
         if infer not in ("off", "map", "mix"):
             raise ValueError(f"infer must be off/map/mix, got {infer!r}")
