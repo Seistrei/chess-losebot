@@ -3227,8 +3227,10 @@ NOT. The census read all 70 pinned games — 3,918 of its 7,076
 steering decisions are held-out-family positions — and the static
 price probe's wall set included squat-held tails and every family's
 corridors, so the feature DEFINITIONS, the stripped GATE ("the
-region every certificate lived in": 14 of those 22 certs are
-held-out games), and the approach thresholds {18, 36} were informed
+region every certificate lived in": 12 of those 22 certs are
+held-out games [second review round: "14" stood here first —
+miscounted; the majority framing survives the correction]), and
+the approach thresholds {18, 36} were informed
 by the same forty (family, seed) opponents the ship gate then
 re-ran. The brief mandated studying the pinned trophies (six of ten
 are held-out games) AND forbade deriving constants from held-out
@@ -3324,7 +3326,9 @@ the declaration.
   the census read all 70 pinned games (3,918 of 7,076 steering
   decisions are held-out positions), the price probe's wall set
   included squat-held tails, the stripped gate was fitted to a cert
-  population that is 14/22 held-out games, and the approach
+  population that is 12/22 held-out (12/21 in the census's own
+  subcap-native rows) [second review round: both spots first said
+  14/22 — miscounted], and the approach
   thresholds came off that probe — then the same forty (family,
   seed) opponents scored the ship gate. The brief both mandated
   studying the pinned trophies (six of ten held-out) and forbade
@@ -3406,9 +3410,13 @@ THE PRE-DECLARED READS, APPLIED WITHOUT ADJUSTMENT:
   DECLARED READ THE GENERALIZATION CLAIM IS WITHDRAWN ENTIRELY.
   The 11/40 is a benchmark-board result at its pinned seeds, full
   stop; at seeds the study never saw, a13 does not beat a12 on
-  the held-out families. The 6-point held-out gap at pinned seeds
-  against a 1-point deficit at fresh seeds is the size of the
-  study-exposure-plus-seed effect, and it is most of the gap.
+  the held-out families. The five-conversion gain at
+  pinned seeds REVERSES to a one-conversion deficit at fresh seeds
+  — a six-conversion CROSS-SEED SWING [second review round: this
+  sentence first called the pinned gap itself "6-point"; five is
+  the gap, six is the swing between the two deltas] — and that
+  swing is the JOINT size of study exposure and seed-by-config
+  interaction; this design cannot split the two.
 
 WHAT REPLICATES ACROSS EVERY UNTOUCHED BLOCK, stated at face
 value: the ZACH gain — 5/10 at s100 and 5/10 at s200 against the
@@ -3433,8 +3441,15 @@ seeds under the pre-declared rule), one replicated family gain
 -4/20 independent), and independent totals of 19/100 vs 21/100 —
 inside the ±2-per-60 weather band the a12 session measured, so
 the honest one-line summary is "a13 ~ a12 off the benchmark,
-a13 >> a12 on it, and the on-benchmark gap is substantially
-study exposure." The NEXT SESSION INHERITS the default
+a13 >> a12 on it, and the on-benchmark gap is CONSISTENT WITH
+study exposure and/or seed-by-config interaction." [Second review
+round: "substantially study exposure" stood here first — but
+fresh seeds keep the same opponent families, so they cannot
+separate exposure from ordinary seed-by-config interaction, and
+the project's own depth-4 arc produced same-size cross-seed
+swings (+6 dev at s0, -5 at s100) with NO exposure story at all.
+Only the dev-only clean-room re-derivation can isolate the
+exposure component.] The NEXT SESSION INHERITS the default
 reconsideration with this table, as declared; the clean path to
 an untainted candidate is a dev-only re-derivation (features,
 gate, and prices from dev artifacts alone) gated on a
@@ -3443,3 +3458,41 @@ config derivation never read held-out game content; appr18
 stands as the benchmark table with this addendum as its
 footnote. Validation reports and their forced PGNs tracked under
 games/league/val-*/.
+
+## Second review round on the a13 arc: a miscount, a gap that was a swing, and a cause the design cannot name (2026-07-27)
+
+Three items from outside review, all three accepted. Log-only: no
+code, no behavior, no verdict moves — every correction lands
+inside claims whose conclusions survive it, which is exactly why
+they were worth fixing precisely. Edits in place, each marked
+"[second review round]"; this entry is the index.
+
+- TWELVE, NOT FOURTEEN: both statements of the held-out share of
+  the certificate population said 14/22; the trophy ledger counts
+  12/22 held-out (dev 10: zach_g02 2, zach_g03 3, zach_g05 3,
+  squat_g09 2), and the census's subcap-native rows count 12/21
+  (squat_g09's diverged game carries 1). The P1 majority framing
+  survives — 12 of 22 is still most — but the number was wrong in
+  both places it appeared.
+- FIVE IS THE GAP, SIX IS THE SWING: the addendum called the
+  pinned-seed held-out gap "6-point"; it is 11-6 = +5, and six is
+  the swing between +5 pinned and -1 fresh. Now stated as: the
+  five-conversion gain reverses to a one-conversion deficit, a
+  six-conversion cross-seed swing.
+- THE DESIGN CANNOT NAME THE CAUSE: the one-line summary
+  attributed the on-benchmark gap "substantially" to study
+  exposure, but fresh seeds keep the same opponent families, so
+  the cells separate NOTHING between exposure and ordinary
+  seed-by-config interaction — and the depth-4 arc already
+  produced same-size cross-seed swings with no exposure story.
+  Reworded to "consistent with exposure and/or seed-by-config
+  interaction"; the dev-only clean-room re-derivation is the
+  instrument that could isolate exposure, and it stays the named
+  next path.
+
+The round's shape, continuous with the six instances before it:
+each error made the corrected claim SOUND stronger than its
+evidence — a bigger held-out share, a bigger pinned gap, a named
+cause. The corrections all point the same direction: the a13
+story is exactly as strong as the addendum's tables, and no
+stronger.
