@@ -3496,3 +3496,169 @@ evidence — a bigger held-out share, a bigger pinned gap, a named
 cause. The corrections all point the same direction: the a13
 story is exactly as strong as the addendum's tables, and no
 stronger.
+
+## The clean room: inputs, funnel, and the decision read, declared before a single dev row is computed (2026-07-27)
+
+This session is the inherited default reconsideration, and this
+entry is its declaration IN FULL — written and committed before any
+dev-only table exists. The P1 stands as owned: the a13 feature
+definitions, gate, and thresholds were informed by held-out game
+content (census 3,918/7,076 held-out decisions, probe walls
+including squat-held tails, gate fitted on a 12/22-held-out cert
+population, thresholds {18,36} off that probe). The cure declared
+there runs here: a dev-only re-derivation of features, gate, and
+prices, and a default decided on a cell no study has ever touched.
+Everything not on the INPUTS list is banned from every script
+input, aggregate, threshold choice, and gate constant. The funnel
+and the decision read are mechanical on purpose: a reviewer should
+be able to re-run both from this entry alone and land on the same
+candidate and the same default.
+
+THE INPUTS, exhaustively — dev-family content only:
+
+1. The 30 dev PGNs of the shipped a12 pin:
+   games/league/subcap-75k/{zach,sloppy,squat}_g00..g09 (the
+   census corpus; 4 forced — zach_g02/g03/g05, squat_g09).
+2. Dev cert plies: dev-plumb/trophy-certs-subcap75k.json FILTERED
+   BY GAME NAME to those four dev games (each game's certs were
+   re-derived from that game's own PGN by the probe ladder — per-
+   game dev provenance). Lands as dev-clean/trophy-certs-dev.json.
+3. Armed dev draws for the sloppy mechanism read:
+   dev-plumb-k3-appr18/sloppy_g00,g03 (stalemate-us), g01,g06
+   (fifty-move); the appr18 pin's dev sloppy draws; val-dev-
+   s200-appr18 sloppy games if contrast is needed. All dev-family.
+4. Arm-stage evidence, existing reports only (all dev-family by
+   construction): dev-plumb-k1-check45 5/30, -k2-ring30 5/30,
+   -k3-appr18 8/30, -k3-appr36 4/30 (s0; base 4/30 = the subcap-75k
+   dev rows); dev-plumb-ab-k1-s100 10/30, -ab-k2-s100 5/30,
+   -ab-k3-appr18-s100 9/30, dev-ab75-base-s100 10/30 (s100);
+   val-dev-s200-base 6/30, val-dev-s200-appr18 6/30 (s200).
+5. Eval-constant arithmetic from losebot/evaluate.py (code, not
+   games): check_menu 45 = MATING_MOVE_BONUS 90 / 2; ring_donation
+   30 = OUR_MAN_VALUE 25 + 5. These two prices are arithmetic-
+   derived and stay fixed; only king_approach's price was probe-
+   derived and only it gets re-priced.
+
+BANNED, named: every sloppy-held/human-held/squat-held/random PGN,
+position, tail, cert, or statistic; the pooled dev-plumb JSONs
+(feature-study-subcap75k.json, price-probe.json — they contain
+held-out rows and are superseded here by dev-clean regenerations);
+the appr18 pin's held-out rows; every val-held-* artifact. The
+held-out s100/s0 tables stay what they are — the a13 arc's verdict
+— and enter nothing here.
+
+THE INSTRUMENTS (games/league/dev-clean/, persisted next to their
+artifacts per the instrument rule): feature_study_dev.py — the
+census fork with a STRUCTURAL whitelist (only zach/sloppy/squat
+stems are globbed, an assert refuses any other family, the exact
+30-file list lands in the output JSON); price_probe_dev.py — reads
+only the dev census JSON; gate_fit_dev.py — dev cert/corridor gate
+coverage; the certs filter. Bucket conventions unchanged
+(CORRIDOR_PLIES 12, TAIL_PLIES 40 — the reach sweep's own).
+
+THE FUNNEL, pre-committed and mechanical:
+
+1. CENSUS DIRECTION TEST, dev rows only. A shipped term stays a
+   candidate iff its feature separates corridor-vs-tail in the
+   direction its price points: check_menu — corridor check-supply
+   rate (their_checks>0) > tail rate; ring_donation — corridor
+   ring-donation rate > tail rate; king_approach — corridor median
+   range_dist < tail median. Direction only; magnitude is the
+   probe's and the arms' job.
+2. STATIC PROBE BARS, dev positions only. Bar wall set = squat +
+   zach dev tails (the recoverable-wall mirror of the original's
+   choice, minus its held-out member); sloppy tails measured and
+   reported alongside but outside the bar (spent-material walls —
+   and the sloppy mechanism read below owns that story). Ladder:
+   king_approach {6,9,12,18,24,36}; check_menu 45; ring_donation
+   30; combo 45/30/18 informational. VISIBILITY bar: >= 5% of bar-
+   wall argmaxes move at the tested price — a term that cannot
+   reprice 1 stalled decision in 20 cannot plausibly bend a
+   depth-3 trajectory. CORRIDOR GUARD: against off, played-move
+   top1 rate may drop at most 0.05 and median rank may rise at
+   most 1 — a term that demotes the known-good device moves is
+   fighting what it exists to serve. king_approach's candidate
+   rung V = the smallest ladder rung passing both bars.
+3. GATE REFIT, dev evidence only. Family fixed at the shipped
+   shape: pieces==0 OR men<=k. k_dev = smallest k giving 100%
+   dev-cert coverage AND >=95% dev-corridor coverage; if the
+   pieces==0 branch alone covers all dev certs and >=95% of dev
+   corridors, the men-branch is UNSUPPORTED by dev evidence and
+   the candidate gate is pieces==0 alone. k_dev != 5 means the
+   candidate differs from a13 even at an unchanged price, and the
+   decision cell gets its third side.
+4. ARM STANDARD. Configs with existing arm data reuse it — no
+   re-rolling. The independence read: all non-s0 dev blocks the
+   config has, pooled, Delta vs base per 30 games >= -1 passes
+   (the a12 session's measured weather band, +-2 per 60); s0
+   NEVER enters an independence read (the P2 lesson). A config
+   with no existing data runs the house path: s0 arm (gain vs
+   4/30 to continue — dead configs stop there), then s100 A/B
+   (Delta >= -1 vs 10/30 passes). Existing independent blocks,
+   fixed now: appr18 15/60 vs 16/60 (-0.5/30); check45 10/30 vs
+   10/30 (0); ring30 5/30 vs 10/30 (-5, dead on arrival).
+5. THE SELECTOR. Among funnel survivors: highest independent
+   Delta per 30; tie -> higher bar-wall argmax rate at its price;
+   tie -> fewer armed knobs, then lower price. Survivor count
+   zero = NO CANDIDATE. A non-shipped census feature may enter
+   only if it separates at least as sharply as the sharpest
+   shipped-term feature on the dev table; it then takes the full
+   new-config path (arithmetic price from eval constants, probe
+   bars, s0 arm, s100 A/B) or is logged as an open cell.
+
+All four outputs are honest: the funnel may re-land approach 18,
+land a different rung or gate, promote a different term, or
+produce nothing. Whichever lands is reported at face value.
+
+THE SLOPPY MECHANISM READ (runs regardless of candidate): the
+armed self-draw signature — st-us/fifty replacing max-plies, the
+replicated -4/20 independent cost — gets its mechanism read from
+the input-3 games via corridor_report.py, against a base sloppy
+max-plies wall for contrast. If the dev-only census prices sloppy
+structure differently than the pooled census did, the difference
+and its reason get stated.
+
+THE DECISION CELL, pre-committed in full before anything runs:
+
+- SIDES, at the decision code state (current a13 source, no code
+  changes before the cell): val-held-s200-a12 = league --families
+  held --games 10 --seed0 200 --max-plies 240 --eval-king-approach
+  0 (the byte-verified a12 path); val-held-s200-<candidate> = the
+  candidate's flags; val-held-s200-a13 (defaults, approach 18)
+  ONLY if the candidate differs from approach-18 — and that third
+  side is INFORMATIONAL ONLY: it prices the a13 attempt on a
+  never-studied cell and cannot take the default under any score,
+  because its derivation is the thing under audit. Seed0 200 has
+  never run for held-out families (verified across every report
+  under games/league/ before this entry). 10 games per family,
+  even, seed-paired seats. Reports + forced PGNs tracked val-*
+  style. No new pinned league unless the pre-declared flip branch
+  below fires.
+- THE READ, totals AND rows, complete: score = selfmate-forced
+  count over the 40 held-out games; mercy coins, labels, and node
+  counts are REPORTED, never read. |Delta| >= 2 on totals: totals
+  decide alone. |Delta| <= 1 (inside the weather band scaled to
+  40): the texture decides — fewer zero forced-rows wins; still
+  equal, lexicographic maximin on the sorted 4-row vectors (higher
+  worst row, then second-worst, and so on); vectors identical =
+  tie. Candidate beats-or-ties a12 -> candidate becomes (or
+  confirms) the default. Candidate loses -> the default reverts to
+  --eval-king-approach 0.
+- OUTCOMES, exhaustive: (a) candidate == approach-18 and it wins
+  or ties -> the a13 default is CONFIRMED with clean provenance,
+  version stays a13, no new league (the appr18 pin stands, this
+  cell its provenance note). (b) candidate != approach-18 and it
+  wins or ties -> default flips to the candidate, version a14, and
+  the session's ONE pinned league runs for the new default (all
+  seven families, standard seeds). (c) candidate loses -> default
+  reverts to king_approach 0, version a14, the revert cites the
+  standing subcap-75k pin, and byte-identity of the new defaults
+  vs the baked a12 image is re-verified (4 protocol games) before
+  the equivalence is claimed. (d) NO candidate from the funnel ->
+  revert exactly as (c) WITHOUT spending the cell — held-out s200
+  stays virgin for a future candidate that earns it. In (c) and
+  (d) the a13 attempt is priced in-log as the cost of deriving
+  from consumed content.
+- Suite 77/77 at every code state; any default flip re-runs it
+  plus the byte-identity protocol before the version claim lands.
+  Commits stay local for user review.
