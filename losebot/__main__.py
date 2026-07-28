@@ -159,6 +159,21 @@ def _add_engine_args(parser: argparse.ArgumentParser) -> None:
         "re-derived from dev-only content (clean-room revert, "
         "2026-07-27)",
     )
+    parser.add_argument(
+        "--plan-steer", type=int, default=0,
+        help="device-plan layer price (0 disables — the default, "
+        "byte-identical to the planless engine). In the stripped "
+        "region the engine proposes concrete mate DEVICES from "
+        "dev-derived templates (pawn-strike, pawn-push, "
+        "promotion-tomb, recapture-box), validates each terminal "
+        "with the oracle's own AND-node at n<=2 before aiming "
+        "(certify-or-don't-aim), and the leaf eval then prices "
+        "distance-to-ASSIGNMENT — our king to ITS validated square, "
+        "box men to THEIRS — at this price per square (box men at "
+        "half). The donation target is priced only once king and box "
+        "stand assembled: donations pay only where boxes are built. "
+        "Declared rungs 24 and 48 (2026-07-27 device-plan entry)",
+    )
 
 
 def _build_engine(args) -> ModelEngine:
@@ -185,6 +200,7 @@ def _build_engine(args) -> ModelEngine:
         eval_check_menu=args.eval_check_menu,
         eval_ring_donation=args.eval_ring_donation,
         eval_king_approach=args.eval_king_approach,
+        plan_steer=args.plan_steer,
     )
 
 
@@ -278,6 +294,7 @@ def _cmd_league(args) -> int:
             "eval_check_menu": args.eval_check_menu,
             "eval_ring_donation": args.eval_ring_donation,
             "eval_king_approach": args.eval_king_approach,
+            "plan_steer": args.plan_steer,
         }
         if args.infer != "off":
             # Persist the exact posterior, not aliases whose parameter

@@ -222,6 +222,32 @@ def selfmate_in(board: chess.Board, n: int, budget,
     return move if status is ProofStatus.PROVEN else None
 
 
+def forced_after_status(board: chess.Board, n: int, budget,
+                        memo=None) -> ProofStatus:
+    """Public AND-node entry: THEM to move; PROVEN iff every legal
+    reply mates us now or is forced to lose within n-1 further own
+    moves.
+
+    This is the exact node the exhaustive prover walks one ply below
+    a certificate, exposed for the device-plan layer's hypothetical
+    P* validation (2026-07-27 declaration): a position one legal
+    our-move away from a PROVEN board here is a position
+    ``selfmate_status`` certifies at the same n, with that move as
+    the proving move. Same machinery, same draw-aware memo keys; the
+    history walk starts at ``board`` itself, which for a synthetic
+    P* (fresh board, clock zero) makes the proof geometry-pure —
+    the caller owns that caveat.
+    """
+    if memo is None:
+        memo = {}
+    if board.is_checkmate() or board.is_stalemate() or _probe_draw(board):
+        # An ended position holds no net — and a vacuous AND over an
+        # empty reply set must not read as one.
+        return ProofStatus.DISPROVEN
+    history = _history_counts(board)
+    return _forced_after(board, n, budget, memo, history)
+
+
 # --- The forcing-restricted certifier: sound, incomplete, deep -------
 #
 # The exhaustive prover above pays ~33x per rung, and the 2026-07-24

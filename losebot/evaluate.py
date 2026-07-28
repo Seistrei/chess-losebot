@@ -117,12 +117,19 @@ class EvalParams:
 
 
 def evaluate(board: chess.Board, us: chess.Color,
-             params: EvalParams | None = None) -> float:
+             params: EvalParams | None = None, plan=None) -> float:
     """Score the position for the player trying to get mated.
 
     ``params`` carries the proximity prices; None is the pre-plumbing
     eval, bit for bit — the engine passes None whenever every price
     is zero, so knob-off runs stay on the historical code path.
+
+    ``plan`` is an adopted device-plan instantiation (losebot.plan
+    PlanState) or None. With a plan the leaf additionally prices
+    distance-to-ASSIGNMENT — our king to ITS validated target square,
+    box men to THEIRS — the destination-shaped gradient the 2026-07-27
+    declaration built where king_approach had only a direction. None
+    (the default, and every plan-off run) adds nothing.
     """
     them = not us
     check_menu = params.check_menu if params is not None else 0
@@ -237,6 +244,12 @@ def evaluate(board: chess.Board, us: chess.Color,
                 v -= params.king_approach * min(
                     chess.square_distance(our_king, t) for t in targets
                 )
+
+    # Device-plan steering (default-off; the 2026-07-27 declaration).
+    # A destination, not a direction: the plan's targets were oracle-
+    # validated as a certifiable net before anything was priced here.
+    if plan is not None:
+        v += plan.leaf_delta(board, us)
 
     # We fear the draw clock; they do not.
     v -= CLOCK_PRESSURE * board.halfmove_clock

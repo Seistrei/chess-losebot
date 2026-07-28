@@ -60,6 +60,7 @@ def best_move(
     forced_ext: int = 0,
     node_cap: int = 0,
     eval_params=None,
+    plan=None,
 ) -> tuple[chess.Move | None, float, SearchStats]:
     """Pick our move by expectimax. ``root_moves`` restricts the root
     (the engine's misère-safety partition); None means all legal.
@@ -124,7 +125,7 @@ def best_move(
         board.push(move)
         value = _node_value(
             board, us, model, depth - 1, 1, topk, coverage, draw_contempt,
-            stats, probe, forced_ext, limit, eval_params,
+            stats, probe, forced_ext, limit, eval_params, plan,
         )
         board.pop()
         stats.root_values.append((move, value))
@@ -235,6 +236,7 @@ def _node_value(
     ext_left: int = 0,
     node_limit: int | None = None,
     eval_params=None,
+    plan=None,
 ) -> float:
     stats.nodes += 1
     if board.is_checkmate():
@@ -272,10 +274,10 @@ def _node_value(
         # overspent — never the branches walked after it.
         stats.clamped += 1
         stats.leaves += 1
-        return evaluate(board, us, eval_params)
+        return evaluate(board, us, eval_params, plan)
     if depth <= 0 and not extended:
         stats.leaves += 1
-        return evaluate(board, us, eval_params)
+        return evaluate(board, us, eval_params, plan)
     if board.turn == us:
         value = -float("inf")
         for move in board.legal_moves:
@@ -283,6 +285,7 @@ def _node_value(
             child = _node_value(
                 board, us, model, child_depth, ply + 1, topk, coverage,
                 contempt, stats, probe, child_ext, node_limit, eval_params,
+                plan,
             )
             board.pop()
             if child > value:
@@ -301,7 +304,7 @@ def _node_value(
         board.push(move)
         child = _node_value(
             board, us, model, child_depth, ply + 1, topk, coverage, contempt,
-            stats, probe, child_ext, node_limit, eval_params,
+            stats, probe, child_ext, node_limit, eval_params, plan,
         )
         board.pop()
         value += prob * child

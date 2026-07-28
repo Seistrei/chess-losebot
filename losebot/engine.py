@@ -58,7 +58,7 @@ from __future__ import annotations
 
 import chess
 
-from . import oracle
+from . import oracle, plan as device_plan
 from .evaluate import EvalParams
 from .models.base import OpponentModel
 from .models.posterior import HypothesisPosterior
@@ -92,6 +92,7 @@ class ModelEngine:
         eval_check_menu: int = 0,
         eval_ring_donation: int = 0,
         eval_king_approach: int = 0,
+        plan_steer: int = 0,
     ):
         if infer not in ("off", "map", "mix"):
             raise ValueError(f"infer must be off/map/mix, got {infer!r}")
@@ -118,6 +119,14 @@ class ModelEngine:
         self.eval_check_menu = eval_check_menu
         self.eval_ring_donation = eval_ring_donation
         self.eval_king_approach = eval_king_approach
+        self.plan_steer = plan_steer
+        # Device-plan state (2026-07-27 declaration): one live plan at
+        # most, adopted only on an oracle-PROVEN P*, re-validated on
+        # any their-footprint change, replaced only on death. All of
+        # it inert at plan_steer 0 — the a14 path byte for byte.
+        self._plan: device_plan.PlanState | None = None
+        self._plan_region_was = False
+        self._plan_footprint: dict | None = None
         # None when every proximity price is zero: the search then
         # runs the shipped eval on its unchanged fast path, and the
         # defaults-off identity claim is structural.
@@ -173,6 +182,14 @@ class ModelEngine:
         "deep_moves",
         "ext_nodes",
         "clamped_nodes",
+        "plans_proposed",
+        "plan_candidates",
+        "plans_adopted",
+        "plan_deaths",
+        "plan_completions",
+        "plan_cert_retires",
+        "plan_nodes",
+        "plan_active_moves",
     )
 
     def gauges(self) -> dict:
@@ -202,7 +219,21 @@ class ModelEngine:
         proven = self._probe(board, memo)
         if proven is not None:
             self.oracle_moves += 1
+            if self._plan is not None:
+                # A certificate retires the plan with honors: the
+                # oracle plays, the constructor's job is done.
+                self.plan_cert_retires += 1
+                self._plan = None
             return proven
+
+        if self.plan_steer:
+            self._plan_tick(board)
+        if self._plan is not None:
+            self.plan_active_moves += 1
+            if not self._plan.completed and self._plan.assembly_complete(
+                    board, board.turn):
+                self._plan.completed = True
+                self.plan_completions += 1
 
         pool = self._safe_pool(board, legal)
         depth, topk = self.depth, self.topk
@@ -227,6 +258,7 @@ class ModelEngine:
             forced_ext=self.forced_ext,
             node_cap=self.node_cap,
             eval_params=self.eval_params,
+            plan=self._plan,
         )
         self.search_nodes += stats.nodes
         self.ext_nodes += stats.extensions
@@ -273,6 +305,122 @@ class ModelEngine:
                 self.posterior.observe(self._shadow, move)
             self._shadow.push(move)
         self._observed_plies = len(stack)
+
+    def _plan_region(self, board: chess.Board) -> bool:
+        """Where plans live: the union of two existing gates, no new
+        constant — their pieces gone (king+pawns of any count, the
+        squat shape and the deep gate's second branch) OR their
+        non-king men at most ``sub_probe_men`` (the sub-probe gate's
+        own region, where every certificate has ever lived)."""
+        them_occ = board.occupied_co[not board.turn]
+        if not (them_occ & ~board.pawns & ~board.kings):
+            return True
+        return chess.popcount(them_occ) - 1 <= self.sub_probe_men
+
+    def _plan_tick(self, board: chess.Board) -> None:
+        """Plan lifecycle, once per decision: cheap invariants, then
+        re-validation only on their-footprint drift, proposal only on
+        region entry, plan death, or planless footprint change — the
+        declared cadence, nothing per-move."""
+        us = board.turn
+        if not self._plan_region(board):
+            self._plan_region_was = False
+            return
+        entered = not self._plan_region_was
+        self._plan_region_was = True
+        footprint = device_plan.their_footprint(board, not us)
+        died = False
+        if self._plan is not None and footprint != self._plan.their_map:
+            if self._revalidate(board, us, footprint):
+                self._plan.their_map = footprint
+            else:
+                self.plan_deaths += 1
+                self._plan = None
+                died = True
+        if self._plan is None and (
+                entered or died or footprint != self._plan_footprint):
+            self._propose(board, us, footprint)
+            self._plan_footprint = footprint
+
+    def _revalidate(self, board: chess.Board, us: chess.Color,
+                    footprint: dict) -> bool:
+        """Does the adopted terminal still verify against their moved
+        men? Refuted = death; PROVEN or budget-truncated UNKNOWN keeps
+        it (UNKNOWN is not DISPROVEN — the prover's own ethic)."""
+        plan_state = self._plan
+        placements = self._plan_placements(board, us, plan_state)
+        if placements is None:
+            return False
+        budget = [device_plan.VALIDATE_BUDGET]
+        proven_n, status = device_plan.validate(
+            board, us, placements, plan_state.king_target, budget
+        )
+        self.plan_nodes += device_plan.VALIDATE_BUDGET - budget[0]
+        if proven_n is not None:
+            plan_state.validated_n = proven_n
+            return True
+        return status is oracle.ProofStatus.UNKNOWN
+
+    def _plan_placements(self, board: chess.Board, us: chess.Color,
+                         plan_state) -> tuple | None:
+        """Re-resolve the adopted assignments against current men:
+        nearest eligible man per target, greedy and deterministic.
+        None when a target has no surviving eligible man — material
+        for the device is gone and the plan cannot verify."""
+        used: set[int] = set()
+        placements: list[tuple[int, int]] = []
+        targets = list(plan_state.box)
+        if plan_state.donation is not None:
+            targets.append(plan_state.donation)
+        for assignment in targets:
+            best = None
+            for square, piece in sorted(board.piece_map().items()):
+                if (piece.color != us or piece.piece_type == chess.KING
+                        or square in used):
+                    continue
+                if not device_plan._man_eligible(
+                        piece, square, assignment.square, us,
+                        assignment.types):
+                    continue
+                dist = chess.square_distance(square, assignment.square)
+                if best is None or dist < best[0]:
+                    best = (dist, square)
+            if best is None:
+                return None
+            used.add(best[1])
+            placements.append((best[1], assignment.square))
+        return tuple(placements)
+
+    def _propose(self, board: chess.Board, us: chess.Color,
+                 footprint: dict) -> None:
+        """One proposal event: enumerate, rank, validate in order,
+        adopt the first PROVEN candidate. At most MAX_VALIDATIONS
+        AND-checks, each on its own VALIDATE_BUDGET."""
+        self.plans_proposed += 1
+        candidates = device_plan.generate_candidates(board, us)
+        self.plan_candidates += len(candidates)
+        for candidate in candidates[:device_plan.MAX_VALIDATIONS]:
+            budget = [device_plan.VALIDATE_BUDGET]
+            proven_n, _status = device_plan.validate(
+                board, us, candidate.placements, candidate.king_target,
+                budget,
+            )
+            self.plan_nodes += device_plan.VALIDATE_BUDGET - budget[0]
+            if proven_n is None:
+                continue
+            self._plan = device_plan.PlanState(
+                template=candidate.template,
+                king_target=candidate.king_target,
+                donation=candidate.donation,
+                executioner=candidate.executioner,
+                box=candidate.box,
+                king_price=self.plan_steer,
+                box_price=self.plan_steer // device_plan.BOX_PRICE_DIVISOR,
+                validated_n=proven_n,
+                their_map=footprint,
+            )
+            self.plans_adopted += 1
+            return
 
     def _deep_position(self, board: chess.Board) -> bool:
         """The deep-depth gate: is the opponent stripped enough?

@@ -99,6 +99,13 @@ DECLINE_FIXTURE_2 = "n7/6k1/5N2/8/8/8/8/K7 b - - 0 1"
 XRAY_FEN = "b6k/8/2B5/3q4/8/8/8/6K1 w - - 0 1"
 PIN_FEN = "6k1/6b1/5n2/3N4/8/8/8/1K4R1 w - - 0 1"
 
+# Device-plan fixtures (2026-07-27/28 declaration). G09_PLAN: the
+# squat_g09 pre-terminal decision (SAN ply 88, the n=1 cert position's
+# board one our-move earlier) — the proposer must find the game's own
+# device: pawn-strike, executioner f5, king f7, donation g6. The
+# HEAVY fixture (their six men with pieces) shuts the plan region.
+G09_PLAN_FIXTURE = "4nbnr/4pkpp/3p1pq1/2pP1P1P/2p5/8/4r3/5b1K b - - 0 44"
+
 _RESULTS: list[bool] = []
 
 
@@ -733,6 +740,125 @@ def test_eval_proximity() -> None:
         "eval: gated proximity terms are inert outside the strip",
         evaluate(heavy, chess.WHITE, armed) == evaluate(heavy, chess.WHITE),
         "their_men=6 with pieces: armed == shipped",
+    )
+
+
+def test_device_plan() -> None:
+    """The device-plan layer: off is byte-inert, on it proposes only
+    what the oracle certifies, prices distance-to-assignment, gates
+    donations on completion, and dies on refutation."""
+    from . import plan as device_plan
+
+    board = chess.Board(G09_PLAN_FIXTURE)
+    us = board.turn
+
+    # Defaults: knob 0, no state, and a full decision on a plan-region
+    # board moves no plan gauge (the cert fires here; retire-with-
+    # honors must also stay silent with no plan to retire).
+    engine = ModelEngine(make_model("sloppy"))
+    move = engine.choose_move(board.copy(stack=False))
+    check(
+        "plan: defaults are off and inert",
+        engine.plan_steer == 0 and engine._plan is None
+        and all(getattr(engine, g) == 0 for g in engine.GAUGES
+                if g.startswith("plan"))
+        and move is not None,
+        f"plan_steer={engine.plan_steer}",
+    )
+
+    # The proposer, pointed at the squat_g09 pre-terminal position,
+    # must adopt the game's actual device: the trophy is the fixture.
+    candidates = device_plan.generate_candidates(board, us)
+    adopted = None
+    for candidate in candidates[:device_plan.MAX_VALIDATIONS]:
+        budget = [device_plan.VALIDATE_BUDGET]
+        proven_n, _status = device_plan.validate(
+            board, us, candidate.placements, candidate.king_target, budget
+        )
+        if proven_n is not None:
+            adopted = (candidate, proven_n)
+            break
+    check(
+        "plan: proposer re-derives the squat_g09 device",
+        adopted is not None
+        and adopted[0].template == "pawn-strike"
+        and adopted[0].king_target == chess.F7
+        and adopted[0].donation is not None
+        and adopted[0].donation.square == chess.G6
+        and adopted[1] == 1,
+        "none" if adopted is None else
+        f"{adopted[0].template} K={chess.square_name(adopted[0].king_target)}"
+        f" n={adopted[1]}",
+    )
+
+    # Leaf arithmetic on a hand fixture: king 2 from its target, the
+    # box rook 5 from f1 — then the assembled twin, where completion
+    # un-gates the donation term (queen 2 from h2).
+    plan_state = device_plan.PlanState(
+        template="pawn-strike", king_target=chess.G1,
+        donation=device_plan.Assignment(chess.H2, (chess.QUEEN,)),
+        executioner=chess.A8, box=(
+            device_plan.Assignment(chess.F1, (chess.ROOK,)),
+        ),
+        king_price=24, box_price=12, validated_n=1,
+    )
+    apart = chess.Board("k7/8/8/8/7Q/8/8/R3K3 w - - 0 1")
+    together = chess.Board("k7/8/8/8/7Q/8/8/5RK1 w - - 0 1")
+    delta_apart = plan_state.leaf_delta(apart, chess.WHITE)
+    delta_together = plan_state.leaf_delta(together, chess.WHITE)
+    check(
+        "plan: leaf prices distance-to-assignment, donation gated",
+        delta_apart == -(24 * 2 + 12 * 5)
+        and delta_together == -(12 * 2)
+        and not plan_state.assembly_complete(apart, chess.WHITE)
+        and plan_state.assembly_complete(together, chess.WHITE),
+        f"apart={delta_apart:.0f} want -108; "
+        f"together={delta_together:.0f} want -24",
+    )
+
+    # Armed engine adopts on the fixture (plan tick, not choose_move —
+    # the root cert would fire first here and that path is checked
+    # below); the region gate stays shut on a middlegame board.
+    armed = ModelEngine(make_model("sloppy"), plan_steer=24)
+    armed._plan_tick(board)
+    adopted_live = armed._plan
+    heavy = chess.Board("4k3/3pp3/8/2K5/8/n6n/8/r6r w - - 0 1")
+    gated = ModelEngine(make_model("sloppy"), plan_steer=24)
+    gated._plan_tick(heavy)
+    check(
+        "plan: armed tick adopts in-region, region gate holds outside",
+        adopted_live is not None
+        and adopted_live.template == "pawn-strike"
+        and armed.plans_adopted == 1 and armed.plans_proposed == 1
+        and gated.plans_proposed == 0 and gated._plan is None,
+        f"in-region adopted={adopted_live is not None}; "
+        f"middlegame proposals={gated.plans_proposed}",
+    )
+
+    # Footprint drift that eats the donation man = death (the plan's
+    # queen is gone, placement resolution fails), and the re-proposal
+    # happens in the same tick. An UNKNOWN re-validation would keep
+    # the plan — refuted-or-broken kills, budget expiry does not, by
+    # the declaration's own rule.
+    drifted = chess.Board(G09_PLAN_FIXTURE)
+    drifted.remove_piece_at(chess.F5)
+    drifted.set_piece_at(chess.G6, chess.Piece(chess.PAWN, chess.WHITE))
+    armed._plan_tick(drifted)
+    check(
+        "plan: losing the donation man = death, then re-proposal",
+        armed.plan_deaths == 1 and armed.plans_proposed == 2,
+        f"deaths={armed.plan_deaths} proposed={armed.plans_proposed}",
+    )
+
+    # A root certificate retires a live plan with honors.
+    closer = ModelEngine(make_model("sloppy"), plan_steer=24)
+    closer._plan = plan_state
+    move = closer.choose_move(chess.Board(G09_PLAN_FIXTURE))
+    check(
+        "plan: certificate retires the plan",
+        closer.oracle_moves == 1 and closer.plan_cert_retires == 1
+        and closer._plan is None and move == chess.Move.from_uci("h7h6"),
+        f"move={move}",
     )
 
 
@@ -1628,6 +1754,7 @@ def run() -> int:
         test_report_rollups,
         test_evaluate_shape,
         test_eval_proximity,
+        test_device_plan,
         test_sub_probe,
         test_selective_depth,
         test_posterior,
