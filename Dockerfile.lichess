@@ -24,8 +24,13 @@ RUN tar -xzf /tmp/lichess-bot.tar.gz -C /opt \
 
 WORKDIR /opt/lichess-bot
 
-# The losebot package lives in /app (base image); make it importable here.
+# The engine packages live in /app; make them importable here. The base
+# image's baked copy is the a12 byte-identity artifact (dev-clean
+# protocol) and is deliberately never rebuilt, so CURRENT source is
+# copied over it here — this image, not the base, owns engine freshness.
 ENV PYTHONPATH=/app
+COPY losebot /app/losebot
+COPY specialists /app/specialists
 
 COPY lichess/config.yml ./config.yml
 COPY lichess/homemade.py ./homemade.py

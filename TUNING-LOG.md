@@ -4628,3 +4628,157 @@ create and our two return paths now both observe — the
 remaining as-run-arms undercount stands as already recorded.
 Defaults re-verified byte-identical against the baked a12 image
 after the fix (all four protocol games, byteid-device3/).
+
+## The bridge swap: the model engine takes the lichess seat, priced before trusted, and the corpus loop closes (2026-07-28)
+
+The lichess bridge now drives the MODEL engine. lichess/homemade.py
+is rewritten around losebot.ModelEngine at the shipped a14 defaults
+— one engine per game, the ply-rewind guard pattern (a fresh engine
+re-infers and replans from the board's own move stack; takebacks
+and instance reuse are the same non-event they were for the
+specialist), inference ON. The legacy specialist bridge is not
+gone: setting any of LOSEBOT_PROFILE / LOSEBOT_MODEL /
+LOSEBOT_DEPTH selects it, old governor and 2026-07-20 defaults
+verbatim — one env line (LOSEBOT_PROFILE=field) is the whole
+rollback, no rebuild. Bridge files only: git touches
+Dockerfile.lichess, README.md, lichess/homemade.py,
+lichess/smoke_test.py. No losebot/ or specialists/ line moved, so
+league behavior is untouched by construction — no version bump
+(2.0.0a14 stands), no byte-identity run owed, and the 85/85 suite
+ran mount-over against this exact tree at session start.
+
+THE BELIEF CHOICE, recorded: configured point prior FITTED_HUMAN
+(models/posterior.py), infer=map, everything else a14 defaults —
+plan_steer 0, eval knobs 0 — so the first corpus batch reflects
+the engine the league pins, not an experiment. Legality:
+FITTED_HUMAN is the coordinate-descent MLE over the eight
+first-party Iptychs games (768 observations, 2026-07-23), no
+held-out preset anywhere in its derivation; it is the hypothesis
+set's own point, so the posterior anchors on it exactly as the
+league's infer=map runs anchor on dev presets. The bridge enforces
+the CLI's held-out boundary verbatim (prior_for_belief at driver
+construction): LOSEBOT_BELIEF=human-held with inference on is
+refused — ERROR log plus fallback to the shipped default, because
+a live bridge must fail loud without wedging the game into
+per-move emergencies. Why fitted-human over zach or sloppy: the
+seat faces humans, the corpus point is the only belief with human
+provenance, and its mercy=.70 axis is the one that makes "will
+they actually mate us" learnable (the human-held diagnosis the
+mercy ladder was built for). Half the prior mass still spreads
+across the families (CONFIGURED_PRIOR_MASS .5), so a live
+squatter or zach-like is a few observations from repricing — on
+the smoke's plain Ruy stack the MAP already sits at
+fitted-human@.645 after four observations.
+
+THE GOVERNOR, model-engine edition — priced before trusted.
+Budget = clock + 2x increment, the standing pattern, floors
+180/60/20. The full config's per-move worst case was measured
+FIRST (the four protocol families, seed 0, 240 plies, the
+bridge's own belief config, PyPy in-image; instruments and JSONs
+in games/league/dev-bridge/):
+
+```
+tier       probe_n@cap / sub_cap / depth / node_cap
+full       4@50k / 75k / 3 / 400k     (budget >= 180s: a14 defaults)
+  zach    mean 1.70s  p90 2.86  max 6.49   ~98k nodes/s
+  sloppy  mean 0.97s  p90 1.89  max 2.75   ~126k
+  squat   mean 1.23s  p90 2.80  max 3.57   ~130k
+  random  mean 1.10s  p90 1.83  max 3.48   ~109k
+mid        4@25k / 30k / 3 / 150k     (60 <= budget < 180)
+  squat   mean 0.96s  p90 2.08  max 2.51; zach max 2.12
+low        3@10k / 10k / 2 / 60k      (20 <= budget < 60)
+  squat   max 0.24; zach max 0.41
+emergency  1@4k  / 0   / 1 / 15k      (budget < 20)
+  squat   max 0.042; zach max 0.048
+```
+
+The worst full-config move is the all-caps decision: the 6.49s
+zach move spent probe 50,000/50,000 + sub-probe 74,984/75,000 +
+search 188,541 + ext 68,028 — the caps bound it, and the
+theoretical ceiling (50k + 75k + 400k at that position's ~59k
+nodes/s, the slowest observed) is ~9s. So: full config runs
+whenever budget >= 180s (a worst-case spike is <= 5% of the
+remaining clock), and the lower tiers' cap sums put their
+measured worst cases at 2.5s / 0.4s / 0.05s — each a small
+fraction of its band's floor. probe_n stays 4 down through mid
+because iterative deepening self-regulates under the cap; the cap
+IS the budget, and shrinking it is what low clock costs (the
+record's dearest certificate is an n=3 find at 49,559 of 50,000 —
+a clamped probe_cap pays certificates first, stated plainly).
+Fixed per-MOVE budgets (correspondence passes limit.time; config
+move_time 60) run the full config at >= 30s — 4.6x margin over
+the measured worst, 3x over the ceiling — and clamp through the
+same ladder below that. The emergency tier is a survival mode and
+its validation game says so honestly: at depth 1 with no
+sub-probes the engine STALEMATED the squat kernel — the tier
+exists because under a 20s budget the alternative is losing on
+time, which forfeits the mate along with the game.
+
+THE INVARIANTS, kept and now smoke-ENFORCED (smoke_test.py, 23
+checks, runs in the image build and fails it): casual only;
+resign and draw offers disabled; abort_time 120; greetings <= 140
+chars at a 20-char username; max_days .inf; pgn_directory
+game_records/ with per-game grouping (the corpus protocol);
+matchmaking off; ExampleEngine still exported (test_bot's
+unconditional import); the lichess-bot SHA pin unchanged; the
+OAuth token nowhere but gitignored lichess/lichess.env. New
+model-bridge checks: the default driver is losebot(infer-map)
+with belief fitted-human and a live posterior; a14 defaults
+intact under a generous clock; plan/eval knobs at defaults; the
+posterior observes exactly the opponent's plies through the
+bridge (the Black-seat path separately spot-checked in-image: 2
+observations from 2 White plies); mate refusal through the real
+search(); every governor tier clamps its declared knobs, plays
+legal, and the ladder is monotone; the emergency fallback
+DEMONSTRABLY fires and lands misère-safe (the first draft's check
+was vacuous — searching a lower-ply board tripped the rewind
+guard, rebuilt the driver, and silently discarded the patched
+choose(); the check now pins raised=True — the rewind guard
+protecting a game is also a rewind guard eating a test); one env
+line restores the specialist with its old clamps (profile field,
+depth 1, cap 12,000 at the low tier).
+
+THE IMAGE. Dockerfile.lichess now COPYs current losebot/ +
+specialists/ over the inherited /app: the base losebot:latest is
+the baked-a12 byte-identity artifact (dev-clean protocol) and is
+deliberately never rebuilt — the lichess image owns engine
+freshness now. The previous live image survives as
+losebot-lichess:specialist-20260720; the rollback ladder is env
+line first, dated tag second.
+
+THE CORPUS LOOP, closed end to end. The fit CLI ran against the
+live game_records exactly as a future session will run it:
+
+```
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -v "D:\ChessLosebot\losebot:/app/losebot:ro" \
+  -v "D:\ChessLosebot\lichess\game_records:/data:ro" \
+  losebot pypy3 -m losebot fit --pgn-dir /data \
+    --focal Iptychs --start sloppy --grid fine
+```
+
+(--focal is a substring of the human's username as it appears in
+the PGN headers; fits are per-opponent — pooling across humans
+means one run per username until the CLI grows a not-LoseBotAI
+mode. ~1 min for 8 games.) Result: 8/8 games ingested, 0 skipped
+— including the aborted sNiyNb4S at exactly 1 observation — 768
+observations, converged at pass 4, endpoint the documented
+full-descent MLE to the digit: nll 1423.95 total, 1.8541/move,
+references sloppy 2.4927 / zach 2.7032 / squat 6.2496. That is
+FITTED_HUMAN's provenance block reproduced from the shipped
+pipeline on the shipped corpus: collected games flow into fitting
+with no manual surgery.
+
+WHAT DID NOT HAPPEN: no league game, no held-out anything, the
+virgin s200 cell untouched; no live experiment armed (plan_steer
+and the eval knobs ship at 0 on the bridge; arming live is a
+future mandate with its own declaration). Live games remain the
+user's call — the account holds the token; when one happens, its
+game id and outcome belong here the way the field-notes entry
+recorded the first three. The first model-engine human game is
+the next real datum: the specialist era's live discovery was that
+accepting humans punish donations; the model era's open question
+is its analog — fitted-human already prices offered material as
+taken (greed .95), but no dev family prices a human's midgame
+mate THREATS against our full army, and the posterior's mercy
+axis is the instrument that will read whether they ever cash one.

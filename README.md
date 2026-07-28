@@ -140,14 +140,17 @@ It accepts casual standard challenges at rapid (10+0) and slower,
 correspondence and unlimited included — a bot that plays to lose has no
 business in rated pools or bullet.
 
-The bridge still drives the **specialist** (`LOSEBOT_PROFILE=field
-LOSEBOT_MODEL=zach` — the donation-guarded profile the first live games
-selected; see the field notes in `specialists/TUNING-LOG.md`). The new
-engine takes over the
-bridge once it beats the specialist's held-out league rows — swapping
-is one import in `lichess/homemade.py`, and until then every live game
-keeps landing in `lichess/game_records/` as fitting data for the urge
-family.
+The bridge drives the **model engine** (`losebot.ModelEngine` at the
+league's own defaults): oracle probes for forced-selfmate certificates,
+expectimax steering against an inferred opponent belief — anchored on
+the corpus-fitted human point and updated from the opponent's observed
+moves within each game — and a clock governor that clamps the spike
+knobs as the clock shrinks (tiers in `lichess/homemade.py`). One env
+line (`LOSEBOT_PROFILE=field`) restores the legacy specialist bridge —
+the donation-guarded profile the first live games selected; see the
+field notes in `specialists/TUNING-LOG.md`. Every live game keeps
+landing in `lichess/game_records/` as corpus for the urge-family fit
+(`pypy3 -m losebot fit --pgn-dir ... --focal <human>`).
 
 One-time setup: create an OAuth token with the `bot:play` scope on the
 (already upgraded) BOT account, then
