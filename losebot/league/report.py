@@ -104,6 +104,13 @@ _LAYERS = (
     ("root_forcing", "probe_forcing_nodes", "probe_forcing_cap"),
     ("sub_probe", "sub_probe_nodes", "sub_probe_cap"),
     ("steering", "search_nodes", "node_cap"),
+    # Device-plan proposal/validation spend. Zero on every plan-off
+    # run, so the row renders only when the layer was alive; its
+    # budget is per-event (VALIDATE_BUDGET x MAX_VALIDATIONS), not a
+    # per-decision cap, so saturation is honestly null. Omitting it
+    # understated the arms' true per-decision totals (2026-07-28
+    # review round).
+    ("plan", "plan_nodes", "plan_node_cap"),
 )
 
 

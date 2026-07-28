@@ -232,6 +232,9 @@ class ModelEngine:
             self.plan_active_moves += 1
             if not self._plan.completed and self._plan.assembly_complete(
                     board, board.turn):
+                # Completion already standing at decision time (an
+                # adopted-complete plan, or one that survived their
+                # reply intact).
                 self._plan.completed = True
                 self.plan_completions += 1
 
@@ -263,7 +266,21 @@ class ModelEngine:
         self.search_nodes += stats.nodes
         self.ext_nodes += stats.extensions
         self.clamped_nodes += stats.clamped
-        return move if move is not None else pool[0]
+        chosen = move if move is not None else pool[0]
+        if self._plan is not None and not self._plan.completed:
+            # Completion is created by OUR moves (their moves can only
+            # break it), so latch it the moment the chosen move makes
+            # it true — a decision-boundary check alone misses every
+            # assembly their reply disrupts before we stand at the
+            # next decision (2026-07-28 review round).
+            us = board.turn
+            board.push(chosen)
+            completed = self._plan.assembly_complete(board, us)
+            board.pop()
+            if completed:
+                self._plan.completed = True
+                self.plan_completions += 1
+        return chosen
 
     def _current_belief(self) -> OpponentModel:
         """What steering prices this move: fixed belief, MAP, or mix."""
@@ -324,6 +341,14 @@ class ModelEngine:
         declared cadence, nothing per-move."""
         us = board.turn
         if not self._plan_region(board):
+            # The region is NOT monotone: their promotion re-arms a
+            # piece and can shut both gates at once. A plan left
+            # standing here would keep steering the leaf indefinitely
+            # with re-validation suspended — retire it as a death
+            # (2026-07-28 review round; rule (e) of the lifecycle).
+            if self._plan is not None:
+                self.plan_deaths += 1
+                self._plan = None
             self._plan_region_was = False
             return
         entered = not self._plan_region_was

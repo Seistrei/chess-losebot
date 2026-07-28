@@ -4378,10 +4378,20 @@ THE ARMS (dev families, s0, 30 games each; base = subcap-75k dev
 rows 4/30):
 
 ```
-arm    zach  sloppy  squat  total  nodes/dec  plan-nodes/dec
-base   3/10    0/10   1/10   4/30    117,813        —
-w24    4/10    0/10   1/10   5/30    118,821 +0.9%  2,478 (2.1%)
-w48    4/10    0/10   1/10   5/30    ~same          2,121
+arm    zach  sloppy  squat  total  nodes/dec (dev-only, plan incl.)
+base   3/10    0/10   1/10   4/30    120,930   —
+w24    4/10    0/10   1/10   5/30    121,299  +0.3%  (plan 2,478/dec)
+w48    4/10    0/10   1/10   5/30    122,964  +1.7%  (plan 2,121/dec)
+
+[Review round, 2026-07-28: the node column first read "base
+117,813 ... w24 118,821 +0.9% ... w48 ~same" — two errors
+compounding: the baseline was the subcap pin's ALL-70-GAME
+figure against dev-only arm figures (the dev-only base is
+120,930, the a13 entry's own table number), and the arm figures
+omitted plan_nodes because the report's layer block did not list
+the new gauge. Corrected on matching dev-only populations with
+plan spend included; "~same" for w48 is retracted — w48 costs
++1.7%.]
 
 w24: lost NONE, gained zach_g04 (base walls 240; armed diverges
      @ply54, converts @90). w48: lost none of the base three,
@@ -4394,7 +4404,15 @@ plan gauges (w24 / w48): proposed 2,437/2,509 events, candidates
      (sloppy_g04, an already-assembled adoption that changed no
      move), cert-retires 1/1 (zach_g05, a live plan when the
      root cert fired — the division of labor observed once per
-     arm), active moves 100/71.
+     arm), active moves 100/71. [Review round, 2026-07-28: the
+     completion gauge as these arms ran it sampled at DECISION
+     boundaries only, so an assembly completed by our own move
+     and broken by their reply before our next decision was
+     invisible — "completions 1/1" means one completion SURVIVED
+     to a decision, not that only one occurred. The latch now
+     also fires on the chosen move itself (completions are
+     created only by our moves); the transient-completion count
+     for these arms is unmeasured and stays an open cell.]
 ```
 
 THE MECHANISM READS, from the games:
@@ -4470,13 +4488,18 @@ gauges and replay:
   young. Doubling the steering price did not lengthen lives
   (validation is price-blind), which is why the w48 escalation
   changed the roster, not the total.
-- (iv) CLOSING: barely sampled. One completion per arm (an
-  already-complete adoption), one cert-retire per arm. The
-  session's conversions came from SHORT plan-steered
-  redirections into prover range, not from held multi-move
-  assemblies — the constructor converts where two or three
-  steered decisions suffice, and cannot yet hold the
-  ten-move builds squat needs.
+- (iv) CLOSING: barely sampled. One DECISION-OBSERVED completion
+  per arm (an already-complete adoption; the gauge as-run could
+  not see completions their reply broke first — review round,
+  2026-07-28), one cert-retire per arm. The session's
+  conversions came from SHORT plan-steered redirections into
+  prover range, not from held multi-move assemblies — the
+  constructor converts where two or three steered decisions
+  suffice, and cannot yet hold the ten-move builds squat needs.
+  The holding-vs-closing split is therefore bounded, not exact:
+  what is certain is that no held assembly produced a
+  certificate; how many assemblies existed transiently is not
+  measured in these arms.
 
 THE a13 OPEN QUESTION, its boundary now measured: the declared
 trichotomy's outcome (iii) generalized — no plan ever adopts
@@ -4514,9 +4537,13 @@ the negative-assignment gap (vacate-our-blocker to unfreeze an
 executioner) is a schema extension, not a tuning knob. The
 sloppy s100 cells and the three named seeds stay unrun.
 
-COSTS: two 30-game arms, ~2h each detached; plan layer ~2.1% of
-nodes per decision at w24; +0.9% total. No pinned league was
-spent, no held-out game was played, no preset moved. The queue
+COSTS: two 30-game arms, ~2h each detached; plan layer 2,478
+nodes/decision at w24 (2.0% of its plan-inclusive total), 2,121
+at w48; totals +0.3% (w24) and +1.7% (w48) against the dev-only
+base [review round, 2026-07-28: first draft said "+0.9% total"
+and "~2.1%" against a mixed-population, plan-exclusive figure].
+No pinned league was spent, no held-out game was played, no
+preset moved. The queue
 falls as pre-committed: corpus growth (user-side) and the
 lichess bridge swap to the model engine, with the plan layer's
 open cells above as the third item for whichever session next
@@ -4525,3 +4552,60 @@ end to end a second time: inputs declared before boards, bars
 declared before arms, amendments in the open with both
 verdicts, and a virgin cell that two sessions running have
 declined to spend on evidence that had not earned it.
+
+## Review round on the device-arm entry: the gauge measured survival not occurrence, the region has an exit, and the cost table mixed its populations (2026-07-28)
+
+Three findings from outside review, all three accepted after
+verification — two with code fixes, one with a corrected table;
+the arms' verdicts move NOWHERE (no tier, trigger, or roster
+claim rested on any corrected number). Corrections are in place
+at the claims (marked "[review round, 2026-07-28]"); this entry
+is the index. Suite 83 -> 84 green; defaults re-verified
+byte-identical against the baked a12 image after the fixes (all
+four protocol games, byteid-device2/).
+
+- THE COMPLETION GAUGE COUNTED SURVIVALS, NOT COMPLETIONS (P2):
+  the latch sampled at decision boundaries, so an assembly
+  completed by our own move and broken by their reply before our
+  next decision was invisible. "Completions 1/1" therefore means
+  one completion SURVIVED to a decision — the holding-vs-closing
+  split is bounded, not exact, and the entry now says so. Fix:
+  the latch also fires on the chosen move itself (completions
+  are created only by our moves; their moves can only break
+  them). The transient count for the arms as-run stays an open
+  cell — re-measuring it would need re-played arms and no
+  verdict rests on it.
+- THE REGION HAS AN EXIT AND A PLAN COULD SURVIVE IT (P2): the
+  region is not monotone — their promotion re-arms a piece and
+  can shut both gates at once — and the tick's early return left
+  a live plan steering indefinitely with re-validation
+  suspended. Fix: region exit retires the plan as a death (rule
+  (e) of the lifecycle), re-entry re-proposes; new suite check.
+  EXPOSURE IN THE ARMS AS RUN, measured before claiming the
+  results stand (dev-device/region_exit_exposure.py +
+  region-exit-exposure.json): across all 60 armed games exactly
+  ONE game per arm ever crossed region-open -> shut at an engine
+  decision (sloppy_g03, both arms) and it adopted ZERO plans in
+  both — the exposed set is EMPTY, so the hole is real in code
+  and never bit a result. The arms stand unqualified.
+- THE COST TABLE MIXED POPULATIONS AND OMITTED THE LAYER IT WAS
+  PRICING (P2): baseline 117,813 was the subcap pin's all-70-game
+  figure set against dev-only arm figures, and the arm figures
+  excluded plan_nodes because report.py's layer block never
+  listed the new gauge. Corrected dev-only and plan-inclusive:
+  base 120,930, w24 121,299 (+0.3%), w48 122,964 (+1.7%) — the
+  reviewer's own numbers, re-derived here from the three reports
+  before accepting. "~same" for w48 is retracted. Fixes:
+  report.py layers gains a plan row (renders only when the layer
+  was alive, saturation honestly null — its budget is per-event,
+  not per-decision); compare_arms gains the row AND now
+  population-matches its reference to --families, which is the
+  exact mismatch that produced the bad baseline.
+
+The round's shape, familiar from the a13/a14 rounds: each error
+made the draft SOUND cleaner than its measurements — a tidier
+completion story, a monotone region, a cheaper layer. The
+corrected entry is exactly as strong as its tables: the
+constructor's wins and refusals are untouched, the layer costs
+0.3-1.7% not 0.9%-flat, and the closing stage's sample size is
+bounded above as well as below.

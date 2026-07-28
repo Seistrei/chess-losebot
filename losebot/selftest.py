@@ -861,6 +861,28 @@ def test_device_plan() -> None:
         f"move={move}",
     )
 
+    # Region exit retires a live plan too — the region is NOT
+    # monotone (their promotion re-arms a piece and can shut both
+    # gates), and a plan surviving outside it would steer with
+    # re-validation suspended. Re-entry then re-proposes.
+    exiled = ModelEngine(make_model("sloppy"), plan_steer=24)
+    exiled._plan = device_plan.PlanState(
+        template="pawn-strike", king_target=chess.F7,
+        donation=device_plan.Assignment(chess.G6, (chess.QUEEN,)),
+        executioner=chess.F5, box=(), king_price=24, box_price=12,
+        validated_n=1,
+    )
+    exiled._plan_region_was = True
+    exiled._plan_tick(heavy)
+    exited = (exiled._plan is None and exiled.plan_deaths == 1
+              and exiled.plans_proposed == 0)
+    exiled._plan_tick(board)
+    check(
+        "plan: region exit retires, re-entry re-proposes",
+        exited and exiled.plans_proposed == 1 and exiled._plan is not None,
+        f"deaths={exiled.plan_deaths} proposed={exiled.plans_proposed}",
+    )
+
 
 def test_sub_probe() -> None:
     from .search import best_move
