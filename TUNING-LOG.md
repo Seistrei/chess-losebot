@@ -4032,3 +4032,276 @@ g09   FORCED@97  —            max@240    bare@229     48
   king bare or plus one immobilized pawn — and the frozen pawn
   sharpens the st-us reading: zero legal moves from it, so the
   stalemate needs only the king boxed.
+
+## The device-plan layer: templates, proposer, and steering declared before any derivation or arm (2026-07-27)
+
+The knob space is closed by measurement in all three layers —
+prover (reach verdict: certs are cheap and n<=2, walls are
+DISPROVEN-net-poor), steering (depth/topk reshuffle rather than
+grow), leaf eval (the a14 clean room: no proximity term survives a
+dev-only funnel; the sharpest remaining separations are
+consequence-shaped). Every remaining wall is PLAN-shaped: squat is
+a LOCATION failure, sloppy a SEQUENCING failure, random a
+COMMITMENT failure. And the a13 postmortem's core lesson stands:
+a leaf gradient can move the engine tens of plies early (68/70
+diverged) but moves it to net-POOR places — direction without a
+destination. The specialist era proved the complement: every drill
+conversion ever achieved came from plan machinery, never eval
+weights. This entry declares the model-era constructor — a
+default-off DEVICE-PLAN layer — in full, before any template
+constant is derived from game content and before any arm runs.
+The clean-room law is standing: inputs first, funnel next, reads
+pre-committed, amendments only in the open with both verdicts
+kept.
+
+THE INPUTS, exhaustively — dev-family content and opponent-generic
+theory only:
+
+1. The four dev trophy games of the shipped subcap-75k pin and
+   their cert plies: games/league/subcap-75k/zach_g02, zach_g03,
+   zach_g05, squat_g09 (all _selfmate-forced), certs re-derived
+   per-game in dev-clean/trophy-certs-dev.json (9 certs; the g09
+   device read in the a13 entry: king to f7 INTO the f5 pawn's
+   strike zone, queen donated to g6, fxg6 mates — their pawn the
+   executioner).
+2. Dev arm conversions, existing artifacts only:
+   dev-plumb-k2-ring30's squat_g03 and squat_g05 (the two
+   promotion-tomb devices; mechanism read in the a13 entry) and
+   its zach_g02/g05/g06; dev-plumb-k3-appr18's zach_g06 (corner
+   tomb, opponent king walking in) and sloppy_g02/g05/g07 (the
+   king-extraction check chains). All dev-family by construction.
+3. The dev census, corridor buckets included:
+   dev-clean/feature-study-dev.json (3,158 rows, 30 whitelisted
+   dev PGNs — the clean room's own instrument).
+4. Specialist-era device GEOMETRY as opponent-generic THEORY
+   (specialists/templates.py and specialists/TUNING-LOG.md):
+   recapture mate (donate adjacent to our boxed king where their
+   reply recaptures with mate), promotion-tomb (their passed pawn
+   promotes into our back-rank box), the pawn-strike device
+   (our king walks into a their-pawn's capture fork; the strike
+   square needs a their-side guard so our king cannot recapture).
+   Geometry only; no constant fitted from any game, held-out or
+   dev, enters through this door.
+5. Eval-constant and engine-constant arithmetic from
+   losebot/evaluate.py and losebot/engine.py (code, not games) for
+   every price and budget below.
+6. Existing dev tables as arm baselines (no re-rolls): subcap-75k
+   dev rows 4/30 at s0 (zach 3, sloppy 0, squat 1);
+   dev-ab75-base-s100 10/30 (zach 3, sloppy 5, squat 2);
+   val-dev-s200-base 6/30 (zach 4, sloppy 2, squat 0).
+
+BANNED, same list as the clean room: every sloppy-held /
+human-held / squat-held / random PGN, position, tail, cert, or
+statistic; the pooled dev-plumb JSONs' held-out rows; every
+val-held-* artifact. Held-out seed0 200 stays VIRGIN unless the
+pre-declared flip branch below fires, and its read is the one
+ALREADY COMMITTED in the clean-room entry — it is not redeclared
+here and will not be.
+
+THE DESIGN. Three parts, one knob, all default-off.
+
+1. DEVICE TEMPLATES — the catalog, declared from theory and the
+   log's existing mechanism reads; the dev boards will be opened
+   only AFTER this entry commits, under the coverage test below:
+   - PAWN_STRIKE (squat_g09; specialist f7-strike theory).
+     Terminal: their mobile pawn P captures our donated man on D
+     and the pawn-on-D's attack fork covers our king. Assignment
+     set: our king -> a square the pawn attacks after ExD;
+     donation man -> D; box men -> the king target's remaining
+     open flights. Their-side filter: P attacks D now, and D is
+     guarded by a second their man (else our king recaptures).
+   - PROMOTION_TOMB (random-family theory via the specialist log;
+     ring30's two squat conversions). Terminal: their passed pawn
+     promotes and the new piece mates our boxed king. Assignment
+     set: our king -> a square the promoted piece attacks from
+     the promotion square (not adjacent to it), box men -> the
+     remaining open flights. Their-side filter: runway clear,
+     passer within 2 ranks of promotion (deeper passers cannot
+     validate at n<=2 and re-propose as they advance).
+   - RECAPTURE_BOX (zach_g02/g03/g05 class; specialist recapture
+     theory). Terminal: their piece X recaptures our donated man
+     on D adjacent to our boxed king and delivers mate (directly
+     or by discovery). Assignment set: our king -> a square
+     checked by X-on-D; donation man -> D; box men -> remaining
+     open flights. Their-side filter: X attacks D now; D guarded
+     or X's check is at range.
+   The catalog is generative, not exact: templates ENUMERATE
+   candidate geometry; truth is delegated to oracle validation
+   (below), so a permissive generator cannot smuggle in an
+   uncertifiable aim point.
+2. PROPOSER. Cadence: on ENTRY into the plan region, on PLAN
+   DEATH, and — while planless inside the region — on any change
+   in their piece map (their men move rarely there; squat barely
+   at all). Never per-move re-proposal, never restless switching:
+   a live plan blocks new proposals. The plan REGION is the union
+   of two existing gates, no new constant: their pieces == 0 (the
+   deep gate's king+pawns branch, the squat shape) OR their
+   non-king men <= sub_probe_men (5, the sub-probe gate's own
+   region). Enumeration: per template, concrete instantiations
+   (king target x executioner x D x box assignment), material-
+   sufficiency and rough-reachability filtered (pawns only
+   forward on their file, bishops shade-bound, the donation man
+   distinct from box men), ranked by total assignment distance
+   (deterministic tiebreak: template name, then square indexes).
+   VALIDATION, the certify-or-don't-aim rule: for each candidate
+   in rank order, build the hypothetical completed position P* —
+   current board with OUR assigned men teleported to their
+   targets, their men untouched, them to move, clock 0, no
+   castling/ep — require chess legality (board validity), then
+   require the ORACLE's own AND-node to return PROVEN at n <= 2:
+   every their reply from P* mates us now or is forced to within
+   one further own move (a public oracle wrapper over
+   _forced_after; same draw-aware machinery, so a PROVEN P* is
+   exactly a net the root prover would certify one ply earlier,
+   with the donation or final box move as the proving move).
+   First PROVEN candidate is ADOPTED; at most 16 validations per
+   proposal event, each on its own budget of sub_probe_slice // 4
+   = 2,000 nodes (arithmetic from an engine constant; n<=2 is the
+   cheap rung by the reach verdict and these AND-checks start one
+   ply deeper still). Proposer spend is gauged apart
+   (plan_nodes), never carved from any probe cap. The synthetic
+   clock-0/no-history caveat is stated now: P* validation is
+   geometry-pure; the in-game prover on the real path remains the
+   only closer.
+3. STEERING HOOK — leaf shaping, the mechanism the a13 arc proved
+   can hold a trajectory for tens of plies, now pointed at a
+   validated DESTINATION instead of a direction: with a plan
+   active, the leaf eval adds -W * dist(our king, ITS target)
+   and -(W/2) * sum over box targets of dist(nearest eligible
+   man, that target) ("eligible" frozen at proposal: piece types,
+   pawn file/forwardness). SEQUENCING, the sloppy lesson made
+   structural: the donation target is priced ONLY once the king
+   stands on its target and every box target is filled —
+   donations pay only where boxes are already built; before
+   completion the donation man is priced by nothing and the
+   shipped eval keeps it safe. No completion bonus constant:
+   distance zero is the term's own maximum. Plan-off or no plan
+   adopted = the term does not exist (None threads through
+   best_move exactly as EvalParams does; the a14 fast path is
+   untouched).
+   PLAN DEATH, the explicit rules: (a) any their-footprint change
+   triggers a P* re-validation (2,000-node budget); refuted =
+   death; (b) king target or any box target occupied by a their
+   man = re-validation, refuted = death; (c) a root certificate
+   firing retires the plan with honors (the oracle plays; the
+   constructor's job is done); (d) there is NO staleness kill — a
+   stuck plan is left standing so the honest-failure
+   characterization can measure steering failure instead of
+   masking it. Death triggers an immediate re-proposal in the
+   same decision.
+
+THE KNOB AND THE PRICES: --plan-steer W (engine plan_steer,
+default 0 = off: no proposer, no validation, no leaf term, no
+gauge movement — the a14 path byte for byte). The tested rungs,
+arithmetic-derived: W = 24 = FLIGHT_SQUARE_PENALTY (flight
+parity: one square of king progress toward the validated target
+reprices one flight square) and W = 48 = 2x (the nest-exit toll
+the value-plumbing entry measured at ~66 over two steps). Box
+price W/2 mirrors the king-to-box ratio of the shipped
+KING_TARGET_DISTANCE_PENALTY 9 vs OWN_KING_NEIGHBOR_BONUS 6 in
+spirit but is stated as pure arithmetic, not a fit.
+
+TEMPLATE-DERIVATION FUNNEL (runs after this entry commits, before
+implementation freezes): open the input-1 and input-2 terminal
+boards and their cert corridors; the catalog must COVER — i.e.,
+the proposer pointed at the pre-terminal position must generate
+and validate the game's actual device — at least 3 of the 4
+subcap dev trophies and both ring30 promotion tombs. Any covered
+game is evidence the geometry is right; any uncovered game is
+named in the results entry with the geometric reason, and a
+catalog amendment forced by dev boards is recorded as POST-DATA
+exactly as the clean room's stage-1 amendment was, both verdicts
+kept. No constant may be tuned to a single game's board beyond
+what the declared geometry already implies.
+
+STATE REQUIREMENTS at every code state: suite green (77/77
+baseline; new checks additive and named — defaults-inertness on
+engine and eval, template/assignment arithmetic on fixtures,
+P*-validation accept/reject pairs, gate closure outside the
+region, death-and-repropose lifecycle); byte-identity of the new
+source AT DEFAULTS vs the standing dev-clean/byteid-image
+artifacts (the baked-a12 side of the a14 protocol — the image
+side is already on disk and is not re-rolled), all four protocol
+games, before any arm runs. Version stays 2.0.0a14 unless a
+default flips (then a15 with its one pinned league). Commits
+local; no push until user review.
+
+THE ARMS AND THEIR ACCEPTANCE CRITERIA, declared before the first
+game:
+
+- ARM A (dev-device-w24): --plan-steer 24, dev families, baseline
+  seeds s0, 30 games. Divergence replay against subcap-75k with
+  reconstruction mismatches ZERO or the arm is an instrument bug,
+  not a result. Gauges must show the layer alive or silent
+  honestly (plans_proposed / adopted / deaths / completions /
+  certs-under-plan / plan_nodes per game).
+- ESCALATION RULE: ARM B (dev-device-w48) runs ONLY if arm A
+  adopts plans in at least half its squat games AND squat stays
+  < 2/10 — steering-strength escalation is only licensed when
+  proposal and validation demonstrably work and holding is the
+  open question. If arm A adopts nothing anywhere, W is not the
+  blocker and arm B is money on a refuted mechanism.
+- ASSEMBLY TIER, the named target unchanged: dev squat >= 2/10
+  forced at s0 with correct posterior reads (MAP on the squat-k
+  hypotheses for the converted games), against 1/10 in every pin
+  since the pivot. NAMED READS regardless of totals: SLOPPY
+  SEQUENCING — in armed sloppy games, box-completion events and
+  our-men count at first completion vs the donation record
+  (does material still exist when a box first completes?), read
+  from gauges plus replay; SLOPPY FLOOR — the s0 sloppy row
+  cannot regress below its 0/10 base, so the sloppy verdict at
+  s0 is mechanism-read-only; ZACH NEUTRALITY — zach >= 2/10 at
+  s0 (within one game of the 3/10 base; the plan layer has no
+  business burning the one family that already converts).
+- A/B TRIGGER: squat tier met, OR total >= 6/30 (base 4/30, +2
+  beyond weather). Then ARM AB (dev-device-ab-<W>-s100): the
+  winning W at seed0 100, 30 games, against the standing
+  dev-ab75-base-s100 10/30. INDEPENDENCE READ, fixed now: s100
+  alone first (delta >= -1 per 30 passes, the measured weather
+  band); if the config wants the DEFAULT, it must additionally
+  run dev s200 armed (base standing 6/30) and show pooled
+  s100+s200 delta >= 0 vs 16/60. s0 NEVER enters an independence
+  read. Squat's independent cells are reported per-family
+  alongside totals; a tier claimed at s0 and absent at both
+  independent blocks is a pinned-seed fact and will be labeled
+  exactly that.
+- DEFAULT FLIP branch, only then: the decision runs on the VIRGIN
+  held-out s200 cell under the clean-room entry's ALREADY-
+  COMMITTED read (sides, |delta|>=2 totals, zero-rows then
+  lexicographic maximin inside the band — none of it restated
+  here, none of it changed). At most ONE pinned league, only on a
+  flip, per the standing budget rule.
+- HONEST-FAILURE BRANCH, pre-committed: if the plan layer cannot
+  move dev assembly either, the deliverable is the
+  characterization BY STAGE, each measurable from gauges and
+  replay: (i) PROPOSER — no instantiations generated (material/
+  geometry filters starve it); (ii) ORACLE — instantiations
+  generated and all refuted at P* (the templates aim at nets the
+  prover won't certify; refutation-stage histogram says which
+  filter); (iii) HOLDING — plans adopted but die young or their
+  assignment distance never reaches zero (steering loses the
+  tug-of-war; the stuck-plan telemetry is the measurement);
+  (iv) CLOSING — completions happen and no certificate fires
+  (the frozen-snapshot approximation drifted; P* was true at
+  adoption and false at arrival). Whichever stage fails, the
+  queue falls to corpus growth (user-side) and the lichess
+  bridge swap, as the session brief pre-commits.
+- THE a13 OPEN QUESTION, folded in as declared: WHY were the
+  midgame-steered paths net-poor (first divergences at plies
+  48/46/48 in val s100 sloppy g03/g07/g09, base forced at
+  77/111/97)? If the A/B stage runs, those three named seeds get
+  a named read: (i) plan adopted and converts — plan-shaped
+  steering succeeds where gradient-shaped failed, the net-poor
+  verdict was about destinations, not steering; (ii) plan
+  adopted and walls — midgame divergence itself is the harm and
+  the hypothesis dies; (iii) no plan ever adopts before the
+  base's conversion ply — the a13 divergences were pre-region
+  effects no region-gated layer can touch, and the question
+  stays open with that boundary measured. One of the three will
+  be true and will be reported at face value.
+
+All outcomes are honest: the funnel may cover the trophies or
+fail them, the arms may move squat or not, and a layer that
+proposes nothing is a result with a stage attached. Whichever
+lands is reported at face value, and nothing outside outcome
+space touches the virgin cell or the frozen presets.
