@@ -3382,3 +3382,64 @@ The league-budget rule stands: no new pinned league, no record
 claim from these cells — they are the review's demanded
 generalization instruments, reports tracked when they land.
 Addendum below when the four containers finish.
+
+ADDENDUM, THE VALIDATION CELLS (same day, all four landed, exit 0):
+
+```
+DEV s200 (untouched block)    zach  sloppy  squat  total
+base (--eval-king-approach 0) 4/10    2/10   0/10   6/30
+appr18 (a13 defaults)         5/10    1/10   0/10   6/30
+
+HELD-OUT s100                 sl-h   hu-h   sq-h   random  total
+a12 (--eval-king-approach 0)  4/10   1/10   0/10    0/10    5/40
+a13 (defaults)                1/10   1/10   1/10    1/10    4/40
+```
+
+THE PRE-DECLARED READS, APPLIED WITHOUT ADJUSTMENT:
+
+- INDEPENDENT DEV EVIDENCE (s100 + s200 pooled, s0 excluded):
+  appr18 15/60 vs base 16/60 — MINUS ONE. The s0 block's +4 was
+  the selection artifact the review suspected; off the selection
+  block the dev case for appr18 is neutral-to-negative, exactly
+  as the reviewer read the s100 cell alone.
+- HELD-OUT s100: a13 4/40 vs a12 5/40 — a13 < a12, so BY THE
+  DECLARED READ THE GENERALIZATION CLAIM IS WITHDRAWN ENTIRELY.
+  The 11/40 is a benchmark-board result at its pinned seeds, full
+  stop; at seeds the study never saw, a13 does not beat a12 on
+  the held-out families. The 6-point held-out gap at pinned seeds
+  against a 1-point deficit at fresh seeds is the size of the
+  study-exposure-plus-seed effect, and it is most of the gap.
+
+WHAT REPLICATES ACROSS EVERY UNTOUCHED BLOCK, stated at face
+value: the ZACH gain — 5/10 at s100 and 5/10 at s200 against the
+base's 3 and 4 (+3/20; zach is also 5/10 in both s0 cells) — is
+the one family-level effect that survives independence. The
+SLOPPY regression replicates the other way (3/20 vs 7/20 on
+untouched blocks; the self-draw signature family). Dev squat is
+2/20 vs 2/20. The held-out texture the totals hide: a13's s100
+board is 1/1/1/1 — every held-out family converts, squat-held
+off zero where a12 reads zero, random converting FORCED where
+a12's row is five mercy coins — breadth against a12's
+sloppy-held-concentrated 4. Texture, reported; the declared read
+is totals, and totals say 4 < 5.
+
+WHERE THIS LEAVES THE a13 DEFAULT, exactly: the ship rule was
+pinned-seed by declaration and fired as written; these cells were
+declared label-gates, not ship-gates, before they ran, and the
+label verdict is in — the generalization claim is withdrawn. The
+default now rests on: the benchmark board (+5 held-out at pinned
+seeds under the pre-declared rule), one replicated family gain
+(zach +3/20 independent), one replicated family cost (sloppy
+-4/20 independent), and independent totals of 19/100 vs 21/100 —
+inside the ±2-per-60 weather band the a12 session measured, so
+the honest one-line summary is "a13 ~ a12 off the benchmark,
+a13 >> a12 on it, and the on-benchmark gap is substantially
+study exposure." The NEXT SESSION INHERITS the default
+reconsideration with this table, as declared; the clean path to
+an untainted candidate is a dev-only re-derivation (features,
+gate, and prices from dev artifacts alone) gated on a
+never-studied cell. posterior-ext remains the last pin whose
+config derivation never read held-out game content; appr18
+stands as the benchmark table with this addendum as its
+footnote. Validation reports and their forced PGNs tracked under
+games/league/val-*/.
