@@ -4355,3 +4355,173 @@ the refuter. Every optimism these introduce is arbitrated where
 all optimism is arbitrated: the P* validation refutes what does
 not certify. The arms run next, against the acceptance bars
 exactly as declared above.
+
+## The device arms land: the constructor works end to end on zach, refuses sloppy entirely, and the squat wall names its two remaining shapes (2026-07-28)
+
+Both declared arms ran and both scored against the bars exactly
+as written. The verdicts first: the ASSEMBLY TIER IS NOT MET
+(dev squat 1/10 at both rungs, the same one game as every pin),
+the A/B TRIGGER IS NOT MET (5/30 at both rungs against a >= 6/30
+bar), so no fresh-seed A/B ran, no flip candidacy exists, the
+VIRGIN held-out s200 cell is NOT SPENT, --plan-steer stays
+default-off at 0, and the version stays 2.0.0a14. The layer
+ships as priced, default-off code — one flag away, like
+check_menu and ring_donation before it — and this entry is the
+characterization the honest-failure branch pre-committed, which
+turns out to be a characterization with a working constructor
+inside it. Suite 83/83 at every state; defaults byte-identical
+to the baked a12 image (all four protocol games, verdicts in
+dev-device/); divergence replay on BOTH arms against subcap-75k:
+reconstruction mismatches ZERO.
+
+THE ARMS (dev families, s0, 30 games each; base = subcap-75k dev
+rows 4/30):
+
+```
+arm    zach  sloppy  squat  total  nodes/dec  plan-nodes/dec
+base   3/10    0/10   1/10   4/30    117,813        —
+w24    4/10    0/10   1/10   5/30    118,821 +0.9%  2,478 (2.1%)
+w48    4/10    0/10   1/10   5/30    ~same          2,121
+
+w24: lost NONE, gained zach_g04 (base walls 240; armed diverges
+     @ply54, converts @90). w48: lost none of the base three,
+     gained zach_g06 (diverges @78, converts @186, 3 certs),
+     and the w24 gain g04 walls again — same divergence ply 54,
+     different steered path, no net. Roster churn at the top
+     rung, clean +1 at the bottom one.
+plan gauges (w24 / w48): proposed 2,437/2,509 events, candidates
+     7,790/7,879, adopted 45/42, deaths 42/40, completions 1/1
+     (sloppy_g04, an already-assembled adoption that changed no
+     move), cert-retires 1/1 (zach_g05, a live plan when the
+     root cert fired — the division of labor observed once per
+     arm), active moves 100/71.
+```
+
+THE MECHANISM READS, from the games:
+
+- ZACH_G04 AT W24 IS THE CONSTRUCTOR WORKING END TO END on a
+  game the base never converts: check chain herds THEIR king
+  into our structure (Kf3, Kf2), the queen is donated on f3
+  WITH CHECK to load the pawn executioner via the forced
+  recapture gxf3, Rg1 seals the g2-pawn's promotion square,
+  Nxa3 is the zugzwang, and fxe2# is the strike — their pawn
+  captures our knight adjacent to our boxed king on d1,
+  guarded by their own king. Three adoptions, three deaths —
+  the plans re-aimed as their king walked, and the divergence
+  they carved led where the prover could close. The device is
+  the funnel's own PAWN_STRIKE with the specialist recapture
+  choreography around it.
+- SLOPPY IS UNTOUCHED AT BOTH PRICES, and that is the strongest
+  sloppy result the project has: all TEN games move-identical
+  to base at w24 AND at w48 (labels are the base pin's own row:
+  g01 st-us, g03 insuf, eight max-plies). The certify-or-don't-
+  aim gate validated nothing durable in sloppy's residues (8 of
+  10 games adopted zero plans; g04/g05's three adoptions lived
+  one move each and changed no argmax), so the layer refused to
+  steer — and the a13 term's replicated -4/20 sloppy cost is
+  ABSENT BY CONSTRUCTION, not by luck. The declared sequencing
+  read resolves as: no sloppy plan ever lived long enough to
+  re-sequence anything, so donations-after-boxes was never
+  exercised there; the box-first rule remains tested only by
+  the zach conversions.
+- SQUAT_G09 IS IDENTICAL AT BOTH RUNGS with ZERO adoptions: the
+  root cert fires at the same ply it always did (the probe runs
+  before the plan tick), so the one squat trophy rides the base
+  path untouched. The a13 arms LOST this game by steering it
+  away; the plan layer holds it by refusing to.
+- THE SQUAT WALLS DIVERGE AND STILL WALL: five games at w24
+  (first divergences plies 36-79), four at w48 — the LOCATION
+  failure is demonstrably steerable (the armed g00 smoke shows
+  our king relocated from the frozen-c4 glue to a rook-flanked
+  e8 back-rank box), but no relocation produced a net. And the
+  longest-held plan of the session — squat_g05 at w48, ONE plan
+  held 19 moves — still walled: holding alone was not
+  sufficient in its one sample.
+- THE SQUAT RESIDUE, read from g01's final board: their army
+  reduced to a two-square king shuffle (g1-h1) plus two
+  PERMANENTLY frozen pawns (a6 blocked by our a7, h2 blocked by
+  our h3 bishop). No template has an executioner there — a
+  frozen pawn can never capture, push, or promote, and a bare
+  king cannot mate — so the proposer correctly generates
+  nothing: the position is a dead draw unless OUR OWN blocker
+  vacates to unfreeze their pawn, an operation the assignment
+  schema cannot express (assignments say "put a man HERE",
+  never "take this man AWAY"). The engine shuffles its queen
+  against the clock instead. This is the sharpest remaining
+  squat shape: the squeeze machinery freezes their material
+  into deadness faster than the constructor can spend it.
+
+THE STAGED CHARACTERIZATION, as pre-committed, each stage from
+gauges and replay:
+
+- (i) PROPOSER: works. ~2,500 proposal events per arm generate
+  ~7,800 candidates; generation goes honestly sparse exactly
+  where devices stop existing (sloppy residues ~10 candidates
+  across 40+ events; executioner-extinct squat endings zero).
+- (ii) ORACLE GATE: works, in both directions. Every adoption
+  is a PROVEN n<=2 net (45/42 per arm), and the refusals are
+  load-bearing: the sloppy identity and the g09 hold are the
+  gate declining aims the prover would not certify.
+- (iii) HOLDING: the failing stage, measured. Mean plan
+  lifespan 2.2 active moves at w24, 1.7 at w48; 42/40 deaths
+  against 45/42 adoptions. Deaths are footprint-driven
+  re-validation kills — their side of P* is a frozen snapshot,
+  and against opponents that move every ply the snapshot dies
+  young. Doubling the steering price did not lengthen lives
+  (validation is price-blind), which is why the w48 escalation
+  changed the roster, not the total.
+- (iv) CLOSING: barely sampled. One completion per arm (an
+  already-complete adoption), one cert-retire per arm. The
+  session's conversions came from SHORT plan-steered
+  redirections into prover range, not from held multi-move
+  assemblies — the constructor converts where two or three
+  steered decisions suffice, and cannot yet hold the
+  ten-move builds squat needs.
+
+THE a13 OPEN QUESTION, its boundary now measured: the declared
+trichotomy's outcome (iii) generalized — no plan ever adopts
+durably in sloppy at all, so a certify-gated layer cannot
+reproduce the a13 divergences at plies 46-48, and the s100
+named-seed read never ran (no A/B was licensed). WHY appr18's
+steered sloppy midgames were net-poor stays open; what is now
+measured is that destination-gated steering PAYS NOTHING there:
+the gradient-vs-destination distinction is real in the games —
+direction diverged sloppy and lost 4/20, destinations refused
+and lost zero.
+
+TIER SCORING, against the declared bars verbatim: ASSEMBLY —
+not met (squat 1/10 both rungs; the escalation condition fired
+exactly as declared — 6/10 squat games adopting at w24 with
+squat < 2/10 — and its answer is that price was not the
+blocker). ZACH NEUTRALITY — exceeded (4/10 >= 2/10, the gain
+plan-attributable by replay). SLOPPY FLOOR — held at 0/10 with
+the identity read above. A/B TRIGGER — not met (5/30 < 6/30
+both rungs), so nothing advanced to seeds the study never saw,
+and no claim here extends past s0.
+
+OPEN CELLS, named at tested width: death CAUSES are not split
+in gauges (refuted vs material-loss vs target-occupied) — the
+lifespan number carries the verdict but not the anatomy;
+per-template adoption counts are not gauged (the funnel proves
+all four templates generate; which adopt in play is unmeasured,
+and PROMOTION_TOMB has no in-game evidence at all); the
+re-validation budget's UNKNOWN-keeps rule (2,000 nodes) was
+never stressed; w rungs off {24,48} untested; a footprint-
+change DEBOUNCE (re-validating only when the device footprint —
+executioner, guard, ray squares — changes, not the whole map)
+is the obvious next holding lever and nothing here prices it;
+the negative-assignment gap (vacate-our-blocker to unfreeze an
+executioner) is a schema extension, not a tuning knob. The
+sloppy s100 cells and the three named seeds stay unrun.
+
+COSTS: two 30-game arms, ~2h each detached; plan layer ~2.1% of
+nodes per decision at w24; +0.9% total. No pinned league was
+spent, no held-out game was played, no preset moved. The queue
+falls as pre-committed: corpus growth (user-side) and the
+lichess bridge swap to the model engine, with the plan layer's
+open cells above as the third item for whichever session next
+takes a construction mandate. The clean-room method carried
+end to end a second time: inputs declared before boards, bars
+declared before arms, amendments in the open with both
+verdicts, and a virgin cell that two sessions running have
+declined to spend on evidence that had not earned it.
